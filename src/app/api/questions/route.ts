@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('questions')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('serial_number', { ascending: true })
 
     if (topicId       && topicId       !== '') query = query.eq('topic_id',        topicId)
     if (subtopicId    && subtopicId    !== '') query = query.eq('subtopic_id',     subtopicId)

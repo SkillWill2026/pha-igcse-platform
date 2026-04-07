@@ -194,9 +194,11 @@ export function QuestionsLibrary({ boards }: Props) {
       result.push({ id: rootId, original, boardEntries })
     }
 
-    result.sort(
-      (a, b) => new Date(b.original.created_at).getTime() - new Date(a.original.created_at).getTime(),
-    )
+    result.sort((a, b) => {
+      const sa = a.original.serial_number ?? ''
+      const sb = b.original.serial_number ?? ''
+      return sa.localeCompare(sb)
+    })
     return result
   }, [questions])
 
