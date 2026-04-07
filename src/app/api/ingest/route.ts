@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const isMixed = subtopic_id === 'mixed'
+
     const fileName = file.name.toLowerCase()
     const isPDF = fileName.endsWith('.pdf')
     const isDOCX = fileName.endsWith('.docx')
@@ -67,22 +69,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Fetch subtopic + topic for context ───────────────────────────────────
+    // ── Fetch subtopic + topic for context (skipped for mixed) ──────────────
     const supabase = createAdminClient()
 
-    const { data: subtopic } = await supabase
-      .from('subtopics')
-      .select('ref, name:title, topic_id')
-      .eq('id', subtopic_id)
-      .single()
+    let subtopic: { ref: string; name: string; topic_id: string } | null = null
+    let topic: { ref: string; name: string } | null = null
 
-    const { data: topic } = subtopic
-      ? await supabase
+    if (!isMixed) {
+      const { data: s } = await supabase
+        .from('subtopics')
+        .select('ref, name:title, topic_id')
+        .eq('id', subtopic_id)
+        .single()
+      subtopic = s
+
+      if (subtopic) {
+        const { data: t } = await supabase
           .from('topics')
           .select('ref, name')
           .eq('id', subtopic.topic_id)
           .single()
-      : { data: null }
+        topic = t
+      }
+    }
 
     // ── Anthropic extraction ─────────────────────────────────────────────────
     const anthropic = createAnthropicClient()
@@ -107,8 +116,12 @@ Rules:
 • Never split sub-parts into separate objects.
 • Output ONLY the JSON array — no markdown fences, no explanation, no extra text.`
 
+    const contextLine = isMixed
+      ? 'This paper contains mixed topics — extract all questions without assuming a specific subtopic.'
+      : `Context: Topic ${topic?.ref ?? '?'} – ${topic?.name ?? 'Unknown'} | Subtopic ${subtopic?.ref ?? '?'} – ${subtopic?.name ?? 'Unknown'}`
+
     const userContent = `Extract all exam questions from this Cambridge IGCSE Mathematics document.
-Context: Topic ${topic?.ref ?? '?'} – ${topic?.name ?? 'Unknown'} | Subtopic ${subtopic?.ref ?? '?'} – ${subtopic?.name ?? 'Unknown'}
+${contextLine}
 
 ---
 ${text.slice(0, 14_000)}
@@ -141,8 +154,8 @@ ${text.slice(0, 14_000)}
     // ── Insert into questions table ──────────────────────────────────────────
     const rows = aiQuestions.map((q) => ({
       exam_board_id,
-      topic_id: subtopic?.topic_id ?? null,
-      subtopic_id,
+      topic_id: isMixed ? null : (subtopic?.topic_id ?? null),
+      subtopic_id: isMixed ? null : subtopic_id,
       content_text: String(q.content_text ?? '').trim(),
       difficulty: Math.min(5, Math.max(1, Math.round(Number(q.difficulty) || 2))),
       question_type: VALID_QUESTION_TYPES.includes(q.question_type)

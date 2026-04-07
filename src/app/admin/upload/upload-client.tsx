@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -9,7 +9,10 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
 } from '@/components/ui/select'
 import {
@@ -104,6 +107,18 @@ export function UploadClient({
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  // Group subtopics by topic for the dropdown
+  const topicGroups = useMemo(() => {
+    const map = new Map<string, { label: string; items: Subtopic[] }>()
+    for (const s of subtopics) {
+      const key = s.topic_id
+      const label = s.topics ? `${s.topics.ref} ${s.topics.name}` : 'Other'
+      if (!map.has(key)) map.set(key, { label, items: [] })
+      map.get(key)!.items.push(s)
+    }
+    return Array.from(map.values())
+  }, [subtopics])
+
   // ── Dropzone ────────────────────────────────────────────────────────────────
   const onDrop = useCallback((accepted: File[]) => {
     if (accepted[0]) {
@@ -173,6 +188,20 @@ export function UploadClient({
 
   const canExtract = !!file && !!boardId && !!subtopicId && !isExtracting
 
+  // ── Trigger label for subtopic selector ─────────────────────────────────────
+  const subtopicTriggerLabel = () => {
+    if (!subtopicId) return <span className="text-muted-foreground">Select subtopic…</span>
+    if (subtopicId === 'mixed') return <span className="italic text-violet-600">Mixed Topics</span>
+    const s = subtopics.find((x) => x.id === subtopicId)
+    if (!s) return null
+    return (
+      <span>
+        <span className="font-mono text-xs text-muted-foreground mr-1">{s.ref}</span>
+        {s.name}
+      </span>
+    )
+  }
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-8 max-w-4xl">
@@ -208,14 +237,7 @@ export function UploadClient({
             <Label>Subtopic</Label>
             <Select value={subtopicId} onValueChange={(v) => setSubtopicId(v ?? '')}>
               <SelectTrigger>
-                {subtopicId
-                  ? (() => {
-                      const s = subtopics.find((x) => x.id === subtopicId)
-                      return s
-                        ? <span><span className="font-mono text-xs text-muted-foreground mr-1">{s.ref}</span>{s.name}</span>
-                        : null
-                    })()
-                  : <span className="text-muted-foreground">Select subtopic…</span>}
+                {subtopicTriggerLabel()}
               </SelectTrigger>
               <SelectContent className="max-h-72" alignItemWithTrigger={false}>
                 {subtopics.length === 0 ? (
@@ -223,14 +245,29 @@ export function UploadClient({
                     No subtopics found — run SQL migrations first
                   </div>
                 ) : (
-                  subtopics.map((s) => (
-                    <SelectItem key={s.id} value={s.id} label={`${s.ref} – ${s.name}`}>
-                      <span className="font-mono text-xs mr-1.5 text-muted-foreground">
-                        {s.ref}
-                      </span>
-                      {s.name}
+                  <>
+                    {/* Special: Mixed Topics */}
+                    <SelectItem value="mixed" label="Mixed Topics">
+                      <span className="italic text-violet-600">Mixed Topics</span>
                     </SelectItem>
-                  ))
+
+                    <SelectSeparator />
+
+                    {/* Grouped subtopics by topic */}
+                    {topicGroups.map((group) => (
+                      <SelectGroup key={group.label}>
+                        <SelectLabel>{group.label}</SelectLabel>
+                        {group.items.map((s) => (
+                          <SelectItem key={s.id} value={s.id} label={`${s.ref} – ${s.name}`}>
+                            <span className="font-mono text-xs mr-1.5 text-muted-foreground">
+                              {s.ref}
+                            </span>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </>
                 )}
               </SelectContent>
             </Select>
