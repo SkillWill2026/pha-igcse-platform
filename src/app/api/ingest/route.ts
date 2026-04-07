@@ -20,10 +20,6 @@ interface AIQuestion {
 }
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env['ANTHROPIC_API_KEY']
-  const keyPreview = apiKey ? apiKey.slice(0, 10) + '…' : 'MISSING'
-  console.log('[ingest] ANTHROPIC_API_KEY preview:', keyPreview)
-
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null
@@ -146,8 +142,6 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
     for (let i = 0; i < sourceText.length; i += CHUNK_SIZE) {
       chunks.push(sourceText.slice(i, i + CHUNK_SIZE))
     }
-    console.log(`[ingest] chunks: ${chunks.length}, total chars: ${sourceText.length}`)
-
     const extractionPrompt = `${systemPrompt}\n\n${contextLine}`
 
     const allQuestions: AIQuestion[] = []
@@ -163,7 +157,6 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
           }],
         })
         const raw = response.content[0].type === 'text' ? response.content[0].text : ''
-        console.log(`[ingest] chunk ${chunkIdx} raw (first 200):`, raw.slice(0, 200))
         const cleaned = raw
           .replace(/^```json\s*/i, '')
           .replace(/^```\s*/i, '')
@@ -173,18 +166,16 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
         if (Array.isArray(parsed)) {
           allQuestions.push(...(parsed as AIQuestion[]))
         }
-      } catch (err) {
-        console.log(`[ingest] chunk ${chunkIdx} failed:`, err)
+      } catch {
         continue
       }
     }
 
     if (allQuestions.length === 0) {
-      return NextResponse.json({
-        error: 'No questions could be extracted from this document',
-        debug_text_preview: sourceText.slice(0, 500),
-        debug_text_length: sourceText.length,
-      }, { status: 422 })
+      return NextResponse.json(
+        { error: 'No questions could be extracted from this document' },
+        { status: 422 },
+      )
     }
 
     // ── Insert into questions table ──────────────────────────────────────────
