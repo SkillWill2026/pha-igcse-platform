@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BookOpen, FileText, Loader2, LogOut, Upload, Users } from 'lucide-react'
+import { BookOpen, CalendarDays, FileText, Loader2, LogOut, Upload, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavLink {
@@ -14,10 +14,11 @@ interface NavLink {
 }
 
 const NAV_LINKS: NavLink[] = [
-  { href: '/admin/upload',    label: 'Upload',            icon: Upload,   adminOnly: false },
-  { href: '/admin/questions', label: 'Questions Library', icon: BookOpen, adminOnly: false },
-  { href: '/admin/answers',   label: 'Answers Library',   icon: FileText, adminOnly: false },
-  { href: '/admin/users',     label: 'Users',             icon: Users,    adminOnly: true  },
+  { href: '/admin/upload',    label: 'Upload',            icon: Upload,       adminOnly: false },
+  { href: '/admin/questions', label: 'Questions Library', icon: BookOpen,     adminOnly: false },
+  { href: '/admin/answers',   label: 'Answers Library',   icon: FileText,     adminOnly: false },
+  { href: '/admin/schedule',  label: 'Schedule',          icon: CalendarDays, adminOnly: false },
+  { href: '/admin/users',     label: 'Users',             icon: Users,        adminOnly: true  },
 ]
 
 interface SidebarProps {
