@@ -162,7 +162,12 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
         const res  = await fetch('/api/ingest', { method: 'POST', body: fd })
         const data = await res.json() as { count?: number; questions?: unknown[]; error?: string }
 
-        if (!res.ok) throw new Error(data.error ?? `Server error ${res.status}`)
+        if (!res.ok) {
+          const msg = data.error === 'AI returned malformed JSON'
+            ? 'document too complex, try a shorter file'
+            : (data.error ?? `Server error ${res.status}`)
+          throw new Error(msg)
+        }
 
         const count = data.count ?? (data.questions as unknown[])?.length ?? 0
         setQueue((prev) => prev.map((f) =>

@@ -136,11 +136,15 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       : `Context: Topic ${topic?.ref ?? '?'} – ${topic?.name ?? 'Unknown'} | Subtopic ${subtopic?.ref ?? '?'} – ${(subtopic as any)?.title ?? 'Unknown'}`
 
+    // Truncate to 12 000 chars to stay within reliable JSON response limits.
+    // Larger documents cause Claude to produce truncated/malformed JSON.
+    const truncatedText = text.slice(0, 12_000)
+
     const userContent = `Extract all exam questions from this Cambridge IGCSE Mathematics document.
 ${contextLine}
 
 ---
-${text.slice(0, 14_000)}
+${truncatedText}
 ---`
 
     const aiResponse = await anthropic.messages.create({
@@ -150,20 +154,23 @@ ${text.slice(0, 14_000)}
       messages: [{ role: 'user', content: userContent }],
     })
 
-    const raw =
-      aiResponse.content[0].type === 'text' ? aiResponse.content[0].text.trim() : ''
+    const raw = aiResponse.content[0].type === 'text' ? aiResponse.content[0].text : ''
 
-    // Strip accidental markdown fences if the model adds them
-    const jsonStr = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+    // Strip markdown fences that the model occasionally wraps around JSON
+    const cleaned = raw
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim()
 
     let aiQuestions: AIQuestion[] = []
     try {
-      aiQuestions = JSON.parse(jsonStr)
+      aiQuestions = JSON.parse(cleaned)
       if (!Array.isArray(aiQuestions)) throw new Error('Response is not an array')
     } catch {
       return NextResponse.json(
-        { error: 'AI returned malformed JSON', raw },
-        { status: 502 },
+        { error: 'AI returned malformed JSON', raw: cleaned.slice(0, 200) },
+        { status: 422 },
       )
     }
 
