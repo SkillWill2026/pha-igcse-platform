@@ -4,6 +4,7 @@ export type AnswerStatus = 'draft' | 'approved' | 'rejected'
 
 export interface QuestionRow {
   id: string
+  serial_number: string | null
   exam_board_id: string
   topic_id: string
   subtopic_id: string

@@ -91,6 +91,7 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
   const [questions, setQuestions] = useState<ExtractedQuestion[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [savedSerials, setSavedSerials] = useState<string[]>([])
 
   // ── Dropzone ────────────────────────────────────────────────────────────────
   const onDrop = useCallback((accepted: File[]) => {
@@ -98,6 +99,7 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
       setFile(accepted[0])
       setQuestions([])
       setSaved(false)
+      setSavedSerials([])
       setError(null)
     }
   }, [])
@@ -150,8 +152,9 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: questions.map((q) => q.id) }),
       })
-      const data: { updated?: number; error?: string } = await res.json()
+      const data: { updated?: number; serials?: string[]; error?: string } = await res.json()
       if (!res.ok) throw new Error(data.error ?? `Server error ${res.status}`)
+      setSavedSerials(data.serials ?? [])
       setSaved(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')
@@ -265,10 +268,24 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
               </span>
             </h2>
             {saved && (
-              <span className="flex items-center gap-1.5 text-sm font-medium text-green-600">
-                <CheckCircle2 className="h-4 w-4" />
-                {questions.length} question{questions.length !== 1 ? 's' : ''} approved
-              </span>
+              <div className="flex flex-col items-end gap-1.5">
+                <span className="flex items-center gap-1.5 text-sm font-medium text-green-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {questions.length} question{questions.length !== 1 ? 's' : ''} approved
+                </span>
+                {savedSerials.length > 0 && (
+                  <div className="flex flex-wrap gap-1 justify-end">
+                    {savedSerials.map((s) => (
+                      <span
+                        key={s}
+                        className="inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] bg-gray-100 text-gray-600"
+                      >
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

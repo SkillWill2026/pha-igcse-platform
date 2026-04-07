@@ -21,13 +21,17 @@ export async function PATCH(request: NextRequest) {
       .from('questions')
       .update({ status: 'approved' })
       .in('id', ids as string[])
-      .select('id, status')
+      .select('id, serial_number')
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ updated: data?.length ?? 0 })
+    const serials = (data ?? [])
+      .map((r: any) => r.serial_number as string | null)
+      .filter((s): s is string => s !== null)
+
+    return NextResponse.json({ updated: data?.length ?? 0, serials })
   } catch (err) {
     console.error('[PATCH /api/questions/approve]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

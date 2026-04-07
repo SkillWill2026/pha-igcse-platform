@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowRight, Loader2, Trash2, Wand2, X } from 'lucide-react'
@@ -390,6 +390,7 @@ export function QuestionsLibrary({ boards }: Props) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
+              <TableHead className="w-28">Serial</TableHead>
               <TableHead className="w-36">Subtopic</TableHead>
               <TableHead className="w-40">Boards</TableHead>
               <TableHead className="w-28">Difficulty</TableHead>
@@ -403,14 +404,14 @@ export function QuestionsLibrary({ boards }: Props) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                   <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
                   Loading questions…
                 </TableCell>
               </TableRow>
             ) : filteredGroups.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                   {questions.length === 0
                     ? 'No questions yet — upload a paper to get started.'
                     : `No questions match the current filters. (${questions.length} loaded)`}
@@ -421,6 +422,9 @@ export function QuestionsLibrary({ boards }: Props) {
                 const q = g.original
                 return (
                   <TableRow key={g.id} className="hover:bg-muted/30">
+                    <TableCell>
+                      <SerialPill serial={q.serial_number ?? null} />
+                    </TableCell>
                     <TableCell>
                       <div>
                         <span className="font-mono text-xs text-muted-foreground">
@@ -531,6 +535,31 @@ function FilterSelect({
         ))}
       </SelectContent>
     </Select>
+  )
+}
+
+function SerialPill({ serial }: { serial: string | null }) {
+  const [copied, setCopied] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  if (!serial) return <span className="font-mono text-xs text-muted-foreground/40">—</span>
+
+  function handleClick() {
+    navigator.clipboard.writeText(serial!).then(() => {
+      setCopied(true)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      title={copied ? 'Copied!' : 'Click to copy'}
+      className="inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+    >
+      {copied ? 'Copied!' : serial}
+    </button>
   )
 }
 
