@@ -47,7 +47,8 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient()
     const created = []
 
-    for (const file of files) {
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index]
       const timestamp = Date.now()
       const safeName  = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const storagePath = `${questionId}/${timestamp}_${safeName}`
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
           storage_path: storagePath,
           public_url:   publicUrl,
           image_type:   imageType,
-          sort_order:   timestamp,
+          sort_order:   index,
         })
         .select()
         .single()
