@@ -32,31 +32,18 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient()
     const body = await request.json() as Record<string, unknown>
 
-    const {
-      subtopic_id,
-      ref,
-      title,
-      syllabus_code,
-      mcq_count,
-      short_ans_count,
-      structured_count,
-      extended_count,
-      qs_total,
-    } = body as {
+    const { subtopic_id, ext_num, core_num, outcome, tier, notes } = body as {
       subtopic_id: string
-      ref: string
-      title: string
-      syllabus_code?: string
-      mcq_count: number
-      short_ans_count: number
-      structured_count: number
-      extended_count: number
-      qs_total?: number
+      ext_num: number
+      core_num?: number | null
+      outcome: string
+      tier?: string
+      notes?: string[] | null
     }
 
-    if (!subtopic_id || !ref || !title) {
+    if (!subtopic_id || !ext_num || !outcome) {
       return NextResponse.json(
-        { error: 'Missing required fields: subtopic_id, ref, title' },
+        { error: 'Missing required fields: subtopic_id, ext_num, outcome' },
         { status: 400 },
       )
     }
@@ -68,25 +55,16 @@ export async function POST(request: NextRequest) {
       .eq('subtopic_id', subtopic_id)
 
     const sort_order = (count ?? 0) + 1
-    const computed_qs_total =
-      qs_total ??
-      ((Number(mcq_count) || 0) +
-        (Number(short_ans_count) || 0) +
-        (Number(structured_count) || 0) +
-        (Number(extended_count) || 0))
 
     const { data, error } = await supabase
       .from('sub_subtopics')
       .insert({
         subtopic_id,
-        ref,
-        title,
-        syllabus_code: syllabus_code ?? null,
-        mcq_count: Number(mcq_count) || 0,
-        short_ans_count: Number(short_ans_count) || 0,
-        structured_count: Number(structured_count) || 0,
-        extended_count: Number(extended_count) || 0,
-        qs_total: computed_qs_total,
+        ext_num: Number(ext_num),
+        core_num: core_num != null ? Number(core_num) : null,
+        outcome,
+        tier: tier ?? 'both',
+        notes: notes ?? null,
         sort_order,
       })
       .select()

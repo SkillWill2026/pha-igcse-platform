@@ -10,16 +10,7 @@ export async function PATCH(
   try {
     const supabase = createAdminClient()
     const body = await request.json() as Record<string, unknown>
-    const allowed = [
-      'ref',
-      'title',
-      'syllabus_code',
-      'qs_total',
-      'mcq_count',
-      'short_ans_count',
-      'structured_count',
-      'extended_count',
-    ]
+    const allowed = ['ext_num', 'core_num', 'outcome', 'tier', 'notes', 'sort_order']
     const updates: Record<string, unknown> = {}
     for (const key of allowed) {
       if (key in body) updates[key] = body[key]

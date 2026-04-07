@@ -67,7 +67,8 @@ export async function POST() {
     // 4. Fetch all sub_subtopics
     const { data: subSubtopicsRaw, error: sstErr } = await supabase
       .from('sub_subtopics')
-      .select('id, ref, title, subtopic_id')
+      .select('id, subtopic_id, ext_num, outcome, sort_order')
+      .order('sort_order')
 
     if (sstErr) {
       console.error('[assign-subtopics] sub_subtopics fetch error:', sstErr.message)
@@ -95,7 +96,7 @@ export async function POST() {
         const sstList = sstBySubtopic.get(s.id) ?? []
         const sstLines = sstList
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((ss: any) => `  → sub-subtopic: ${ss.id} | ${ss.ref} | ${ss.title ?? ''}`)
+          .map((ss: any) => `  → objective ${ss.ext_num}: ${ss.id} | ${ss.outcome ?? ''}`)
           .join('\n')
         return `Subtopic: ${s.id} | ${s.ref} | ${s.title ?? ''}` + (sstLines ? '\n' + sstLines : '')
       })

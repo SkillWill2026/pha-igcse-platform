@@ -35,7 +35,7 @@ export default async function QuestionReviewPage({
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('sort_order'),
       supabase.from('subtopics').select('id, ref, title, topic_id').order('sort_order'),
-      supabase.from('sub_subtopics').select('id, ref, title, subtopic_id').order('sort_order'),
+      supabase.from('sub_subtopics').select('id, subtopic_id, ext_num, outcome, sort_order').order('sort_order'),
     ])
 
     if (qRes.error || !qRes.data) {
@@ -43,16 +43,24 @@ export default async function QuestionReviewPage({
       notFound()
     }
 
-    allBoards       = bRes.data ?? []
-    allTopics       = (tRes.data ?? []) as typeof allTopics
+    allBoards    = bRes.data ?? []
+    allTopics    = (tRes.data ?? []) as typeof allTopics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    allSubtopics    = (sRes.data ?? []) as any
-    allSubSubtopics = (sstRes.data ?? []) as typeof allSubSubtopics
+    allSubtopics = (sRes.data ?? []) as any
 
-    const boardMap    = new Map(allBoards.map((b) => [b.id, b]))
-    const topicMap    = new Map(allTopics.map((t) => [t.id, t]))
+    const boardMap       = new Map(allBoards.map((b) => [b.id, b]))
+    const topicMap       = new Map(allTopics.map((t) => [t.id, t]))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const subtopicMap = new Map(allSubtopics.map((s: any) => [s.id, { id: s.id, ref: s.ref, name: s.title ?? '' }]))
+    const subtopicMap    = new Map(allSubtopics.map((s: any) => [s.id, { id: s.id, ref: s.ref, name: s.title ?? '' }]))
+    const subtopicRefMap = new Map(allSubtopics.map((s: { id: string; ref: string }) => [s.id, s.ref]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    allSubSubtopics = (sstRes.data ?? []).map((s: any) => ({
+      id: s.id,
+      subtopic_id: s.subtopic_id,
+      ref: `${subtopicRefMap.get(s.subtopic_id) ?? ''}.${s.ext_num}`,
+      title: s.outcome ?? '',
+      sort_order: s.sort_order,
+    }))
 
     question = {
       ...qRes.data,

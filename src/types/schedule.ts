@@ -3,14 +3,11 @@ export type SubtopicStatus = 'draft' | 'in_progress' | 'review' | 'approved'
 export interface SubSubtopic {
   id: string
   subtopic_id: string
-  ref: string
-  title: string
-  syllabus_code?: string
-  qs_total: number
-  mcq_count: number
-  short_ans_count: number
-  structured_count: number
-  extended_count: number
+  ext_num: number
+  core_num: number | null
+  outcome: string
+  tier: 'both' | 'extended'
+  notes: string[] | null
   sort_order: number
   created_at: string
 }
