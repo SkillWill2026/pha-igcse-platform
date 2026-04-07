@@ -180,10 +180,11 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
     }
 
     if (allQuestions.length === 0) {
-      return NextResponse.json(
-        { error: 'No questions could be extracted from this document' },
-        { status: 422 },
-      )
+      return NextResponse.json({
+        error: 'No questions could be extracted from this document',
+        debug_text_preview: sourceText.slice(0, 500),
+        debug_text_length: sourceText.length,
+      }, { status: 422 })
     }
 
     // ── Insert into questions table ──────────────────────────────────────────
