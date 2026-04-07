@@ -139,6 +139,7 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
     // Truncate to 12 000 chars to stay within reliable JSON response limits.
     // Larger documents cause Claude to produce truncated/malformed JSON.
     const truncatedText = text.slice(0, 12_000)
+    console.log('Text sent to Claude (length):', truncatedText.length)
 
     const userContent = `Extract all exam questions from this Cambridge IGCSE Mathematics document.
 ${contextLine}
@@ -155,6 +156,7 @@ ${truncatedText}
     })
 
     const raw = aiResponse.content[0].type === 'text' ? aiResponse.content[0].text : ''
+    console.log('Claude raw response (first 500):', raw.slice(0, 500))
 
     // Strip markdown fences that the model occasionally wraps around JSON
     const cleaned = raw
@@ -162,12 +164,14 @@ ${truncatedText}
       .replace(/^```\s*/i, '')
       .replace(/```\s*$/i, '')
       .trim()
+    console.log('Cleaned JSON (first 500):', cleaned.slice(0, 500))
 
     let aiQuestions: AIQuestion[] = []
     try {
       aiQuestions = JSON.parse(cleaned)
       if (!Array.isArray(aiQuestions)) throw new Error('Response is not an array')
-    } catch {
+    } catch (err) {
+      console.log('JSON parse error:', err, 'Full cleaned text:', cleaned)
       return NextResponse.json(
         { error: 'AI returned malformed JSON', raw: cleaned.slice(0, 200) },
         { status: 422 },
