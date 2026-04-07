@@ -3,10 +3,18 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowRight, Trash2, X } from 'lucide-react'
+import { ArrowRight, Loader2, Trash2, Wand2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -88,14 +96,21 @@ interface Props {
 
 export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props) {
   const router = useRouter()
-  const [deletingId,  setDeletingId]  = useState<string | null>(null)
-  const [boardId,    setBoardId]    = useState(ALL)
-  const [topicId,    setTopicId]    = useState(ALL)
-  const [subtopicId, setSubtopicId] = useState(ALL)
-  const [qtype,      setQtype]      = useState(ALL)
-  const [status,     setStatus]     = useState(ALL)
-  const [diffMin,    setDiffMin]    = useState(ALL)
-  const [diffMax,    setDiffMax]    = useState(ALL)
+  const [deletingId,        setDeletingId]        = useState<string | null>(null)
+  const [boardId,           setBoardId]           = useState(ALL)
+  const [topicId,           setTopicId]           = useState(ALL)
+  const [subtopicId,        setSubtopicId]        = useState(ALL)
+  const [qtype,             setQtype]             = useState(ALL)
+  const [status,            setStatus]            = useState(ALL)
+  const [diffMin,           setDiffMin]           = useState(ALL)
+  const [diffMax,           setDiffMax]           = useState(ALL)
+  const [assignLoading,     setAssignLoading]     = useState(false)
+  const [showAssignConfirm, setShowAssignConfirm] = useState(false)
+
+  const unassignedCount = useMemo(
+    () => questions.filter((q) => !q.subtopics).length,
+    [questions],
+  )
 
   // Cascade subtopics
   const filteredSubtopics = useMemo(
@@ -212,6 +227,26 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
     setQtype(ALL); setStatus(ALL); setDiffMin(ALL); setDiffMax(ALL)
   }
 
+  async function handleAssignSubtopics() {
+    setShowAssignConfirm(false)
+    setAssignLoading(true)
+    try {
+      const res = await fetch('/api/admin/assign-subtopics', { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        toast.error(d.error ?? 'Auto-assign failed')
+        return
+      }
+      const d = await res.json() as { total: number; assigned: number; skipped: number; errors: number }
+      toast.success(`Assigned ${d.assigned} of ${d.total} questions`)
+      window.location.reload()
+    } catch {
+      toast.error('Auto-assign failed')
+    } finally {
+      setAssignLoading(false)
+    }
+  }
+
   async function handleDelete(groupId: string) {
     setDeletingId(groupId)
     try {
@@ -232,6 +267,51 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
 
   return (
     <div className="space-y-4">
+      {/* ── Auto-assign button ─────────────────────────────────────────── */}
+      {unassignedCount > 0 && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={assignLoading}
+            onClick={() => setShowAssignConfirm(true)}
+          >
+            {assignLoading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Assigning...
+              </>
+            ) : (
+              <>
+                <Wand2 className="h-3.5 w-3.5" />
+                Auto-assign Subtopics ({unassignedCount})
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {/* ── Auto-assign confirmation dialog ───────────────────────────── */}
+      <Dialog open={showAssignConfirm} onOpenChange={setShowAssignConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Auto-assign Subtopics</DialogTitle>
+            <DialogDescription>
+              This will use AI to assign subtopics to all {unassignedCount} unlinked questions. Continue?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAssignConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAssignSubtopics}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
       <div className="rounded-lg border bg-card p-4 space-y-3">
         <div className="flex flex-wrap gap-2 items-center">
