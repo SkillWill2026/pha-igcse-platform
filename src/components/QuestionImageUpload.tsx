@@ -38,9 +38,7 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete }:
       const res = await fetch(`/api/question-images?question_id=${questionId}&image_type=${imageType}`)
       if (!res.ok) return
       const data = await res.json() as QuestionImageWithDisplay[]
-      if (mountedRef.current) {
-        setImages(data)
-      }
+      if (mountedRef.current) setImages(data)
     } catch {
       // ignore
     }
@@ -48,13 +46,13 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete }:
 
   useEffect(() => { fetchImages() }, [fetchImages])
 
-  const onDrop = useCallback(async (accepted: File[]) => {
-    if (accepted.length === 0) return
+  const handleFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) return
 
-    setUploading(accepted.map((f) => ({ name: f.name, progress: 'uploading' as const })))
+    setUploading(files.map((f) => ({ name: f.name, progress: 'uploading' as const })))
 
-    for (let i = 0; i < accepted.length; i++) {
-      const file = accepted[i]
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
       try {
         const fd = new FormData()
         fd.append('question_id', questionId)
@@ -90,8 +88,24 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete }:
     onUploadComplete?.()
   }, [questionId, imageType, fetchImages, onUploadComplete])
 
+  // Clipboard paste support
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      const imageItems = Array.from(items).filter((item) => item.type.startsWith('image/'))
+      if (imageItems.length === 0) return
+      const files = imageItems
+        .map((item) => item.getAsFile())
+        .filter((f): f is File => f !== null)
+      if (files.length > 0) handleFiles(files)
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [handleFiles])
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
+    onDrop: handleFiles,
     accept: {
       'image/jpeg': ['.jpg', '.jpeg'],
       'image/png':  ['.png'],
@@ -131,7 +145,7 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete }:
         <input {...getInputProps()} />
         <Upload className="h-6 w-6 text-muted-foreground mb-2" />
         <p className="text-xs font-medium">
-          {isDragActive ? 'Drop images here' : 'Drag & drop or click to select'}
+          {isDragActive ? 'Drop images here' : 'Drag & drop, click, or paste (Ctrl+V)'}
         </p>
         <p className="text-xs text-muted-foreground mt-0.5">JPG, PNG, GIF, WebP</p>
       </div>
