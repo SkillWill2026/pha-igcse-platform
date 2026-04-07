@@ -13,6 +13,16 @@ export interface Topic {
   created_at: string
 }
 
+export interface PPTDeck {
+  id: string
+  subtopic_id: string
+  filename: string
+  file_path: string
+  file_size: number | null
+  uploaded_by: string | null
+  created_at: string
+}
+
 export interface Subtopic {
   id: string
   topic_id: string
@@ -28,6 +38,10 @@ export interface Subtopic {
   status: SubtopicStatus
   sort_order: number
   created_at: string
+  ppt_required: boolean
+  examples_required: number
+  ppt_decks?: PPTDeck[]
+  examples_count?: number
 }
 
 export interface TopicWithSubtopics extends Topic {

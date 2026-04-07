@@ -17,7 +17,7 @@ export default async function UploadPage() {
     const supabase = createAdminClient()
     const [boardsRes, subtopicsRes, topicsRes] = await Promise.all([
       supabase.from('exam_boards').select('id, name').order('name'),
-      supabase.from('subtopics').select('id, ref, name, topic_id').order('ref'),
+      supabase.from('subtopics').select('id, ref, name:title, topic_id').order('ref'),
       supabase.from('topics').select('id, ref, name'),
     ])
     boards = boardsRes.data ?? []

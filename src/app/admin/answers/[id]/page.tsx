@@ -27,7 +27,7 @@ export default async function AnswerReviewPage({
         .single(),
       supabase.from('exam_boards').select('id, name'),
       supabase.from('topics').select('id, ref, name'),
-      supabase.from('subtopics').select('id, ref, name'),
+      supabase.from('subtopics').select('id, ref, name:title'),
     ])
 
     if (aRes.error || !aRes.data) {

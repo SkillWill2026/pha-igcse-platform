@@ -31,7 +31,7 @@ export default async function QuestionReviewPage({
         .single(),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name'),
-      supabase.from('subtopics').select('id, ref, name'),
+      supabase.from('subtopics').select('id, ref, name:title'),
     ])
 
     if (qRes.error || !qRes.data) {

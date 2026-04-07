@@ -28,7 +28,7 @@ export default async function QuestionsPage() {
         .order('created_at', { ascending: false }),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('ref'),
-      supabase.from('subtopics').select('id, ref, name, topic_id').order('ref'),
+      supabase.from('subtopics').select('id, ref, name:title, topic_id').order('ref'),
     ])
 
     if (qRes.error) console.error('[QuestionsPage] questions error:', qRes.error)

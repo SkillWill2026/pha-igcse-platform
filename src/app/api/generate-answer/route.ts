@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
         ? supabase.from('topics').select('ref, name').eq('id', question.topic_id).single()
         : Promise.resolve({ data: null }),
       question.subtopic_id
-        ? supabase.from('subtopics').select('ref, name').eq('id', question.subtopic_id).single()
+        ? supabase.from('subtopics').select('ref, name:title').eq('id', question.subtopic_id).single()
         : Promise.resolve({ data: null }),
       question.exam_board_id
         ? supabase.from('exam_boards').select('name').eq('id', question.exam_board_id).single()

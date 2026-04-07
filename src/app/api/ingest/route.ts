@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
     const { data: subtopic } = await supabase
       .from('subtopics')
-      .select('ref, name, topic_id')
+      .select('ref, name:title, topic_id')
       .eq('id', subtopic_id)
       .single()
 

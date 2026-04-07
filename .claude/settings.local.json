@@ -42,7 +42,13 @@
       "Bash(winget install:*)",
       "Bash(gh auth:*)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth status)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" repo create pha-igcse-platform --private --confirm)"
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" repo create pha-igcse-platform --private --confirm)",
+      "Bash(ls \"C:\\\\Users\\\\jayou\\\\Desktop\\\\pha-igcse-platform\\\\src\\\\components\\\\schedule\"\" && echo \"---\" && ls \"C:UsersjayouDesktoppha-igcse-platformsrcappapischedule\"\")",
+      "Bash(ls /c/Users/jayou/Desktop/pha-igcse-platform/src/app/api/schedule/examples/[id]/)",
+      "Bash(ls /c/Users/jayou/Desktop/pha-igcse-platform/src/app/api/schedule/ppt/[id]/)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

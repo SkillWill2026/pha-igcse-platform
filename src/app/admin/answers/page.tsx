@@ -34,7 +34,7 @@ export default async function AnswersPage() {
         ),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('ref'),
-      supabase.from('subtopics').select('id, ref, name, topic_id').order('ref'),
+      supabase.from('subtopics').select('id, ref, name:title, topic_id').order('ref'),
     ])
 
     if (aRes.error) console.error('[AnswersPage] answers error:',   aRes.error)
