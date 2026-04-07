@@ -21,6 +21,7 @@ import {
 import { MathRenderer } from '@/components/admin/math-renderer'
 import { RejectDialog } from '@/components/admin/reject-dialog'
 import { DeleteDialog } from '@/components/admin/delete-dialog'
+import { QuestionImageUpload } from '@/components/QuestionImageUpload'
 import type { QuestionWithRelations, QuestionType, QuestionStatus } from '@/types/database'
 
 const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
@@ -446,7 +447,19 @@ export function ReviewClient({
         />
       </section>
 
-      {/* ── Image upload ──────────────────────────────────────────────────── */}
+      {/* ── Question images ───────────────────────────────────────────────── */}
+      <section className="space-y-2">
+        <Label>Question images</Label>
+        <QuestionImageUpload questionId={question.id} imageType="question" />
+      </section>
+
+      {/* ── Answer images ─────────────────────────────────────────────────── */}
+      <section className="space-y-2">
+        <Label>Answer images</Label>
+        <QuestionImageUpload questionId={question.id} imageType="answer" />
+      </section>
+
+      {/* ── Legacy single image upload ────────────────────────────────────── */}
       <section className="space-y-2">
         <Label>Question Image <span className="text-muted-foreground font-normal">(optional)</span></Label>
         {imageUrl ? (

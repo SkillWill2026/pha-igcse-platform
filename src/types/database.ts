@@ -30,6 +30,17 @@ export interface QuestionWithRelations extends QuestionRow {
   sub_subtopics: { ext_num: number; outcome: string; tier: string } | null
 }
 
+export type QuestionImage = {
+  id: string
+  question_id: string
+  storage_path: string
+  public_url: string | null
+  image_type: 'question' | 'answer' | 'diagram'
+  caption: string | null
+  sort_order: number
+  created_at: string
+}
+
 export interface AnswerRow {
   id: string
   question_id: string
