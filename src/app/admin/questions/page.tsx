@@ -14,30 +14,44 @@ export default async function QuestionsPage() {
 
   try {
     const supabase = createAdminClient()
+
+    // Fetch all four tables in parallel — questions with NO embedded joins so that
+    // missing FK constraints cannot silently zero out the entire result.
     const [qRes, bRes, tRes, sRes] = await Promise.all([
       supabase
         .from('questions')
-        .select(`
-          id, content_text, difficulty, question_type, marks, status,
-          ai_extracted, created_at, updated_at,
-          exam_board_id, topic_id, subtopic_id, image_url, source_question_id,
-          exam_boards(id, name),
-          topics(id, ref, name),
-          subtopics(id, ref, name)
-        `)
+        .select(
+          'id, content_text, difficulty, question_type, marks, status,' +
+          'ai_extracted, created_at, updated_at,' +
+          'exam_board_id, topic_id, subtopic_id, image_url, source_question_id',
+        )
         .order('created_at', { ascending: false }),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('ref'),
       supabase.from('subtopics').select('id, ref, name, topic_id').order('ref'),
     ])
-    if (qRes.error)  console.error('[QuestionsPage] questions query error:', qRes.error)
-    if (bRes.error)  console.error('[QuestionsPage] boards query error:',    bRes.error)
-    if (tRes.error)  console.error('[QuestionsPage] topics query error:',    tRes.error)
-    if (sRes.error)  console.error('[QuestionsPage] subtopics query error:', sRes.error)
-    questions = (qRes.data as unknown as QuestionWithRelations[]) ?? []
+
+    if (qRes.error) console.error('[QuestionsPage] questions error:', qRes.error)
+    if (bRes.error) console.error('[QuestionsPage] boards error:',    bRes.error)
+    if (tRes.error) console.error('[QuestionsPage] topics error:',    tRes.error)
+    if (sRes.error) console.error('[QuestionsPage] subtopics error:', sRes.error)
+
     boards    = bRes.data ?? []
     topics    = tRes.data ?? []
     subtopics = sRes.data ?? []
+
+    // Build lookup maps so we can stitch relations without relying on FK constraints
+    const boardMap    = new Map(boards.map((b) => [b.id, b]))
+    const topicMap    = new Map(topics.map((t) => [t.id, t]))
+    const subtopicMap = new Map(subtopics.map((s) => [s.id, { id: s.id, ref: s.ref, name: s.name }]))
+
+    questions = (qRes.data ?? []).map((q) => ({
+      ...q,
+      exam_boards: boardMap.get(q.exam_board_id)    ?? null,
+      topics:      topicMap.get(q.topic_id)          ?? null,
+      subtopics:   subtopicMap.get(q.subtopic_id)    ?? null,
+    })) as unknown as QuestionWithRelations[]
+
   } catch (err) {
     console.error('[QuestionsPage] unexpected error:', err)
   }
