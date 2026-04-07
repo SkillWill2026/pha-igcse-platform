@@ -50,10 +50,10 @@ export function AnswersLibrary({ answers, boards, topics, subtopics }: Props) {
       if (!q) return false
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const qAny = q as any
-      if (boardId    !== ALL && qAny.exam_boards?.id  !== boardId)    return false
-      if (topicId    !== ALL && qAny.topics?.id        !== topicId)    return false
-      if (subtopicId !== ALL && qAny.subtopics?.id     !== subtopicId) return false
-      if (status     !== ALL && a.status               !== status)     return false
+      if (boardId    && boardId    !== ALL && qAny.exam_boards?.id !== boardId)    return false
+      if (topicId    && topicId    !== ALL && qAny.topics?.id     !== topicId)    return false
+      if (subtopicId && subtopicId !== ALL && qAny.subtopics?.id  !== subtopicId) return false
+      if (status     && status     !== ALL && a.status            !== status)     return false
       return true
     })
   }, [answers, boardId, topicId, subtopicId, status])

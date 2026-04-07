@@ -167,13 +167,13 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
     return groups.filter((g) => {
       const q = g.original
       // Board filter: pass if any member is from this board
-      if (boardId !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
-      if (topicId    !== ALL && q.topics?.id      !== topicId)    return false
-      if (subtopicId !== ALL && q.subtopics?.id   !== subtopicId) return false
-      if (qtype      !== ALL && q.question_type   !== qtype)      return false
-      if (status     !== ALL && q.status          !== status)     return false
-      if (diffMin    !== ALL && q.difficulty < Number(diffMin))   return false
-      if (diffMax    !== ALL && q.difficulty > Number(diffMax))   return false
+      if (boardId    && boardId    !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
+      if (topicId    && topicId    !== ALL && q.topics?.id    !== topicId)    return false
+      if (subtopicId && subtopicId !== ALL && q.subtopics?.id !== subtopicId) return false
+      if (qtype      && qtype      !== ALL && q.question_type !== qtype)      return false
+      if (status     && status     !== ALL && q.status        !== status)     return false
+      if (diffMin    && diffMin    !== ALL && q.difficulty < Number(diffMin)) return false
+      if (diffMax    && diffMax    !== ALL && q.difficulty > Number(diffMax)) return false
       return true
     })
   }, [groups, boardId, topicId, subtopicId, qtype, status, diffMin, diffMax])
