@@ -6,6 +6,10 @@ import { ImageIcon, Loader2, Trash2, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { QuestionImage } from '@/types/database'
 
+interface QuestionImageWithDisplay extends QuestionImage {
+  display_url: string | null
+}
+
 interface Props {
   questionId: string
   imageType: 'question' | 'answer' | 'diagram'
@@ -19,7 +23,7 @@ interface UploadingFile {
 }
 
 export function QuestionImageUpload({ questionId, imageType, onUploadComplete }: Props) {
-  const [images,    setImages]    = useState<QuestionImage[]>([])
+  const [images,    setImages]    = useState<QuestionImageWithDisplay[]>([])
   const [uploading, setUploading] = useState<UploadingFile[]>([])
   const [deleting,  setDeleting]  = useState<Set<string>>(new Set())
   const mountedRef = useRef(true)
@@ -31,11 +35,11 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete }:
 
   const fetchImages = useCallback(async () => {
     try {
-      const res = await fetch(`/api/question-images?question_id=${questionId}`)
+      const res = await fetch(`/api/question-images?question_id=${questionId}&image_type=${imageType}`)
       if (!res.ok) return
-      const data = await res.json() as QuestionImage[]
+      const data = await res.json() as QuestionImageWithDisplay[]
       if (mountedRef.current) {
-        setImages(data.filter((img) => img.image_type === imageType))
+        setImages(data)
       }
     } catch {
       // ignore
@@ -158,10 +162,10 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete }:
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
           {images.map((img) => (
             <div key={img.id} className="relative group rounded-lg border overflow-hidden bg-muted/30">
-              {img.public_url ? (
+              {img.display_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={img.public_url}
+                  src={img.display_url}
                   alt={img.caption ?? 'Question image'}
                   className="w-full h-24 object-cover"
                 />

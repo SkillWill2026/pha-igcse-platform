@@ -5,23 +5,38 @@ export const runtime = 'nodejs'
 
 const BUCKET = 'question-images'
 
-// ── GET ?question_id=X ────────────────────────────────────────────────────────
+// ── GET ?question_id=X&image_type=Y ──────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const questionId = request.nextUrl.searchParams.get('question_id')
+  const imageType  = request.nextUrl.searchParams.get('image_type')
   if (!questionId) {
     return NextResponse.json({ error: 'question_id is required' }, { status: 400 })
   }
 
   try {
     const supabase = createAdminClient()
-    const { data, error } = await supabase
+    let query = supabase
       .from('question_images')
       .select('*')
       .eq('question_id', questionId)
       .order('sort_order', { ascending: true })
 
+    if (imageType) query = query.eq('image_type', imageType)
+
+    const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json(data ?? [])
+
+    const rows = data ?? []
+    const withSignedUrls = await Promise.all(
+      rows.map(async (image) => {
+        const { data: signedUrl } = await supabase.storage
+          .from(BUCKET)
+          .createSignedUrl(image.storage_path, 3600)
+        return { ...image, display_url: signedUrl?.signedUrl ?? null }
+      }),
+    )
+
+    return NextResponse.json(withSignedUrls)
   } catch (err) {
     console.error('[GET /api/question-images]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
