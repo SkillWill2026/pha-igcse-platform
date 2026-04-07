@@ -7,6 +7,7 @@ export interface QuestionRow {
   exam_board_id: string
   topic_id: string
   subtopic_id: string
+  sub_subtopic_id: string | null
   content_text: string
   image_url: string | null
   difficulty: number
@@ -23,6 +24,7 @@ export interface QuestionWithRelations extends QuestionRow {
   exam_boards: { id: string; name: string } | null
   topics: { id: string; ref: string; name: string } | null
   subtopics: { id: string; ref: string; name: string } | null
+  sub_subtopics: { ext_num: number; outcome: string; tier: string } | null
 }
 
 export interface AnswerRow {

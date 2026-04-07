@@ -9,61 +9,38 @@ export default async function QuestionsPage() {
   noStore()
   let questions: QuestionWithRelations[] = []
   let boards: { id: string; name: string }[] = []
-  let topics: { id: string; ref: string; name: string }[] = []
-  let subtopics: { id: string; ref: string; name: string; topic_id: string }[] = []
-  let subSubtopics: { id: string; ref: string; title: string; subtopic_id: string }[] = []
 
   try {
     const supabase = createAdminClient()
 
-    // Fetch all four tables in parallel — questions with NO embedded joins so that
-    // missing FK constraints cannot silently zero out the entire result.
-    const [qRes, bRes, tRes, sRes, sstRes] = await Promise.all([
+    const [qRes, bRes] = await Promise.all([
       supabase
         .from('questions')
-        .select(
-          'id, content_text, difficulty, question_type, marks, status,' +
-          'ai_extracted, created_at, updated_at,' +
-          'exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, source_question_id',
-        )
+        .select(`
+          id, content_text, difficulty, question_type, marks, status,
+          ai_extracted, created_at, updated_at,
+          exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, source_question_id,
+          topics(ref, name),
+          subtopics(ref, title),
+          sub_subtopics(ext_num, outcome, tier)
+        `)
         .order('created_at', { ascending: false }),
       supabase.from('exam_boards').select('id, name').order('name'),
-      supabase.from('topics').select('id, ref, name').order('ref'),
-      supabase.from('subtopics').select('id, ref, title, topic_id').order('ref'),
-      supabase.from('sub_subtopics').select('id, subtopic_id, ext_num, outcome, sort_order').order('sort_order'),
     ])
 
     if (qRes.error) console.error('[QuestionsPage] questions error:', qRes.error)
-    if (bRes.error) console.error('[QuestionsPage] boards error:',    bRes.error)
-    if (tRes.error) console.error('[QuestionsPage] topics error:',    tRes.error)
-    if (sRes.error) console.error('[QuestionsPage] subtopics error:', sRes.error)
-    if (sstRes.error) console.error('[QuestionsPage] sub_subtopics error:', sstRes.error)
+    if (bRes.error) console.error('[QuestionsPage] boards error:', bRes.error)
 
-    boards    = bRes.data ?? []
-    topics    = tRes.data ?? []
-    subtopics = sRes.data ?? []
+    boards = bRes.data ?? []
+    const boardMap = new Map(boards.map((b) => [b.id, b]))
 
-    // Build lookup maps so we can stitch relations without relying on FK constraints
-    const boardMap    = new Map(boards.map((b) => [b.id, b]))
-    const topicMap    = new Map(topics.map((t) => [t.id, t]))
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    subtopics = (subtopics as any[]).map((s) => ({ id: s.id, ref: s.ref, name: s.title ?? '', topic_id: s.topic_id }))
-    const subtopicRefMap = new Map(subtopics.map((s) => [s.id, s.ref]))
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    subSubtopics = (sstRes.data ?? []).map((s: any) => ({
-      id: s.id,
-      subtopic_id: s.subtopic_id,
-      ref: `${subtopicRefMap.get(s.subtopic_id) ?? ''}.${s.ext_num}`,
-      title: s.outcome ?? '',
-      sort_order: s.sort_order,
-    }))
-    const subtopicMap = new Map(subtopics.map((s) => [s.id, { id: s.id, ref: s.ref, name: s.name }]))
-
-    questions = (qRes.data ?? []).map((q) => ({
+    questions = (qRes.data ?? []).map((q: any) => ({
       ...q,
-      exam_boards: boardMap.get(q.exam_board_id)    ?? null,
-      topics:      topicMap.get(q.topic_id)          ?? null,
-      subtopics:   subtopicMap.get(q.subtopic_id)    ?? null,
+      exam_boards:   boardMap.get(q.exam_board_id) ?? null,
+      topics:        q.topics        ?? null,
+      subtopics:     q.subtopics     ? { id: q.subtopic_id, ref: q.subtopics.ref, name: q.subtopics.title ?? '' } : null,
+      sub_subtopics: q.sub_subtopics ?? null,
     })) as unknown as QuestionWithRelations[]
 
   } catch (err) {
@@ -79,9 +56,6 @@ export default async function QuestionsPage() {
       <QuestionsLibrary
         questions={questions}
         boards={boards}
-        topics={topics}
-        subtopics={subtopics}
-        subSubtopics={subSubtopics}
       />
     </div>
   )

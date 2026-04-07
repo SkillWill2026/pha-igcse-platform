@@ -7,6 +7,7 @@ import { ArrowRight, Loader2, Trash2, Wand2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { Button } from '@/components/ui/button'
+import { SyllabusSelector } from '@/components/SyllabusSelector'
 import {
   Dialog,
   DialogContent,
@@ -86,22 +87,17 @@ interface QuestionGroup {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  questions:     QuestionWithRelations[]
-  boards:        { id: string; name: string }[]
-  topics:        { id: string; ref: string; name: string }[]
-  subtopics:     { id: string; ref: string; name: string; topic_id: string }[]
-  subSubtopics:  { id: string; ref: string; title: string; subtopic_id: string }[]
+  questions: QuestionWithRelations[]
+  boards:    { id: string; name: string }[]
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function QuestionsLibrary({ questions, boards, topics, subtopics, subSubtopics }: Props) {
+export function QuestionsLibrary({ questions, boards }: Props) {
   const router = useRouter()
   const [deletingId,        setDeletingId]        = useState<string | null>(null)
   const [boardId,           setBoardId]           = useState(ALL)
-  const [topicId,           setTopicId]           = useState(ALL)
-  const [subtopicId,        setSubtopicId]        = useState(ALL)
-  const [subSubtopicId,     setSubSubtopicId]     = useState(ALL)
+  const [subSubtopicFilter, setSubSubtopicFilter] = useState<string | null>(null)
   const [qtype,             setQtype]             = useState(ALL)
   const [status,            setStatus]            = useState(ALL)
   const [diffMin,           setDiffMin]           = useState(ALL)
@@ -113,18 +109,6 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics, subSubt
     () => questions.filter((q) => !q.subtopics).length,
     [questions],
   )
-
-  // Cascade subtopics
-  const filteredSubtopics = useMemo(
-    () => (topicId === ALL ? subtopics : subtopics.filter((s) => s.topic_id === topicId)),
-    [topicId, subtopics],
-  )
-
-  // Cascade sub-subtopics
-  const filteredSubSubtopics = useMemo(() => {
-    const list = subtopicId === ALL ? subSubtopics : subSubtopics.filter((s) => s.subtopic_id === subtopicId)
-    return [...list].sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }))
-  }, [subtopicId, subSubtopics])
 
   // ── Build groups ───────────────────────────────────────────────────────────
   const groups = useMemo<QuestionGroup[]>(() => {
@@ -207,17 +191,15 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics, subSubt
     return groups.filter((g) => {
       const q = g.original
       // Board filter: pass if any member is from this board
-      if (boardId       && boardId       !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
-      if (topicId       && topicId       !== ALL && q.topics?.id    !== topicId)    return false
-      if (subtopicId    && subtopicId    !== ALL && q.subtopics?.id !== subtopicId) return false
-      if (subSubtopicId && subSubtopicId !== ALL && (q as any).sub_subtopic_id !== subSubtopicId) return false
-      if (qtype         && qtype         !== ALL && q.question_type !== qtype)      return false
-      if (status        && status        !== ALL && q.status        !== status)     return false
-      if (diffMin       && diffMin       !== ALL && q.difficulty < Number(diffMin)) return false
-      if (diffMax       && diffMax       !== ALL && q.difficulty > Number(diffMax)) return false
+      if (boardId          && boardId !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
+      if (subSubtopicFilter && q.sub_subtopic_id !== subSubtopicFilter) return false
+      if (qtype  && qtype  !== ALL && q.question_type !== qtype)      return false
+      if (status && status !== ALL && q.status        !== status)     return false
+      if (diffMin && diffMin !== ALL && q.difficulty < Number(diffMin)) return false
+      if (diffMax && diffMax !== ALL && q.difficulty > Number(diffMax)) return false
       return true
     })
-  }, [groups, boardId, topicId, subtopicId, subSubtopicId, qtype, status, diffMin, diffMax])
+  }, [groups, boardId, subSubtopicFilter, qtype, status, diffMin, diffMax])
 
   // ── Counts (groups, not rows) ──────────────────────────────────────────────
   const counts = useMemo(() => ({
@@ -228,11 +210,11 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics, subSubt
   }), [filteredGroups])
 
   const hasFilters =
-    boardId !== ALL || topicId !== ALL || subtopicId !== ALL || subSubtopicId !== ALL ||
+    boardId !== ALL || subSubtopicFilter !== null ||
     qtype !== ALL || status !== ALL || diffMin !== ALL || diffMax !== ALL
 
   const clearFilters = () => {
-    setBoardId(ALL); setTopicId(ALL); setSubtopicId(ALL); setSubSubtopicId(ALL)
+    setBoardId(ALL); setSubSubtopicFilter(null)
     setQtype(ALL); setStatus(ALL); setDiffMin(ALL); setDiffMax(ALL)
   }
 
@@ -323,73 +305,59 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics, subSubt
 
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
       <div className="rounded-lg border bg-card p-4 space-y-3">
-        <div className="flex flex-wrap gap-2 items-center">
-          <FilterSelect
-            placeholder="All Boards"
-            value={boardId}
-            onValueChange={setBoardId}
-            options={boards.map((b) => ({ value: b.id, label: b.name }))}
-          />
-          <FilterSelect
-            placeholder="All Topics"
-            value={topicId}
-            onValueChange={(v) => { setTopicId(v); setSubtopicId(ALL) }}
-            options={topics.map((t) => ({ value: t.id, label: `${t.ref} – ${t.name}` }))}
-          />
-          <FilterSelect
-            placeholder="All Subtopics"
-            value={subtopicId}
-            onValueChange={(v) => { setSubtopicId(v); setSubSubtopicId(ALL) }}
-            options={filteredSubtopics.map((s) => ({ value: s.id, label: `${s.ref} – ${s.name}` }))}
-            className="w-56"
-          />
-          {filteredSubSubtopics.length > 0 && (
+        <div className="flex flex-wrap gap-4 items-start">
+          {/* Three-level syllabus selector */}
+          <div className="w-72">
+            <SyllabusSelector onSubSubtopicChange={setSubSubtopicFilter} />
+          </div>
+
+          {/* Other filters */}
+          <div className="flex flex-wrap gap-2 items-center flex-1 pt-5">
             <FilterSelect
-              placeholder="All Sub-subtopics"
-              value={subSubtopicId}
-              onValueChange={setSubSubtopicId}
-              options={filteredSubSubtopics.map((s) => ({ value: s.id, label: `${s.ref} – ${s.title}` }))}
-              className="w-56"
+              placeholder="All Boards"
+              value={boardId}
+              onValueChange={setBoardId}
+              options={boards.map((b) => ({ value: b.id, label: b.name }))}
             />
-          )}
-          <FilterSelect
-            placeholder="All Types"
-            value={qtype}
-            onValueChange={setQtype}
-            options={[
-              { value: 'mcq',          label: 'MCQ' },
-              { value: 'short_answer', label: 'Short Answer' },
-              { value: 'structured',   label: 'Structured' },
-              { value: 'extended',     label: 'Extended' },
-            ]}
-          />
-          <FilterSelect
-            placeholder="All Statuses"
-            value={status}
-            onValueChange={setStatus}
-            options={[
-              { value: 'draft',    label: 'Draft' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'rejected', label: 'Rejected' },
-            ]}
-          />
-          <FilterSelect
-            placeholder="Min Diff"
-            value={diffMin}
-            onValueChange={setDiffMin}
-            options={[1,2,3,4,5].map((n) => ({ value: String(n), label: `Min ${n}★` }))}
-          />
-          <FilterSelect
-            placeholder="Max Diff"
-            value={diffMax}
-            onValueChange={setDiffMax}
-            options={[1,2,3,4,5].map((n) => ({ value: String(n), label: `Max ${n}★` }))}
-          />
-          {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
-              <X className="h-3 w-3" /> Clear
-            </Button>
-          )}
+            <FilterSelect
+              placeholder="All Types"
+              value={qtype}
+              onValueChange={setQtype}
+              options={[
+                { value: 'mcq',          label: 'MCQ' },
+                { value: 'short_answer', label: 'Short Answer' },
+                { value: 'structured',   label: 'Structured' },
+                { value: 'extended',     label: 'Extended' },
+              ]}
+            />
+            <FilterSelect
+              placeholder="All Statuses"
+              value={status}
+              onValueChange={setStatus}
+              options={[
+                { value: 'draft',    label: 'Draft' },
+                { value: 'approved', label: 'Approved' },
+                { value: 'rejected', label: 'Rejected' },
+              ]}
+            />
+            <FilterSelect
+              placeholder="Min Diff"
+              value={diffMin}
+              onValueChange={setDiffMin}
+              options={[1,2,3,4,5].map((n) => ({ value: String(n), label: `Min ${n}★` }))}
+            />
+            <FilterSelect
+              placeholder="Max Diff"
+              value={diffMax}
+              onValueChange={setDiffMax}
+              options={[1,2,3,4,5].map((n) => ({ value: String(n), label: `Max ${n}★` }))}
+            />
+            {hasFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
+                <X className="h-3 w-3" /> Clear
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -431,10 +399,20 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics, subSubt
                 return (
                   <TableRow key={g.id} className="hover:bg-muted/30">
                     <TableCell>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {q.subtopics?.ref ?? '—'}
-                      </span>
-                      <span className="ml-1.5 text-xs">{q.subtopics?.name ?? ''}</span>
+                      <div>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {q.subtopics?.ref ?? '—'}
+                        </span>
+                        <span className="ml-1.5 text-xs">{q.subtopics?.name ?? ''}</span>
+                      </div>
+                      {q.sub_subtopics && (
+                        <div className="text-[11px] text-muted-foreground mt-0.5">
+                          {q.sub_subtopics.ext_num}.{' '}
+                          {q.sub_subtopics.outcome.length > 60
+                            ? q.sub_subtopics.outcome.slice(0, 60) + '…'
+                            : q.sub_subtopics.outcome}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">

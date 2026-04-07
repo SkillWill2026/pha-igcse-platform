@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -9,10 +9,7 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
-  SelectSeparator,
   SelectTrigger,
 } from '@/components/ui/select'
 import {
@@ -23,27 +20,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { SyllabusSelector } from '@/components/SyllabusSelector'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ExamBoard {
   id: string
   name: string
-}
-
-interface Subtopic {
-  id: string
-  ref: string
-  name: string
-  topic_id: string
-  topics: { ref: string; name: string } | null
-}
-
-interface SubSubtopicItem {
-  id: string
-  ref: string
-  title: string
-  subtopic_id: string
 }
 
 interface ExtractedQuestion {
@@ -97,49 +80,17 @@ function TypeBadge({ type }: { type: string }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function UploadClient({
-  boards,
-  subtopics,
-  allSubSubtopics,
-}: {
-  boards: ExamBoard[]
-  subtopics: Subtopic[]
-  allSubSubtopics: SubSubtopicItem[]
-}) {
+export function UploadClient({ boards }: { boards: ExamBoard[] }) {
   const [file, setFile] = useState<File | null>(null)
   const [boardId, setBoardId] = useState('')
-  const [subtopicId, setSubtopicId] = useState('')
-  const [selectedSubSubtopicId, setSelectedSubSubtopicId] = useState<string>('')
+  const [subtopicId, setSubtopicId] = useState<string | null>(null)
+  const [subSubtopicId, setSubSubtopicId] = useState<string | null>(null)
 
   const [isExtracting, setIsExtracting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [questions, setQuestions] = useState<ExtractedQuestion[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
-
-  // Group subtopics by topic for the dropdown
-  const topicGroups = useMemo(() => {
-    const map = new Map<string, { label: string; items: Subtopic[] }>()
-    for (const s of subtopics) {
-      const key = s.topic_id
-      const label = s.topics ? `${s.topics.ref} ${s.topics.name}` : 'Other'
-      if (!map.has(key)) map.set(key, { label, items: [] })
-      map.get(key)!.items.push(s)
-    }
-    return Array.from(map.values())
-  }, [subtopics])
-
-  // Sub-subtopics for the currently selected subtopic
-  const relevantSubSubtopics = useMemo(() => {
-    const list = subtopicId ? allSubSubtopics.filter((s) => s.subtopic_id === subtopicId) : []
-    return [...list].sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }))
-  }, [subtopicId, allSubSubtopics])
-
-  // When subtopic changes, reset sub-subtopic
-  function handleSubtopicChange(value: string) {
-    setSubtopicId(value ?? '')
-    setSelectedSubSubtopicId('')
-  }
 
   // ── Dropzone ────────────────────────────────────────────────────────────────
   const onDrop = useCallback((accepted: File[]) => {
@@ -173,9 +124,7 @@ export function UploadClient({
       fd.append('file', file)
       fd.append('exam_board_id', boardId)
       fd.append('subtopic_id', subtopicId)
-      if (selectedSubSubtopicId) {
-        fd.append('sub_subtopic_id', selectedSubSubtopicId)
-      }
+      if (subSubtopicId) fd.append('sub_subtopic_id', subSubtopicId)
 
       const res = await fetch('/api/ingest', { method: 'POST', body: fd })
       const data: { questions?: ExtractedQuestion[]; error?: string } = await res.json()
@@ -213,43 +162,13 @@ export function UploadClient({
 
   const canExtract = !!file && !!boardId && !!subtopicId && !isExtracting
 
-  // ── Trigger label for subtopic/sub-subtopic selector ─────────────────────────
-  const subtopicTriggerLabel = () => {
-    if (!subtopicId) return <span className="text-muted-foreground truncate">Select subtopic…</span>
-    if (subtopicId === 'mixed') return <span className="italic text-violet-600 truncate">Mixed Topics</span>
-
-    if (selectedSubSubtopicId) {
-      const sst = allSubSubtopics.find((x) => x.id === selectedSubSubtopicId)
-      const parent = subtopics.find((x) => x.id === subtopicId)
-      if (sst) {
-        return (
-          <span className="truncate">
-            <span className="font-mono text-xs text-muted-foreground mr-1">{parent?.ref}</span>
-            <span className="font-mono text-xs text-muted-foreground mr-1">›</span>
-            <span className="font-mono text-xs text-muted-foreground mr-1">{sst.ref}</span>
-            {sst.title}
-          </span>
-        )
-      }
-    }
-
-    const s = subtopics.find((x) => x.id === subtopicId)
-    if (!s) return null
-    return (
-      <span className="truncate">
-        <span className="font-mono text-xs text-muted-foreground mr-1">{s.ref}</span>
-        {s.name}
-      </span>
-    )
-  }
-
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-8 max-w-4xl">
       {/* ── Upload card ──────────────────────────────────────────────────── */}
       <div className="rounded-lg border bg-card p-6 shadow-sm space-y-6">
-        {/* Dropdowns */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Exam Board + Syllabus Selector */}
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Exam Board</Label>
             <Select value={boardId} onValueChange={(v) => setBoardId(v ?? '')}>
@@ -275,76 +194,11 @@ export function UploadClient({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Topic / Subtopic / Sub-subtopic</Label>
-            <Select value={selectedSubSubtopicId || subtopicId} onValueChange={(v) => {
-              if (!v) return
-              // Check if it's a sub-subtopic
-              const sst = allSubSubtopics.find((x) => x.id === v)
-              if (sst) {
-                setSelectedSubSubtopicId(sst.id)
-                setSubtopicId(sst.subtopic_id)
-                return
-              }
-              // Otherwise it's a subtopic or 'mixed'
-              handleSubtopicChange(v)
-            }}>
-              <SelectTrigger className="w-full max-w-full overflow-hidden">
-                {subtopicTriggerLabel()}
-              </SelectTrigger>
-              <SelectContent className="max-h-72" alignItemWithTrigger={false}>
-                {subtopics.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                    No subtopics found — run SQL migrations first
-                  </div>
-                ) : (
-                  <>
-                    {/* Special: Mixed Topics */}
-                    <SelectItem value="mixed" label="Mixed Topics">
-                      <span className="italic text-violet-600">Mixed Topics</span>
-                    </SelectItem>
-
-                    <SelectSeparator />
-
-                    {/* 3-level: Topic → Subtopic → Sub-subtopics */}
-                    {topicGroups.map((group) => (
-                      <SelectGroup key={group.label}>
-                        <SelectLabel>{group.label}</SelectLabel>
-                        {group.items.map((s) => {
-                          const subItems = allSubSubtopics.filter((ss) => ss.subtopic_id === s.id)
-                          return (
-                            <div key={s.id}>
-                              <SelectItem value={s.id} label={`${s.ref} – ${s.name}`}>
-                                <span className="font-mono text-xs mr-1.5 text-muted-foreground">
-                                  {s.ref}
-                                </span>
-                                {s.name}
-                              </SelectItem>
-                              {subItems.map((ss) => (
-                                <SelectItem
-                                  key={ss.id}
-                                  value={ss.id}
-                                  label={`${s.ref} › ${ss.ref} – ${ss.title}`}
-                                >
-                                  <span className="font-mono text-xs mr-1 text-muted-foreground pl-4">
-                                    › {ss.ref}
-                                  </span>
-                                  <span className="text-muted-foreground">{ss.title}</span>
-                                </SelectItem>
-                              ))}
-                            </div>
-                          )
-                        })}
-                      </SelectGroup>
-                    ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-            {selectedSubSubtopicId && relevantSubSubtopics.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Sub-subtopic selected — questions will be tagged accordingly.
-              </p>
-            )}
+            <Label>Syllabus</Label>
+            <SyllabusSelector
+              onSubSubtopicChange={setSubSubtopicId}
+              onSubtopicChange={(id) => setSubtopicId(id)}
+            />
           </div>
         </div>
 
