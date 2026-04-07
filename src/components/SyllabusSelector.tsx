@@ -165,9 +165,9 @@ export function SyllabusSelector({
         </Select>
       </div>
 
-      {/* Learning Objective */}
+      {/* Sub-subtopic */}
       <div className="space-y-1">
-        <Label className="text-xs">Learning Objective</Label>
+        <Label className="text-xs">Sub-subtopic</Label>
         <Select value={subSubtopicId} onValueChange={handleSubSubtopicChange} disabled={!subtopicId}>
           <SelectTrigger className="h-8 text-xs w-full">
             {selectedSubSubtopic ? (
@@ -180,7 +180,7 @@ export function SyllabusSelector({
                   : selectedSubSubtopic.outcome}
               </span>
             ) : (
-              <span className="text-muted-foreground">Select learning objective…</span>
+              <span className="text-muted-foreground">Select sub-subtopic…</span>
             )}
           </SelectTrigger>
           <SelectContent className="max-h-64 overflow-y-auto" alignItemWithTrigger={false}>
