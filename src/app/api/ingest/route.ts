@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
     const exam_board_id = formData.get('exam_board_id') as string | null
     const subtopic_id = formData.get('subtopic_id') as string | null
     const sub_subtopic_id = (formData.get('sub_subtopic_id') as string | null) || null
+    const batch_id        = (formData.get('batch_id')        as string | null) || null
 
     if (!file || !exam_board_id || !subtopic_id) {
       return NextResponse.json(
@@ -175,6 +176,7 @@ ${text.slice(0, 14_000)}
       content_text: String(q.content ?? '').trim(),
       parent_question_ref: q.parent_question_ref ?? null,
       part_label: q.part_label ?? null,
+      batch_id: batch_id ?? null,
       difficulty: Math.min(5, Math.max(1, Math.round(Number(q.difficulty) || 2))),
       question_type: VALID_QUESTION_TYPES.includes(q.question_type)
         ? q.question_type

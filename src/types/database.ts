@@ -7,6 +7,7 @@ export interface QuestionRow {
   serial_number: string | null
   parent_question_ref: string | null
   part_label: string | null
+  batch_id: string | null
   exam_board_id: string
   topic_id: string
   subtopic_id: string
@@ -28,6 +29,20 @@ export interface QuestionWithRelations extends QuestionRow {
   topics: { id: string; ref: string; name: string } | null
   subtopics: { id: string; ref: string; name: string } | null
   sub_subtopics: { ext_num: number; outcome: string; tier: string } | null
+}
+
+export type UploadBatch = {
+  id: string
+  total_files: number
+  completed_files: number
+  failed_files: number
+  total_questions_extracted: number
+  topic_id: string | null
+  subtopic_id: string | null
+  sub_subtopic_id: string | null
+  status: 'processing' | 'completed' | 'partial' | 'failed'
+  created_at: string
+  completed_at: string | null
 }
 
 export type QuestionImage = {

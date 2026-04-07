@@ -34,7 +34,7 @@ import { TypeBadge } from '@/components/admin/type-badge'
 import { StatusBadge } from '@/components/admin/status-badge'
 import { DifficultyStars } from '@/components/admin/difficulty-stars'
 import { DeleteDialog } from '@/components/admin/delete-dialog'
-import type { QuestionWithRelations } from '@/types/database'
+import type { QuestionWithRelations, UploadBatch } from '@/types/database'
 
 const ALL = '__all__'
 
@@ -109,6 +109,8 @@ export function QuestionsLibrary({ boards }: Props) {
   const [status,           setStatus]           = useState(ALL)
   const [diffMin,          setDiffMin]          = useState(ALL)
   const [diffMax,          setDiffMax]          = useState(ALL)
+  const [batchFilter,      setBatchFilter]      = useState(ALL)
+  const [batches,          setBatches]          = useState<UploadBatch[]>([])
 
   const [deletingId,        setDeletingId]        = useState<string | null>(null)
   const [assignLoading,     setAssignLoading]     = useState(false)
@@ -122,6 +124,7 @@ export function QuestionsLibrary({ boards }: Props) {
       if (topicFilter       && topicFilter       !== '') params.set('topic_id',        topicFilter)
       if (subtopicFilter    && subtopicFilter    !== '') params.set('subtopic_id',     subtopicFilter)
       if (subSubtopicFilter && subSubtopicFilter !== '') params.set('sub_subtopic_id', subSubtopicFilter)
+      if (batchFilter       && batchFilter       !== ALL) params.set('batch_id',        batchFilter)
 
       const url = '/api/questions' + (params.size > 0 ? '?' + params.toString() : '')
       const res = await fetch(url)
@@ -137,11 +140,19 @@ export function QuestionsLibrary({ boards }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [topicFilter, subtopicFilter, subSubtopicFilter])
+  }, [topicFilter, subtopicFilter, subSubtopicFilter, batchFilter])
 
   useEffect(() => {
     fetchQuestions()
   }, [fetchQuestions])
+
+  // Fetch recent batches for the filter dropdown
+  useEffect(() => {
+    fetch('/api/upload-batch')
+      .then((r) => r.json())
+      .then((d) => setBatches(Array.isArray(d) ? d as UploadBatch[] : []))
+      .catch(() => {})
+  }, [])
 
   // ── Build groups ───────────────────────────────────────────────────────────
   const groups = useMemo<QuestionGroup[]>(() => {
@@ -229,14 +240,15 @@ export function QuestionsLibrary({ boards }: Props) {
   )
 
   const hasFilters =
-    boardId !== ALL || topicFilter !== null || subtopicFilter !== null || subSubtopicFilter !== null ||
+    boardId !== ALL || batchFilter !== ALL ||
+    topicFilter !== null || subtopicFilter !== null || subSubtopicFilter !== null ||
     qtype !== ALL || status !== ALL || diffMin !== ALL || diffMax !== ALL
 
   const clearFilters = () => {
     setBoardId(ALL)
     setTopicFilter(null); setSubtopicFilter(null); setSubSubtopicFilter(null)
     setSelectorKey((k) => k + 1)  // force SyllabusSelector to re-mount and reset
-    setQtype(ALL); setStatus(ALL); setDiffMin(ALL); setDiffMax(ALL)
+    setQtype(ALL); setStatus(ALL); setDiffMin(ALL); setDiffMax(ALL); setBatchFilter(ALL)
   }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -370,6 +382,18 @@ export function QuestionsLibrary({ boards }: Props) {
               onValueChange={setDiffMax}
               options={[1,2,3,4,5].map((n) => ({ value: String(n), label: `Max ${n}★` }))}
             />
+            {batches.length > 0 && (
+              <FilterSelect
+                placeholder="All Batches"
+                value={batchFilter}
+                onValueChange={setBatchFilter}
+                className="w-48"
+                options={batches.map((b) => ({
+                  value: b.id,
+                  label: `${new Date(b.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · ${b.total_files}f · ${b.total_questions_extracted}q`,
+                }))}
+              />
+            )}
             {hasFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
                 <X className="h-3 w-3" /> Clear

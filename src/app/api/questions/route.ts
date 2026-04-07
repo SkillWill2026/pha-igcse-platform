@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
   const topicId       = searchParams.get('topic_id')
   const subtopicId    = searchParams.get('subtopic_id')
   const subSubtopicId = searchParams.get('sub_subtopic_id')
+  const batchId       = searchParams.get('batch_id')
 
   try {
     const supabase = createAdminClient()
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
     if (topicId       && topicId       !== '') query = query.eq('topic_id',        topicId)
     if (subtopicId    && subtopicId    !== '') query = query.eq('subtopic_id',     subtopicId)
     if (subSubtopicId && subSubtopicId !== '') query = query.eq('sub_subtopic_id', subSubtopicId)
+    if (batchId       && batchId       !== '') query = query.eq('batch_id',        batchId)
 
     const { data, error } = await query
     if (error) {

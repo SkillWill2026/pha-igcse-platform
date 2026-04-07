@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Upload, X, Loader2, CheckCircle2, AlertCircle, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -12,14 +12,6 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { SyllabusSelector } from '@/components/SyllabusSelector'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -29,79 +21,83 @@ interface ExamBoard {
   name: string
 }
 
-interface ExtractedQuestion {
+type FileStatus = 'queued' | 'processing' | 'done' | 'failed'
+
+interface QueuedFile {
   id: string
-  content_text: string
-  difficulty: number
-  question_type: string
-  marks: number
-  subtopic_ref: string
+  file: File
+  status: FileStatus
+  questionsExtracted?: number
+  error?: string
 }
 
-// ── Small display helpers ──────────────────────────────────────────────────────
+interface Summary {
+  total: number
+  done: number
+  failed: number
+  questions: number
+}
 
-function DifficultyDots({ value }: { value: number }) {
-  return (
-    <span className="flex gap-0.5" aria-label={`Difficulty ${value} of 5`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <span
-          key={i}
-          className={cn(
-            'text-xs select-none',
-            i < value ? 'text-primary' : 'text-muted-foreground/20',
-          )}
-        >
-          ●
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function FileStatusBadge({ item }: { item: QueuedFile }) {
+  switch (item.status) {
+    case 'queued':
+      return (
+        <span className="shrink-0 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+          Queued
         </span>
-      ))}
-    </span>
-  )
-}
-
-const TYPE_COLOURS: Record<string, string> = {
-  mcq:          'bg-blue-100   text-blue-800',
-  short_answer: 'bg-green-100  text-green-800',
-  structured:   'bg-amber-100  text-amber-800',
-  extended:     'bg-purple-100 text-purple-800',
-}
-
-function TypeBadge({ type }: { type: string }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded px-2 py-0.5 text-xs font-medium',
-        TYPE_COLOURS[type] ?? 'bg-muted text-muted-foreground',
-      )}
-    >
-      {type.replace('_', '\u00a0')}
-    </span>
-  )
+      )
+    case 'processing':
+      return (
+        <span className="shrink-0 flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Processing…
+        </span>
+      )
+    case 'done':
+      return (
+        <span className="shrink-0 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+          Done — {item.questionsExtracted ?? 0} question{item.questionsExtracted !== 1 ? 's' : ''}
+        </span>
+      )
+    case 'failed':
+      return (
+        <span className="shrink-0 text-xs text-destructive bg-destructive/10 px-2 py-0.5 rounded-full max-w-[200px] truncate" title={item.error}>
+          Failed — {item.error ?? 'Unknown error'}
+        </span>
+      )
+  }
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function UploadClient({ boards }: { boards: ExamBoard[] }) {
-  const [file, setFile] = useState<File | null>(null)
-  const [boardId, setBoardId] = useState('')
-  const [subtopicId, setSubtopicId] = useState<string | null>(null)
+  const [boardId,       setBoardId]       = useState('')
+  const [topicId,       setTopicId]       = useState<string | null>(null)
+  const [subtopicId,    setSubtopicId]    = useState<string | null>(null)
   const [subSubtopicId, setSubSubtopicId] = useState<string | null>(null)
 
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [questions, setQuestions] = useState<ExtractedQuestion[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-  const [savedSerials, setSavedSerials] = useState<string[]>([])
+  const [queue,       setQueue]       = useState<QueuedFile[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [summary,     setSummary]     = useState<Summary | null>(null)
 
-  // ── Dropzone ────────────────────────────────────────────────────────────────
+  // ── Drop zone ───────────────────────────────────────────────────────────────
   const onDrop = useCallback((accepted: File[]) => {
-    if (accepted[0]) {
-      setFile(accepted[0])
-      setQuestions([])
-      setSaved(false)
-      setSavedSerials([])
-      setError(null)
-    }
+    setQueue((prev) => [
+      ...prev,
+      ...accepted.map((f) => ({
+        id:     crypto.randomUUID(),
+        file:   f,
+        status: 'queued' as const,
+      })),
+    ])
+    setSummary(null)
   }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -110,68 +106,115 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
     },
-    maxFiles: 1,
+    multiple: true,
   })
 
-  // ── Extract ─────────────────────────────────────────────────────────────────
-  const handleExtract = async () => {
-    if (!file || !boardId || !subtopicId) return
-    setIsExtracting(true)
-    setError(null)
-    setSaved(false)
-    setQuestions([])
-
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('exam_board_id', boardId)
-      fd.append('subtopic_id', subtopicId!)
-      if (subSubtopicId) fd.append('sub_subtopic_id', subSubtopicId)
-
-      const res = await fetch('/api/ingest', { method: 'POST', body: fd })
-      const data: { questions?: ExtractedQuestion[]; error?: string } = await res.json()
-
-      if (!res.ok) throw new Error(data.error ?? `Server error ${res.status}`)
-      setQuestions(data.questions ?? [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
-    } finally {
-      setIsExtracting(false)
-    }
+  function removeFile(id: string) {
+    if (isUploading) return
+    setQueue((prev) => prev.filter((f) => f.id !== id))
   }
 
-  // ── Confirm & Save ──────────────────────────────────────────────────────────
-  const handleConfirm = async () => {
-    if (questions.length === 0) return
-    setIsSaving(true)
-    setError(null)
+  // ── Upload ──────────────────────────────────────────────────────────────────
+  const queued = queue.filter((f) => f.status === 'queued')
+  const canStart = queued.length > 0 && !!boardId && !!subtopicId && !isUploading
 
+  async function handleStartUpload() {
+    if (!canStart) return
+    setIsUploading(true)
+    setSummary(null)
+
+    // Create batch record
+    let batchId: string | null = null
     try {
-      const res = await fetch('/api/questions/approve', {
-        method: 'PATCH',
+      const batchRes = await fetch('/api/upload-batch', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: questions.map((q) => q.id) }),
+        body: JSON.stringify({
+          topic_id:        topicId,
+          subtopic_id:     subtopicId,
+          sub_subtopic_id: subSubtopicId,
+          total_files:     queued.length,
+        }),
       })
-      const data: { updated?: number; serials?: string[]; error?: string } = await res.json()
-      if (!res.ok) throw new Error(data.error ?? `Server error ${res.status}`)
-      setSavedSerials(data.serials ?? [])
-      setSaved(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error')
-    } finally {
-      setIsSaving(false)
+      const batchData = await batchRes.json() as { id?: string }
+      batchId = batchData.id ?? null
+    } catch {
+      // Continue without batch tracking if creation fails
     }
-  }
 
-  const canExtract = !!file && !!boardId && !!subtopicId && !isExtracting
+    let done = 0, failed = 0, questions = 0
+
+    for (const item of queue) {
+      if (item.status !== 'queued') continue
+
+      setQueue((prev) => prev.map((f) =>
+        f.id === item.id ? { ...f, status: 'processing' } : f,
+      ))
+
+      try {
+        const fd = new FormData()
+        fd.append('file',          item.file)
+        fd.append('exam_board_id', boardId)
+        fd.append('subtopic_id',   subtopicId!)
+        if (subSubtopicId) fd.append('sub_subtopic_id', subSubtopicId)
+        if (batchId)       fd.append('batch_id',        batchId)
+
+        const res  = await fetch('/api/ingest', { method: 'POST', body: fd })
+        const data = await res.json() as { count?: number; questions?: unknown[]; error?: string }
+
+        if (!res.ok) throw new Error(data.error ?? `Server error ${res.status}`)
+
+        const count = data.count ?? (data.questions as unknown[])?.length ?? 0
+        setQueue((prev) => prev.map((f) =>
+          f.id === item.id ? { ...f, status: 'done', questionsExtracted: count } : f,
+        ))
+        done++
+        questions += count
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        setQueue((prev) => prev.map((f) =>
+          f.id === item.id ? { ...f, status: 'failed', error: msg } : f,
+        ))
+        failed++
+      }
+    }
+
+    // Update batch record with final counts
+    if (batchId) {
+      const finalStatus = failed === 0 ? 'completed' : done === 0 ? 'failed' : 'partial'
+      try {
+        await fetch('/api/upload-batch', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            batch_id:                   batchId,
+            completed_files:            done,
+            failed_files:               failed,
+            total_questions_extracted:  questions,
+            status:                     finalStatus,
+          }),
+        })
+      } catch { /* ignore */ }
+    }
+
+    setSummary({ total: queued.length, done, failed, questions })
+    setIsUploading(false)
+  }
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-8 max-w-4xl">
-      {/* ── Upload card ──────────────────────────────────────────────────── */}
-      <div className="rounded-lg border bg-card p-6 shadow-sm space-y-6">
-        {/* Exam Board + Syllabus Selector */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+    <div className="space-y-6 max-w-3xl">
+
+      {/* ── Section 1: Syllabus tagging ──────────────────────────────────── */}
+      <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold">Syllabus Tagging</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            These tags apply to all files in the batch.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Exam Board</Label>
             <Select value={boardId} onValueChange={(v) => setBoardId(v ?? '')}>
@@ -187,9 +230,7 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
                   </div>
                 ) : (
                   boards.map((b) => (
-                    <SelectItem key={b.id} value={b.id} label={b.name}>
-                      {b.name}
-                    </SelectItem>
+                    <SelectItem key={b.id} value={b.id} label={b.name}>{b.name}</SelectItem>
                   ))
                 )}
               </SelectContent>
@@ -199,154 +240,110 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
           <div className="space-y-1.5">
             <Label>Syllabus</Label>
             <SyllabusSelector
+              onTopicChange={setTopicId}
+              onSubtopicChange={setSubtopicId}
               onSubSubtopicChange={setSubSubtopicId}
-              onSubtopicChange={(id) => setSubtopicId(id)}
+              showTierBadge={false}
             />
           </div>
+        </div>
+      </div>
+
+      {/* ── Section 2: File drop zone + queue ────────────────────────────── */}
+      <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold">Files</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {queue.length === 0
+              ? 'Add PDF or DOCX files to the queue.'
+              : `${queue.length} file${queue.length !== 1 ? 's' : ''} in queue`}
+          </p>
         </div>
 
         {/* Drop zone */}
         <div
           {...getRootProps()}
           className={cn(
-            'flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-8 py-12 text-center transition-colors cursor-pointer select-none',
+            'flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-8 py-10 text-center transition-colors cursor-pointer select-none',
             isDragActive
               ? 'border-primary bg-primary/5'
               : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30',
-            file && !isDragActive && 'border-primary/50 bg-primary/5',
           )}
         >
           <input {...getInputProps()} />
-          {file ? (
-            <>
-              <FileText className="mb-3 h-10 w-10 text-primary" />
-              <p className="text-sm font-medium">{file.name}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {(file.size / 1024).toFixed(1)} KB &middot; click or drop to replace
-              </p>
-            </>
-          ) : (
-            <>
-              <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
-              <p className="text-sm font-medium">
-                {isDragActive ? 'Release to upload' : 'Drag & drop a PDF or DOCX'}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">or click to browse files</p>
-            </>
-          )}
+          <Upload className="mb-3 h-8 w-8 text-muted-foreground" />
+          <p className="text-sm font-medium">
+            {isDragActive ? 'Release to add files' : 'Drag & drop PDF or DOCX files'}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">or click to browse — multiple files supported</p>
         </div>
 
-        {/* Error banner */}
-        {error && (
-          <div className="flex items-start gap-2 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            {error}
+        {/* File queue */}
+        {queue.length > 0 && (
+          <div className="space-y-1.5">
+            {queue.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-md border px-3 py-2 bg-muted/20"
+              >
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="flex-1 text-sm truncate min-w-0" title={item.file.name}>
+                  {item.file.name}
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                  {formatSize(item.file.size)}
+                </span>
+                <FileStatusBadge item={item} />
+                <button
+                  type="button"
+                  onClick={() => removeFile(item.id)}
+                  disabled={isUploading || item.status === 'processing'}
+                  aria-label="Remove file"
+                  className="shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
-
-        {/* Submit */}
-        <Button onClick={handleExtract} disabled={!canExtract} className="w-full" size="lg">
-          {isExtracting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Extracting questions…
-            </>
-          ) : (
-            'Extract Questions'
-          )}
-        </Button>
       </div>
 
-      {/* ── Results panel ────────────────────────────────────────────────── */}
-      {questions.length > 0 && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">
-              Extracted Questions
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({questions.length})
-              </span>
-            </h2>
-            {saved && (
-              <div className="flex flex-col items-end gap-1.5">
-                <span className="flex items-center gap-1.5 text-sm font-medium text-green-600">
-                  <CheckCircle2 className="h-4 w-4" />
-                  {questions.length} question{questions.length !== 1 ? 's' : ''} approved
-                </span>
-                {savedSerials.length > 0 && (
-                  <div className="flex flex-wrap gap-1 justify-end">
-                    {savedSerials.map((s) => (
-                      <span
-                        key={s}
-                        className="inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] bg-gray-100 text-gray-600"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-lg border overflow-hidden shadow-sm">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="w-16">Ref</TableHead>
-                  <TableHead>Question Preview</TableHead>
-                  <TableHead className="w-32">Difficulty</TableHead>
-                  <TableHead className="w-28">Type</TableHead>
-                  <TableHead className="w-16 text-right">Marks</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {questions.map((q) => (
-                  <TableRow key={q.id} className="hover:bg-muted/30">
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {q.subtopic_ref}
-                    </TableCell>
-                    <TableCell>
-                      <p className="text-sm leading-snug line-clamp-2">
-                        {q.content_text.length > 80
-                          ? q.content_text.slice(0, 80) + '…'
-                          : q.content_text}
-                      </p>
-                    </TableCell>
-                    <TableCell>
-                      <DifficultyDots value={q.difficulty} />
-                    </TableCell>
-                    <TableCell>
-                      <TypeBadge type={q.question_type} />
-                    </TableCell>
-                    <TableCell className="text-right text-sm font-semibold tabular-nums">
-                      {q.marks}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          {!saved && (
-            <Button
-              onClick={handleConfirm}
-              disabled={isSaving}
-              size="lg"
-              className="w-full"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving…
-                </>
-              ) : (
-                `Confirm & Save ${questions.length} Question${questions.length !== 1 ? 's' : ''}`
-              )}
-            </Button>
+      {/* ── Section 3: Start + summary ─────────────────────────────────────── */}
+      <div className="space-y-4">
+        <Button
+          onClick={handleStartUpload}
+          disabled={!canStart}
+          size="lg"
+          className="w-full"
+        >
+          {isUploading ? (
+            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Uploading…</>
+          ) : (
+            `Start Upload${queued.length > 0 ? ` (${queued.length} file${queued.length !== 1 ? 's' : ''})` : ''}`
           )}
-        </div>
-      )}
+        </Button>
+
+        {summary && (
+          <div className={cn(
+            'flex items-start gap-3 rounded-md border px-4 py-3 text-sm',
+            summary.failed === 0
+              ? 'border-green-200 bg-green-50 text-green-800'
+              : summary.done === 0
+                ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                : 'border-yellow-200 bg-yellow-50 text-yellow-800',
+          )}>
+            {summary.failed === 0
+              ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+              : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+            <span>
+              Batch complete — {summary.done} file{summary.done !== 1 ? 's' : ''} processed,{' '}
+              {summary.questions} question{summary.questions !== 1 ? 's' : ''} extracted
+              {summary.failed > 0 && `, ${summary.failed} failed`}
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
