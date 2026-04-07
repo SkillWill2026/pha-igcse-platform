@@ -1,157 +1,110 @@
--- ================================================================
--- Migration 006: Replace subtopics with correct Cambridge IGCSE 0580
--- 72 subtopics (with tier) + 171 learning-objective sub_subtopics
--- ================================================================
+-- Recovery script: completes 006 after partial failure.
+-- Safe to run multiple times — all steps are idempotent.
+-- Steps already completed by 006 (column adds, deletes, topic updates) are skipped.
 
 -- ────────────────────────────────────────────
--- 0. Make FK columns nullable on questions
---    (may already be nullable from hotfix)
+-- 1. Ensure subtopics columns exist (may already be done by 006)
 -- ────────────────────────────────────────────
-alter table public.questions alter column topic_id    drop not null;
-alter table public.questions alter column subtopic_id drop not null;
-
--- ────────────────────────────────────────────
--- 1. Null out question FK refs so we can delete subtopics
--- ────────────────────────────────────────────
-update public.questions set subtopic_id = null, topic_id = null;
-
--- Also null sub_subtopic_id if the column already exists
-do $$ begin
-  if exists (
-    select 1 from information_schema.columns
-    where table_schema = 'public' and table_name = 'questions' and column_name = 'sub_subtopic_id'
-  ) then
-    execute 'update public.questions set sub_subtopic_id = null';
-  end if;
-end $$;
-
--- ────────────────────────────────────────────
--- 2. Drop old sub_subtopics table (previous schema: ref/title/syllabus_code/qs_total)
--- ────────────────────────────────────────────
-drop table if exists public.sub_subtopics cascade;
-
--- ────────────────────────────────────────────
--- 3. Delete all existing subtopics
--- ────────────────────────────────────────────
-delete from public.subtopics;
-
--- ────────────────────────────────────────────
--- 4. Ensure subtopics has the columns we need
--- ────────────────────────────────────────────
-alter table public.subtopics add column if not exists title     text;
-alter table public.subtopics add column if not exists tier      text;
+alter table public.subtopics add column if not exists title      text;
+alter table public.subtopics add column if not exists tier       text;
 alter table public.subtopics add column if not exists sort_order integer not null default 0;
 
 -- ────────────────────────────────────────────
--- 5. Update topic names to official syllabus + set sort_order
--- ────────────────────────────────────────────
-alter table public.topics add column if not exists sort_order integer not null default 0;
-
-update public.topics set name = 'Number',                      sort_order = 1 where ref = 'C1';
-update public.topics set name = 'Algebra and graphs',          sort_order = 2 where ref = 'C2';
-update public.topics set name = 'Coordinate geometry',         sort_order = 3 where ref = 'C3';
-update public.topics set name = 'Geometry',                    sort_order = 4 where ref = 'C4';
-update public.topics set name = 'Mensuration',                 sort_order = 5 where ref = 'C5';
-update public.topics set name = 'Trigonometry',                sort_order = 6 where ref = 'C6';
-update public.topics set name = 'Transformations and vectors', sort_order = 7 where ref = 'C7';
-update public.topics set name = 'Probability',                 sort_order = 8 where ref = 'C8';
-update public.topics set name = 'Statistics',                  sort_order = 9 where ref = 'C9';
-
--- ────────────────────────────────────────────
--- 6. Seed 72 subtopics
+-- 2. Insert 72 subtopics — skip any that already exist (ref is unique)
 -- ────────────────────────────────────────────
 insert into public.subtopics (topic_id, ref, title, tier, sort_order)
 select t.id, s.ref, s.title, s.tier, s.sort_order
 from public.topics t
 join (values
   -- ── C1 Number (18) ──────────────────────────────────────────
-  ('C1','C1.1',  'Types of number',                     'both',     1),
-  ('C1','C1.2',  'Sets',                                'both',     2),
-  ('C1','C1.3',  'Powers and roots',                    'both',     3),
-  ('C1','C1.4',  'Fractions decimals and percentages',  'both',     4),
-  ('C1','C1.5',  'Ordering',                            'both',     5),
-  ('C1','C1.6',  'The four operations',                 'both',     6),
-  ('C1','C1.7',  'Indices I',                           'both',     7),
-  ('C1','C1.8',  'Standard form',                       'both',     8),
-  ('C1','C1.9',  'Estimation',                          'both',     9),
-  ('C1','C1.10', 'Limits of accuracy',                  'both',     10),
-  ('C1','C1.11', 'Ratio and proportion',                'both',     11),
-  ('C1','C1.12', 'Rates',                               'both',     12),
-  ('C1','C1.13', 'Percentages',                         'both',     13),
-  ('C1','C1.14', 'Using a calculator',                  'both',     14),
-  ('C1','C1.15', 'Time',                                'both',     15),
-  ('C1','C1.16', 'Money',                               'both',     16),
-  ('C1','E1.17', 'Exponential growth and decay',        'extended', 17),
-  ('C1','E1.18', 'Surds',                               'extended', 18),
+  ('C1','C1.1',  'Types of number',                          'both',     1),
+  ('C1','C1.2',  'Sets',                                     'both',     2),
+  ('C1','C1.3',  'Powers and roots',                         'both',     3),
+  ('C1','C1.4',  'Fractions decimals and percentages',       'both',     4),
+  ('C1','C1.5',  'Ordering',                                 'both',     5),
+  ('C1','C1.6',  'The four operations',                      'both',     6),
+  ('C1','C1.7',  'Indices I',                                'both',     7),
+  ('C1','C1.8',  'Standard form',                            'both',     8),
+  ('C1','C1.9',  'Estimation',                               'both',     9),
+  ('C1','C1.10', 'Limits of accuracy',                       'both',     10),
+  ('C1','C1.11', 'Ratio and proportion',                     'both',     11),
+  ('C1','C1.12', 'Rates',                                    'both',     12),
+  ('C1','C1.13', 'Percentages',                              'both',     13),
+  ('C1','C1.14', 'Using a calculator',                       'both',     14),
+  ('C1','C1.15', 'Time',                                     'both',     15),
+  ('C1','C1.16', 'Money',                                    'both',     16),
+  ('C1','E1.17', 'Exponential growth and decay',             'extended', 17),
+  ('C1','E1.18', 'Surds',                                    'extended', 18),
   -- ── C2 Algebra and graphs (13) ──────────────────────────────
-  ('C2','C2.1',  'Introduction to algebra',             'both',     1),
-  ('C2','C2.2',  'Algebraic manipulation',              'both',     2),
-  ('C2','E2.3',  'Algebraic fractions',                 'extended', 3),
-  ('C2','C2.4',  'Indices II',                          'both',     4),
-  ('C2','C2.5',  'Equations',                           'both',     5),
-  ('C2','C2.6',  'Inequalities',                        'both',     6),
-  ('C2','C2.7',  'Sequences',                           'both',     7),
-  ('C2','E2.8',  'Proportion',                          'extended', 8),
-  ('C2','C2.9',  'Graphs in practical situations',      'both',     9),
-  ('C2','C2.10', 'Graphs of functions',                 'both',     10),
-  ('C2','C2.11', 'Sketching curves',                    'both',     11),
-  ('C2','E2.12', 'Differentiation',                     'extended', 12),
-  ('C2','E2.13', 'Functions',                           'extended', 13),
+  ('C2','C2.1',  'Introduction to algebra',                  'both',     1),
+  ('C2','C2.2',  'Algebraic manipulation',                   'both',     2),
+  ('C2','E2.3',  'Algebraic fractions',                      'extended', 3),
+  ('C2','C2.4',  'Indices II',                               'both',     4),
+  ('C2','C2.5',  'Equations',                                'both',     5),
+  ('C2','C2.6',  'Inequalities',                             'both',     6),
+  ('C2','C2.7',  'Sequences',                                'both',     7),
+  ('C2','E2.8',  'Proportion',                               'extended', 8),
+  ('C2','C2.9',  'Graphs in practical situations',           'both',     9),
+  ('C2','C2.10', 'Graphs of functions',                      'both',     10),
+  ('C2','C2.11', 'Sketching curves',                         'both',     11),
+  ('C2','E2.12', 'Differentiation',                          'extended', 12),
+  ('C2','E2.13', 'Functions',                                'extended', 13),
   -- ── C3 Coordinate geometry (7) ──────────────────────────────
-  ('C3','C3.1',  'Coordinates',                         'both',     1),
-  ('C3','C3.2',  'Drawing linear graphs',               'both',     2),
-  ('C3','C3.3',  'Gradient of linear graphs',           'both',     3),
-  ('C3','E3.4',  'Length and midpoint',                 'extended', 4),
-  ('C3','C3.5',  'Equations of linear graphs',          'both',     5),
-  ('C3','C3.6',  'Parallel lines',                      'both',     6),
-  ('C3','E3.7',  'Perpendicular lines',                 'extended', 7),
+  ('C3','C3.1',  'Coordinates',                              'both',     1),
+  ('C3','C3.2',  'Drawing linear graphs',                    'both',     2),
+  ('C3','C3.3',  'Gradient of linear graphs',                'both',     3),
+  ('C3','E3.4',  'Length and midpoint',                      'extended', 4),
+  ('C3','C3.5',  'Equations of linear graphs',               'both',     5),
+  ('C3','C3.6',  'Parallel lines',                           'both',     6),
+  ('C3','E3.7',  'Perpendicular lines',                      'extended', 7),
   -- ── C4 Geometry (8) ─────────────────────────────────────────
-  ('C4','C4.1',  'Geometrical terms',                   'both',     1),
-  ('C4','C4.2',  'Geometrical constructions',           'both',     2),
-  ('C4','C4.3',  'Scale drawings',                      'both',     3),
-  ('C4','C4.4',  'Similarity',                          'both',     4),
-  ('C4','C4.5',  'Symmetry',                            'both',     5),
-  ('C4','C4.6',  'Angles',                              'both',     6),
-  ('C4','C4.7',  'Circle theorems I',                   'both',     7),
-  ('C4','E4.8',  'Circle theorems II',                  'extended', 8),
+  ('C4','C4.1',  'Geometrical terms',                        'both',     1),
+  ('C4','C4.2',  'Geometrical constructions',                'both',     2),
+  ('C4','C4.3',  'Scale drawings',                           'both',     3),
+  ('C4','C4.4',  'Similarity',                               'both',     4),
+  ('C4','C4.5',  'Symmetry',                                 'both',     5),
+  ('C4','C4.6',  'Angles',                                   'both',     6),
+  ('C4','C4.7',  'Circle theorems I',                        'both',     7),
+  ('C4','E4.8',  'Circle theorems II',                       'extended', 8),
   -- ── C5 Mensuration (5) ──────────────────────────────────────
-  ('C5','C5.1',  'Units of measure',                    'both',     1),
-  ('C5','C5.2',  'Area and perimeter',                  'both',     2),
-  ('C5','C5.3',  'Circles arcs and sectors',            'both',     3),
-  ('C5','C5.4',  'Surface area and volume',             'both',     4),
-  ('C5','C5.5',  'Compound shapes and parts of shapes', 'both',     5),
+  ('C5','C5.1',  'Units of measure',                         'both',     1),
+  ('C5','C5.2',  'Area and perimeter',                       'both',     2),
+  ('C5','C5.3',  'Circles arcs and sectors',                 'both',     3),
+  ('C5','C5.4',  'Surface area and volume',                  'both',     4),
+  ('C5','C5.5',  'Compound shapes and parts of shapes',      'both',     5),
   -- ── C6 Trigonometry (6) ─────────────────────────────────────
-  ('C6','C6.1',  'Pythagoras theorem',                  'both',     1),
-  ('C6','C6.2',  'Right-angled triangles',              'both',     2),
-  ('C6','E6.3',  'Exact trigonometric values',          'extended', 3),
-  ('C6','E6.4',  'Trigonometric functions',             'extended', 4),
-  ('C6','E6.5',  'Non-right-angled triangles',          'extended', 5),
-  ('C6','E6.6',  'Pythagoras theorem and trigonometry in 3D', 'extended', 6),
+  ('C6','C6.1',  'Pythagoras theorem',                       'both',     1),
+  ('C6','C6.2',  'Right-angled triangles',                   'both',     2),
+  ('C6','E6.3',  'Exact trigonometric values',               'extended', 3),
+  ('C6','E6.4',  'Trigonometric functions',                  'extended', 4),
+  ('C6','E6.5',  'Non-right-angled triangles',               'extended', 5),
+  ('C6','E6.6',  'Pythagoras theorem and trigonometry in 3D','extended', 6),
   -- ── C7 Transformations and vectors (4) ──────────────────────
-  ('C7','C7.1',  'Transformations',                     'both',     1),
-  ('C7','E7.2',  'Vectors in two dimensions',           'extended', 2),
-  ('C7','E7.3',  'Magnitude of a vector',               'extended', 3),
-  ('C7','E7.4',  'Vector geometry',                     'extended', 4),
+  ('C7','C7.1',  'Transformations',                          'both',     1),
+  ('C7','E7.2',  'Vectors in two dimensions',                'extended', 2),
+  ('C7','E7.3',  'Magnitude of a vector',                    'extended', 3),
+  ('C7','E7.4',  'Vector geometry',                          'extended', 4),
   -- ── C8 Probability (4) ──────────────────────────────────────
-  ('C8','C8.1',  'Introduction to probability',         'both',     1),
-  ('C8','C8.2',  'Relative and expected frequencies',   'both',     2),
-  ('C8','C8.3',  'Probability of combined events',      'both',     3),
-  ('C8','E8.4',  'Conditional probability',             'extended', 4),
+  ('C8','C8.1',  'Introduction to probability',              'both',     1),
+  ('C8','C8.2',  'Relative and expected frequencies',        'both',     2),
+  ('C8','C8.3',  'Probability of combined events',           'both',     3),
+  ('C8','E8.4',  'Conditional probability',                  'extended', 4),
   -- ── C9 Statistics (7) ───────────────────────────────────────
-  ('C9','C9.1',  'Classifying statistical data',        'both',     1),
-  ('C9','C9.2',  'Interpreting statistical data',       'both',     2),
-  ('C9','C9.3',  'Averages and range',                  'both',     3),
-  ('C9','C9.4',  'Statistical charts and diagrams',     'both',     4),
-  ('C9','C9.5',  'Scatter diagrams',                    'both',     5),
-  ('C9','E9.6',  'Cumulative frequency diagrams',       'extended', 6),
-  ('C9','E9.7',  'Histograms',                          'extended', 7)
+  ('C9','C9.1',  'Classifying statistical data',             'both',     1),
+  ('C9','C9.2',  'Interpreting statistical data',            'both',     2),
+  ('C9','C9.3',  'Averages and range',                       'both',     3),
+  ('C9','C9.4',  'Statistical charts and diagrams',          'both',     4),
+  ('C9','C9.5',  'Scatter diagrams',                         'both',     5),
+  ('C9','E9.6',  'Cumulative frequency diagrams',            'extended', 6),
+  ('C9','E9.7',  'Histograms',                               'extended', 7)
 ) as s(topic_ref, ref, title, tier, sort_order)
-on t.ref = s.topic_ref;
+on t.ref = s.topic_ref
+on conflict (ref) do nothing;
 
 -- ────────────────────────────────────────────
--- 7. Create new sub_subtopics table
+-- 3. Create sub_subtopics table if it doesn't exist
 -- ────────────────────────────────────────────
-create table public.sub_subtopics (
+create table if not exists public.sub_subtopics (
   id          uuid        primary key default gen_random_uuid(),
   subtopic_id uuid        not null references public.subtopics(id) on delete cascade,
   ext_num     integer     not null,
@@ -165,18 +118,42 @@ create table public.sub_subtopics (
 
 alter table public.sub_subtopics enable row level security;
 
-create policy "Admins full access on sub_subtopics" on public.sub_subtopics
-  for all
-  using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+-- RLS policies — skip if they already exist
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename  = 'sub_subtopics'
+      and policyname = 'Admins full access on sub_subtopics'
+  ) then
+    execute $p$
+      create policy "Admins full access on sub_subtopics" on public.sub_subtopics
+        for all
+        using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'))
+    $p$;
+  end if;
+end $$;
 
-create policy "Tutors read sub_subtopics" on public.sub_subtopics
-  for select
-  using (auth.uid() is not null);
+do $$ begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename  = 'sub_subtopics'
+      and policyname = 'Tutors read sub_subtopics'
+  ) then
+    execute $p$
+      create policy "Tutors read sub_subtopics" on public.sub_subtopics
+        for select
+        using (auth.uid() is not null)
+    $p$;
+  end if;
+end $$;
 
-create index idx_sub_subtopics_subtopic on public.sub_subtopics(subtopic_id);
+create index if not exists idx_sub_subtopics_subtopic on public.sub_subtopics(subtopic_id);
 
 -- ────────────────────────────────────────────
--- 8. Seed sub_subtopics (171 learning objectives)
+-- 4. Seed 171 learning objectives
+--    Only runs when sub_subtopics is empty
 -- ────────────────────────────────────────────
 insert into public.sub_subtopics (subtopic_id, ext_num, core_num, outcome, tier, sort_order)
 select st.id, o.ext_num, o.core_num, o.outcome, o.tier::text, o.sort_order
@@ -499,10 +476,11 @@ join (values
   ('E9.7', 2, null, 'Calculate with frequency density — frequency density = frequency ÷ class width', 'extended', 2)
 
 ) as o(subtopic_ref, ext_num, core_num, outcome, tier, sort_order)
-on st.ref = o.subtopic_ref;
+on st.ref = o.subtopic_ref
+where not exists (select 1 from public.sub_subtopics limit 1);
 
 -- ────────────────────────────────────────────
--- 9. Add sub_subtopic_id to questions
+-- 5. Add sub_subtopic_id to questions (idempotent)
 -- ────────────────────────────────────────────
 alter table public.questions
   add column if not exists sub_subtopic_id uuid references public.sub_subtopics(id) on delete set null;
@@ -510,8 +488,7 @@ alter table public.questions
 create index if not exists idx_questions_sub_subtopic on public.questions(sub_subtopic_id);
 
 -- ────────────────────────────────────────────
--- Verification (commented out — uncomment to check)
+-- Verification
 -- ────────────────────────────────────────────
 -- select count(*) from public.subtopics;     -- expected 72
 -- select count(*) from public.sub_subtopics; -- expected 171
--- select tier, count(*) from public.subtopics group by tier;
