@@ -121,10 +121,10 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics, subSubt
   )
 
   // Cascade sub-subtopics
-  const filteredSubSubtopics = useMemo(
-    () => (subtopicId === ALL ? subSubtopics : subSubtopics.filter((s) => s.subtopic_id === subtopicId)),
-    [subtopicId, subSubtopics],
-  )
+  const filteredSubSubtopics = useMemo(() => {
+    const list = subtopicId === ALL ? subSubtopics : subSubtopics.filter((s) => s.subtopic_id === subtopicId)
+    return [...list].sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }))
+  }, [subtopicId, subSubtopics])
 
   // ── Build groups ───────────────────────────────────────────────────────────
   const groups = useMemo<QuestionGroup[]>(() => {
@@ -521,7 +521,7 @@ function FilterSelect({
           ? <span className="truncate">{options.find((o) => o.value === value)?.label}</span>
           : <span className="text-muted-foreground truncate">{placeholder}</span>}
       </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
+      <SelectContent className="max-h-64 overflow-y-auto" alignItemWithTrigger={false}>
         <SelectItem value={ALL} label={placeholder}>{placeholder}</SelectItem>
         {options.map((o) => (
           <SelectItem key={o.value} value={o.value} label={o.label}>

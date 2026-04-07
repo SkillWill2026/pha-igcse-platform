@@ -130,10 +130,10 @@ export function UploadClient({
   }, [subtopics])
 
   // Sub-subtopics for the currently selected subtopic
-  const relevantSubSubtopics = useMemo(
-    () => (subtopicId ? allSubSubtopics.filter((s) => s.subtopic_id === subtopicId) : []),
-    [subtopicId, allSubSubtopics],
-  )
+  const relevantSubSubtopics = useMemo(() => {
+    const list = subtopicId ? allSubSubtopics.filter((s) => s.subtopic_id === subtopicId) : []
+    return [...list].sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }))
+  }, [subtopicId, allSubSubtopics])
 
   // When subtopic changes, reset sub-subtopic
   function handleSubtopicChange(value: string) {

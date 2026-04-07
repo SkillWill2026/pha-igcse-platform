@@ -72,10 +72,10 @@ export function ReviewClient({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [subSubtopicId, setSubSubtopicId] = useState<string | null>((question as any).sub_subtopic_id ?? null)
 
-  const relevantSubSubtopics = useMemo(
-    () => (subtopicId ? allSubSubtopics.filter((s) => s.subtopic_id === subtopicId) : []),
-    [subtopicId, allSubSubtopics],
-  )
+  const relevantSubSubtopics = useMemo(() => {
+    const list = subtopicId ? allSubSubtopics.filter((s) => s.subtopic_id === subtopicId) : []
+    return [...list].sort((a, b) => a.ref.localeCompare(b.ref, undefined, { numeric: true }))
+  }, [subtopicId, allSubSubtopics])
 
   const topicGroups = useMemo(() => {
     const map = new Map(allTopics.map((t) => ({ ...t, items: [] as typeof allSubtopics })).map((t) => [t.id, t]))
