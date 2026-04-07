@@ -36,8 +36,8 @@ interface Props {
 }
 
 const EMPTY = {
-  ref: '', title: '', due_date: '', sprint_week: '' as string | number,
-  qs_total: 0, mcq_count: 0, short_ans_count: 0, structured_count: 0, extended_count: 0,
+  ref: '', title: '', due_date: '', sprint_week: '' as string,
+  mcq_count: 0, short_ans_count: 0, structured_count: 0, extended_count: 0,
   status: 'draft' as SubtopicStatus,
 }
 
@@ -56,8 +56,7 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
               ref:              subtopic.ref,
               title:            subtopic.title,
               due_date:         subtopic.due_date ?? '',
-              sprint_week:      subtopic.sprint_week ?? '',
-              qs_total:         subtopic.qs_total,
+              sprint_week:      subtopic.sprint_week != null ? String(subtopic.sprint_week) : '',
               mcq_count:        subtopic.mcq_count,
               short_ans_count:  subtopic.short_ans_count,
               structured_count: subtopic.structured_count,
@@ -73,7 +72,8 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
     setForm((f) => ({ ...f, [field]: value }))
   }
 
-  const sprintLabel = form.sprint_week ? `Wk ${form.sprint_week}` : 'Select sprint'
+  const qsTotal     = form.mcq_count + form.short_ans_count + form.structured_count + form.extended_count
+  const sprintLabel = form.sprint_week || 'Select sprint'
   const statusLabel = STATUS_OPTIONS.find((o) => o.value === form.status)?.label ?? 'Draft'
 
   async function handleSubmit(e: React.FormEvent) {
@@ -88,8 +88,9 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
       const payload = {
         ...form,
         topic_id:    topicId,
+        qs_total:    qsTotal,
         due_date:    form.due_date || null,
-        sprint_week: form.sprint_week !== '' ? Number(form.sprint_week) : null,
+        sprint_week: form.sprint_week || null,
       }
       const url    = isEdit ? `/api/schedule/subtopics/${subtopic!.id}` : '/api/schedule/subtopics'
       const method = isEdit ? 'PATCH' : 'POST'
@@ -163,9 +164,9 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
                   <span>{sprintLabel}</span>
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
-                  {Array.from({ length: 14 }, (_, i) => i + 1).map((w) => (
-                    <SelectItem key={w} value={String(w)} label={`Wk ${w}`}>
-                      Wk {w}
+                  {Array.from({ length: 14 }, (_, i) => `Wk ${i + 1}`).map((w) => (
+                    <SelectItem key={w} value={w} label={w}>
+                      {w}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -192,62 +193,58 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
           </div>
 
           {/* Question counts */}
-          <div className="grid grid-cols-5 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="s-total">Total Qs</Label>
-              <Input
-                id="s-total"
-                type="number"
-                min={0}
-                value={form.qs_total}
-                onChange={(e) => set('qs_total', Number(e.target.value))}
-                disabled={isLoading}
-              />
+          <div className="space-y-2">
+            <div className="grid grid-cols-4 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="s-mcq">MCQ</Label>
+                <Input
+                  id="s-mcq"
+                  type="number"
+                  min={0}
+                  value={form.mcq_count}
+                  onChange={(e) => set('mcq_count', Number(e.target.value))}
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-short">Short Ans</Label>
+                <Input
+                  id="s-short"
+                  type="number"
+                  min={0}
+                  value={form.short_ans_count}
+                  onChange={(e) => set('short_ans_count', Number(e.target.value))}
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-struct">Structured</Label>
+                <Input
+                  id="s-struct"
+                  type="number"
+                  min={0}
+                  value={form.structured_count}
+                  onChange={(e) => set('structured_count', Number(e.target.value))}
+                  disabled={isLoading}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="s-ext">Extended</Label>
+                <Input
+                  id="s-ext"
+                  type="number"
+                  min={0}
+                  value={form.extended_count}
+                  onChange={(e) => set('extended_count', Number(e.target.value))}
+                  disabled={isLoading}
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="s-mcq">MCQ</Label>
-              <Input
-                id="s-mcq"
-                type="number"
-                min={0}
-                value={form.mcq_count}
-                onChange={(e) => set('mcq_count', Number(e.target.value))}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="s-short">Short Ans</Label>
-              <Input
-                id="s-short"
-                type="number"
-                min={0}
-                value={form.short_ans_count}
-                onChange={(e) => set('short_ans_count', Number(e.target.value))}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="s-struct">Structured</Label>
-              <Input
-                id="s-struct"
-                type="number"
-                min={0}
-                value={form.structured_count}
-                onChange={(e) => set('structured_count', Number(e.target.value))}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="s-ext">Extended</Label>
-              <Input
-                id="s-ext"
-                type="number"
-                min={0}
-                value={form.extended_count}
-                onChange={(e) => set('extended_count', Number(e.target.value))}
-                disabled={isLoading}
-              />
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Total Qs:{' '}
+              <span className="font-semibold text-foreground tabular-nums">{qsTotal}</span>
+              {' '}(calculated automatically)
+            </p>
           </div>
 
           {error && (

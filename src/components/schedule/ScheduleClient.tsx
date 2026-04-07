@@ -24,11 +24,6 @@ import { TopicModal } from '@/components/schedule/TopicModal'
 import { SubtopicModal } from '@/components/schedule/SubtopicModal'
 import type { Subtopic, SubtopicStatus, Topic, TopicWithSubtopics } from '@/types/schedule'
 
-// ── Sprint week options ────────────────────────────────────────────────────────
-const SPRINT_OPTIONS = Array.from({ length: 14 }, (_, i) => ({
-  value: String(i + 1),
-  label: `Wk ${i + 1}`,
-}))
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({
@@ -142,6 +137,23 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
     }
 
     return { totalQs, approvedCount: approved.length, approvedQs, topicsComplete, currentSprint }
+  }, [topics])
+
+  // ── Sprint options derived from actual data ────────────────────────────────
+  const sprintOptions = useMemo(() => {
+    const seen  = new Set<string>()
+    const opts: string[] = []
+    topics.flatMap((t) => t.subtopics).forEach((s) => {
+      const v = s.sprint_week != null ? String(s.sprint_week) : null
+      if (v && !seen.has(v)) { seen.add(v); opts.push(v) }
+    })
+    // Sort numerically by extracting trailing number, fall back to string sort
+    opts.sort((a, b) => {
+      const na = parseInt(a.replace(/\D/g, ''), 10)
+      const nb = parseInt(b.replace(/\D/g, ''), 10)
+      return isNaN(na) || isNaN(nb) ? a.localeCompare(b) : na - nb
+    })
+    return opts
   }, [topics])
 
   // ── Filtered view ─────────────────────────────────────────────────────────
@@ -320,12 +332,12 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
 
         <Select value={filterSprint} onValueChange={(v) => setFilterSprint(v ?? 'all')}>
           <SelectTrigger className="w-32">
-            <span>{filterSprint === 'all' ? 'All Sprints' : `Wk ${filterSprint}`}</span>
+            <span>{filterSprint === 'all' ? 'All Sprints' : filterSprint}</span>
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
             <SelectItem value="all" label="All Sprints">All Sprints</SelectItem>
-            {SPRINT_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value} label={o.label}>{o.label}</SelectItem>
+            {sprintOptions.map((v) => (
+              <SelectItem key={v} value={v} label={v}>{v}</SelectItem>
             ))}
           </SelectContent>
         </Select>
