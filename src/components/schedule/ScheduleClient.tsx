@@ -87,10 +87,12 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
   const [topics,      setTopics]      = useState<TopicWithSubtopics[]>(initialTopics)
 
   // Filters
-  const [searchQ,       setSearchQ]       = useState('')
-  const [filterSprint,  setFilterSprint]  = useState('all')
-  const [filterStatus,  setFilterStatus]  = useState('all')
-  const [filterTopic,   setFilterTopic]   = useState('all')
+  const [searchQ,        setSearchQ]        = useState('')
+  const [filterSprint,   setFilterSprint]   = useState('all')
+  const [filterStatus,   setFilterStatus]   = useState('all')
+  const [filterTopic,    setFilterTopic]    = useState('all')
+  const [filterPpt,      setFilterPpt]      = useState('all')
+  const [filterExamples, setFilterExamples] = useState('all')
 
   // Topic modal
   const [addTopicOpen,  setAddTopicOpen]  = useState(false)
@@ -115,6 +117,14 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
       (t) => t.subtopics.length > 0 && t.subtopics.every((s) => s.status === 'approved'),
     ).length
 
+    // PPT stats
+    const pptRequired    = allSubs.filter((s) => s.ppt_required)
+    const pptUploaded    = pptRequired.filter((s) => (s.ppt_decks?.length ?? 0) >= 1).length
+
+    // Examples stats
+    const examplesTotal    = allSubs.reduce((acc, s) => acc + (s.examples_required ?? 3), 0)
+    const examplesGenerated = allSubs.reduce((acc, s) => acc + (s.examples_count ?? 0), 0)
+
     const today = new Date(); today.setHours(0, 0, 0, 0)
 
     // Subtopics that have both a due_date and a sprint_week string, and are not yet approved
@@ -136,7 +146,11 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
       currentSprint = String(earliest.sprint_week)
     }
 
-    return { totalQs, approvedCount: approved.length, approvedQs, topicsComplete, currentSprint }
+    return {
+      totalQs, approvedCount: approved.length, approvedQs, topicsComplete, currentSprint,
+      pptUploaded, pptRequired: pptRequired.length,
+      examplesGenerated, examplesTotal,
+    }
   }, [topics])
 
   // ── Sprint options derived from actual data ────────────────────────────────
@@ -166,17 +180,29 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
           if (q && !s.title.toLowerCase().includes(q) && !s.ref.toLowerCase().includes(q)) return false
           if (filterSprint !== 'all' && String(s.sprint_week) !== filterSprint) return false
           if (filterStatus !== 'all' && s.status !== filterStatus) return false
+          if (filterPpt !== 'all') {
+            if (filterPpt === 'not_required' && s.ppt_required) return false
+            if (filterPpt === 'uploaded'     && (!s.ppt_required || (s.ppt_decks?.length ?? 0) === 0)) return false
+            if (filterPpt === 'not_uploaded' && (!s.ppt_required || (s.ppt_decks?.length ?? 0) > 0)) return false
+          }
+          if (filterExamples !== 'all') {
+            const exCount  = s.examples_count ?? 0
+            const exReq    = s.examples_required ?? 3
+            if (filterExamples === 'complete'     && exCount < exReq)                      return false
+            if (filterExamples === 'in_progress'  && !(exCount > 0 && exCount < exReq))    return false
+            if (filterExamples === 'not_started'  && exCount > 0)                          return false
+          }
           return true
         }),
       }))
       .filter((t) => {
         if (filterTopic !== 'all' && t.id !== filterTopic) return false
         // If content filters are active, hide topics with no matching subtopics
-        const hasContentFilter = q || filterSprint !== 'all' || filterStatus !== 'all'
+        const hasContentFilter = q || filterSprint !== 'all' || filterStatus !== 'all' || filterPpt !== 'all' || filterExamples !== 'all'
         if (hasContentFilter && t.filteredSubs.length === 0) return false
         return true
       })
-  }, [topics, searchQ, filterSprint, filterStatus, filterTopic])
+  }, [topics, searchQ, filterSprint, filterStatus, filterTopic, filterPpt, filterExamples])
 
   const totalSubtopics = topics.reduce((acc, t) => acc + t.subtopics.length, 0)
 
@@ -295,7 +321,7 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
       </div>
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard
           label="Total Questions"
           value={stats.totalQs.toLocaleString()}
@@ -307,14 +333,19 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
           sub={`${stats.approvedQs.toLocaleString()} Qs complete`}
         />
         <StatCard
+          label="PPTs"
+          value={`${stats.pptUploaded} / ${stats.pptRequired}`}
+          sub="uploaded"
+        />
+        <StatCard
+          label="Examples"
+          value={`${stats.examplesGenerated} / ${stats.examplesTotal}`}
+          sub="generated"
+        />
+        <StatCard
           label="Current Sprint"
           value={stats.currentSprint ?? '—'}
           sub="based on due dates"
-        />
-        <StatCard
-          label="Topics Complete"
-          value={`${stats.topicsComplete}/${topics.length}`}
-          sub="all subtopics approved"
         />
       </div>
 
@@ -380,6 +411,40 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
             ))}
           </SelectContent>
         </Select>
+
+        <Select value={filterPpt} onValueChange={(v) => setFilterPpt(v ?? 'all')}>
+          <SelectTrigger className="w-36">
+            <span>
+              {filterPpt === 'all'          ? 'All PPTs'
+                : filterPpt === 'uploaded'      ? 'Uploaded'
+                : filterPpt === 'not_uploaded'  ? 'Not Uploaded'
+                : 'Not Required'}
+            </span>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectItem value="all"          label="All PPTs">All PPTs</SelectItem>
+            <SelectItem value="uploaded"     label="Uploaded">Uploaded</SelectItem>
+            <SelectItem value="not_uploaded" label="Not Uploaded">Not Uploaded</SelectItem>
+            <SelectItem value="not_required" label="Not Required">Not Required</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filterExamples} onValueChange={(v) => setFilterExamples(v ?? 'all')}>
+          <SelectTrigger className="w-40">
+            <span>
+              {filterExamples === 'all'          ? 'All Examples'
+                : filterExamples === 'complete'      ? 'Complete'
+                : filterExamples === 'in_progress'   ? 'In Progress'
+                : 'Not Started'}
+            </span>
+          </SelectTrigger>
+          <SelectContent alignItemWithTrigger={false}>
+            <SelectItem value="all"         label="All Examples">All Examples</SelectItem>
+            <SelectItem value="complete"    label="Complete">Complete</SelectItem>
+            <SelectItem value="in_progress" label="In Progress">In Progress</SelectItem>
+            <SelectItem value="not_started" label="Not Started">Not Started</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* ── Topic blocks ── */}
@@ -401,6 +466,7 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
               onEditSubtopic={(s) => setEditSubtopic(s)}
               onDeleteSubtopic={(s) => setDeleteSubtopicTarget({ subtopic: s, topicId: t.id })}
               onStatusChange={(sid, status) => handleStatusChange(sid, t.id, status)}
+              onSubtopicUpdate={upsertSubtopic}
             />
           ))
         )}

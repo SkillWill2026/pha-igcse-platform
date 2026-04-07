@@ -18,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { SubtopicExpandedRow } from '@/components/schedule/SubtopicExpandedRow'
 import type { Subtopic, SubtopicStatus, TopicWithSubtopics } from '@/types/schedule'
 
 // ── Topic badge colours (C1–C9+) ──────────────────────────────────────────────
@@ -87,17 +88,22 @@ function MiniBar({ value, max, className }: { value: number; max: number; classN
   )
 }
 
+// ── Total column count for colSpan ────────────────────────────────────────────
+const ADMIN_COLS    = 12
+const NON_ADMIN_COLS = 11
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
   topic:              TopicWithSubtopics
   isAdmin:            boolean
-  filteredSubtopics:  Subtopic[]       // already filtered by parent
+  filteredSubtopics:  Subtopic[]
   onEditTopic:        () => void
   onDeleteTopic:      () => void
   onAddSubtopic:      () => void
   onEditSubtopic:     (s: Subtopic) => void
   onDeleteSubtopic:   (s: Subtopic) => void
   onStatusChange:     (subtopicId: string, status: SubtopicStatus) => void
+  onSubtopicUpdate:   (s: Subtopic) => void
 }
 
 export function TopicRow({
@@ -110,8 +116,10 @@ export function TopicRow({
   onEditSubtopic,
   onDeleteSubtopic,
   onStatusChange,
+  onSubtopicUpdate,
 }: Props) {
-  const [expanded, setExpanded] = useState(false)
+  const [topicExpanded,      setTopicExpanded]      = useState(false)
+  const [expandedSubtopicId, setExpandedSubtopicId] = useState<string | null>(null)
 
   const approvedCount = topic.subtopics.filter((s) => s.status === 'approved').length
   const totalCount    = topic.subtopics.length
@@ -122,24 +130,28 @@ export function TopicRow({
       })
     : null
 
+  const colSpan = isAdmin ? ADMIN_COLS : NON_ADMIN_COLS
+
+  function toggleSubtopic(id: string) {
+    setExpandedSubtopicId((prev) => (prev === id ? null : id))
+  }
+
   return (
     <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
       {/* ── Topic header ── */}
       <div
         role="button"
         tabIndex={0}
-        onClick={() => setExpanded((v) => !v)}
-        onKeyDown={(e) => e.key === 'Enter' && setExpanded((v) => !v)}
+        onClick={() => setTopicExpanded((v) => !v)}
+        onKeyDown={(e) => e.key === 'Enter' && setTopicExpanded((v) => !v)}
         className="group flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-muted/40 transition-colors"
       >
-        {/* Chevron */}
         <span className="text-muted-foreground shrink-0">
-          {expanded
+          {topicExpanded
             ? <ChevronDown className="h-4 w-4" />
             : <ChevronRight className="h-4 w-4" />}
         </span>
 
-        {/* Ref badge */}
         <span
           className={cn(
             'inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-xs font-semibold',
@@ -149,7 +161,6 @@ export function TopicRow({
           {topic.ref}
         </span>
 
-        {/* Name + meta */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium leading-tight truncate">{topic.name}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -160,7 +171,6 @@ export function TopicRow({
           </p>
         </div>
 
-        {/* Mini progress bar */}
         <div className="hidden sm:flex flex-col items-end gap-1 shrink-0 w-32">
           <span className="text-xs text-muted-foreground">
             {approvedCount}/{totalCount} approved
@@ -168,29 +178,16 @@ export function TopicRow({
           <MiniBar value={approvedCount} max={totalCount || 1} />
         </div>
 
-        {/* Admin actions — stop propagation so clicking buttons doesn't toggle expand */}
         {isAdmin && (
           <div
             className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              onClick={onAddSubtopic}
-              title="Add subtopic"
-            >
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onAddSubtopic} title="Add subtopic">
               <Plus className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              onClick={onEditTopic}
-              title="Edit topic"
-            >
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onEditTopic} title="Edit topic">
               <Pencil className="h-3.5 w-3.5" />
             </Button>
             <Button
@@ -207,7 +204,7 @@ export function TopicRow({
       </div>
 
       {/* ── Subtopics table ── */}
-      {expanded && (
+      {topicExpanded && (
         <div className="border-t overflow-x-auto">
           <Table>
             <TableHeader>
@@ -230,7 +227,7 @@ export function TopicRow({
               {filteredSubtopics.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isAdmin ? 12 : 11}
+                    colSpan={colSpan}
                     className="text-center text-muted-foreground py-8 text-sm"
                   >
                     No subtopics match the current filters.
@@ -241,101 +238,133 @@ export function TopicRow({
                   const frac       = progressFraction(sub.status)
                   const doneApprox = Math.round(sub.qs_total * frac)
                   const dueStr     = sub.due_date
-                    ? new Date(sub.due_date).toLocaleDateString('en-GB', {
-                        day: '2-digit', month: 'short',
-                      })
+                    ? new Date(sub.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
                     : '—'
+                  const isSubExpanded = expandedSubtopicId === sub.id
 
                   return (
-                    <TableRow key={sub.id} className="group/row hover:bg-muted/20">
-                      <TableCell className="pl-4 text-xs text-muted-foreground">{idx + 1}</TableCell>
-                      <TableCell>
-                        <div className="min-w-[160px]">
-                          {sub.ref && (
-                            <span className="text-xs text-muted-foreground mr-1.5">{sub.ref}</span>
-                          )}
-                          <span className="text-sm">{sub.title}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                        {dueStr}
-                      </TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">
-                        {sub.sprint_week ?? '—'}
-                      </TableCell>
-                      <TableCell className="text-center text-sm font-medium">{sub.qs_total}</TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">{sub.mcq_count}</TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">{sub.short_ans_count}</TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">{sub.structured_count}</TableCell>
-                      <TableCell className="text-center text-xs text-muted-foreground">{sub.extended_count}</TableCell>
-
-                      {/* Status — clickable for admins */}
-                      <TableCell>
-                        {isAdmin ? (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                                <StatusPill status={sub.status} />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              {STATUS_OPTIONS.map((s) => (
-                                <DropdownMenuItem
-                                  key={s}
-                                  onClick={() => onStatusChange(sub.id, s)}
-                                  className={sub.status === s ? 'font-medium' : ''}
-                                >
-                                  <StatusPill status={s} />
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        ) : (
-                          <StatusPill status={sub.status} />
+                    <>
+                      {/* Subtopic row — clickable to expand */}
+                      <TableRow
+                        key={`row-${sub.id}`}
+                        className={cn(
+                          'group/row cursor-pointer select-none transition-colors',
+                          isSubExpanded ? 'bg-muted/30' : 'hover:bg-muted/20',
                         )}
-                      </TableCell>
-
-                      {/* Progress */}
-                      <TableCell>
-                        <div className="flex items-center gap-2 min-w-[100px]">
-                          <MiniBar value={doneApprox} max={sub.qs_total || 1} className="flex-1" />
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {doneApprox}/{sub.qs_total}
+                        onClick={() => toggleSubtopic(sub.id)}
+                      >
+                        <TableCell className="pl-4">
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <span className="shrink-0">
+                              {isSubExpanded
+                                ? <ChevronDown className="h-3 w-3" />
+                                : <ChevronRight className="h-3 w-3" />}
+                            </span>
+                            {idx + 1}
                           </span>
-                        </div>
-                      </TableCell>
-
-                      {/* Actions */}
-                      {isAdmin && (
+                        </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6"
-                              onClick={() => onEditSubtopic(sub)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => onDeleteSubtopic(sub)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                          <div className="min-w-[160px]">
+                            {sub.ref && (
+                              <span className="text-xs text-muted-foreground mr-1.5">{sub.ref}</span>
+                            )}
+                            <span className="text-sm">{sub.title}</span>
                           </div>
                         </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {dueStr}
+                        </TableCell>
+                        <TableCell className="text-center text-xs text-muted-foreground">
+                          {sub.sprint_week ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-center text-sm font-medium">{sub.qs_total}</TableCell>
+                        <TableCell className="text-center text-xs text-muted-foreground">{sub.mcq_count}</TableCell>
+                        <TableCell className="text-center text-xs text-muted-foreground">{sub.short_ans_count}</TableCell>
+                        <TableCell className="text-center text-xs text-muted-foreground">{sub.structured_count}</TableCell>
+                        <TableCell className="text-center text-xs text-muted-foreground">{sub.extended_count}</TableCell>
+
+                        {/* Status — stop propagation so dropdown doesn't toggle expand */}
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          {isAdmin ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                  <StatusPill status={sub.status} />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start">
+                                {STATUS_OPTIONS.map((s) => (
+                                  <DropdownMenuItem
+                                    key={s}
+                                    onClick={() => onStatusChange(sub.id, s)}
+                                    className={sub.status === s ? 'font-medium' : ''}
+                                  >
+                                    <StatusPill status={s} />
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : (
+                            <StatusPill status={sub.status} />
+                          )}
+                        </TableCell>
+
+                        <TableCell>
+                          <div className="flex items-center gap-2 min-w-[100px]">
+                            <MiniBar value={doneApprox} max={sub.qs_total || 1} className="flex-1" />
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {doneApprox}/{sub.qs_total}
+                            </span>
+                          </div>
+                        </TableCell>
+
+                        {isAdmin && (
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() => onEditSubtopic(sub)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => onDeleteSubtopic(sub)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+
+                      {/* Expanded panel */}
+                      {isSubExpanded && (
+                        <TableRow key={`expanded-${sub.id}`} className="hover:bg-transparent">
+                          <TableCell colSpan={colSpan} className="p-0">
+                            <div className="relative">
+                              <SubtopicExpandedRow
+                                subtopic={sub}
+                                topicRef={topic.ref}
+                                topicName={topic.name}
+                                isAdmin={isAdmin}
+                                onUpdate={onSubtopicUpdate}
+                              />
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </TableRow>
+                    </>
                   )
                 })
               )}
             </TableBody>
           </Table>
 
-          {/* Add subtopic footer */}
           {isAdmin && (
             <div className="border-t px-4 py-2">
               <button

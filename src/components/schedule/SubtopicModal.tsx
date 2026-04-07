@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,13 +40,14 @@ const EMPTY = {
   ref: '', title: '', due_date: '', sprint_week: '' as string,
   mcq_count: 0, short_ans_count: 0, structured_count: 0, extended_count: 0,
   status: 'draft' as SubtopicStatus,
+  ppt_required: true,
 }
 
 export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }: Props) {
   const isEdit = !!subtopic
-  const [form, setForm]       = useState(EMPTY)
+  const [form, setForm]           = useState(EMPTY)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [error, setError]         = useState('')
 
   useEffect(() => {
     if (open) {
@@ -62,13 +64,14 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
               structured_count: subtopic.structured_count,
               extended_count:   subtopic.extended_count,
               status:           subtopic.status,
+              ppt_required:     subtopic.ppt_required ?? true,
             }
           : EMPTY,
       )
     }
   }, [open, subtopic])
 
-  function set(field: string, value: string | number) {
+  function set(field: string, value: string | number | boolean) {
     setForm((f) => ({ ...f, [field]: value }))
   }
 
@@ -165,9 +168,7 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
                   {Array.from({ length: 14 }, (_, i) => `Wk ${i + 1}`).map((w) => (
-                    <SelectItem key={w} value={w} label={w}>
-                      {w}
-                    </SelectItem>
+                    <SelectItem key={w} value={w} label={w}>{w}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -183,9 +184,7 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
                 </SelectTrigger>
                 <SelectContent alignItemWithTrigger={false}>
                   {STATUS_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value} label={o.label}>
-                      {o.label}
-                    </SelectItem>
+                    <SelectItem key={o.value} value={o.value} label={o.label}>{o.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -197,47 +196,23 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
             <div className="grid grid-cols-4 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="s-mcq">MCQ</Label>
-                <Input
-                  id="s-mcq"
-                  type="number"
-                  min={0}
-                  value={form.mcq_count}
-                  onChange={(e) => set('mcq_count', Number(e.target.value))}
-                  disabled={isLoading}
-                />
+                <Input id="s-mcq" type="number" min={0} value={form.mcq_count}
+                  onChange={(e) => set('mcq_count', Number(e.target.value))} disabled={isLoading} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="s-short">Short Ans</Label>
-                <Input
-                  id="s-short"
-                  type="number"
-                  min={0}
-                  value={form.short_ans_count}
-                  onChange={(e) => set('short_ans_count', Number(e.target.value))}
-                  disabled={isLoading}
-                />
+                <Input id="s-short" type="number" min={0} value={form.short_ans_count}
+                  onChange={(e) => set('short_ans_count', Number(e.target.value))} disabled={isLoading} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="s-struct">Structured</Label>
-                <Input
-                  id="s-struct"
-                  type="number"
-                  min={0}
-                  value={form.structured_count}
-                  onChange={(e) => set('structured_count', Number(e.target.value))}
-                  disabled={isLoading}
-                />
+                <Input id="s-struct" type="number" min={0} value={form.structured_count}
+                  onChange={(e) => set('structured_count', Number(e.target.value))} disabled={isLoading} />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="s-ext">Extended</Label>
-                <Input
-                  id="s-ext"
-                  type="number"
-                  min={0}
-                  value={form.extended_count}
-                  onChange={(e) => set('extended_count', Number(e.target.value))}
-                  disabled={isLoading}
-                />
+                <Input id="s-ext" type="number" min={0} value={form.extended_count}
+                  onChange={(e) => set('extended_count', Number(e.target.value))} disabled={isLoading} />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -247,10 +222,36 @@ export function SubtopicModal({ open, onOpenChange, topicId, subtopic, onSave }:
             </p>
           </div>
 
+          {/* PPT Required toggle */}
+          <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+            <div>
+              <p className="text-sm font-medium">PPT Required?</p>
+              <p className="text-xs text-muted-foreground">
+                Whether a PowerPoint deck is needed for this subtopic
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.ppt_required}
+              onClick={() => set('ppt_required', !form.ppt_required)}
+              disabled={isLoading}
+              className={cn(
+                'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+                form.ppt_required ? 'bg-primary' : 'bg-muted-foreground/30',
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform',
+                  form.ppt_required ? 'translate-x-4' : 'translate-x-0.5',
+                )}
+              />
+            </button>
+          </div>
+
           {error && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </p>
+            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
           )}
         </form>
 

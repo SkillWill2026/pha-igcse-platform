@@ -16,23 +16,33 @@ export default async function SchedulePage() {
 
   const adminClient = createAdminClient()
 
-  const [{ data: profile }, { data: topicsData, error }] = await Promise.all([
+  const [{ data: profile }, { data: topicsData, error }, { data: examplesData }] = await Promise.all([
     adminClient.from('profiles').select('role').eq('id', user.id).single(),
     adminClient
       .from('topics')
-      .select(`*, subtopics(*)`)
+      .select(`*, subtopics(*, ppt_decks(*))`)
       .order('sort_order', { ascending: true }),
+    adminClient
+      .from('questions')
+      .select('subtopic_id')
+      .eq('is_example', true),
   ])
 
   if (error) {
     console.error('[SchedulePage]', error)
   }
 
+  // Build subtopic_id → example count map
+  const examplesMap: Record<string, number> = {}
+  for (const q of examplesData ?? []) {
+    examplesMap[q.subtopic_id] = (examplesMap[q.subtopic_id] ?? 0) + 1
+  }
+
   const topics: TopicWithSubtopics[] = (topicsData ?? []).map((t) => ({
     ...t,
-    subtopics: ((t.subtopics ?? []) as TopicWithSubtopics['subtopics']).sort(
-      (a, b) => a.sort_order - b.sort_order,
-    ),
+    subtopics: ((t.subtopics ?? []) as TopicWithSubtopics['subtopics'])
+      .map((s) => ({ ...s, examples_count: examplesMap[s.id] ?? 0 }))
+      .sort((a, b) => a.sort_order - b.sort_order),
   }))
 
   const isAdmin = profile?.role === 'admin'
