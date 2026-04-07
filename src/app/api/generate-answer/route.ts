@@ -22,21 +22,35 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
 
+    // Fetch question flat — no PostgREST join syntax to avoid FK constraint failures
     const { data: question, error: qErr } = await supabase
       .from('questions')
-      .select(`
-        id, content_text, difficulty, question_type, marks,
-        topics(ref, name),
-        subtopics(ref, name),
-        exam_boards(name)
-      `)
+      .select('id, content_text, difficulty, question_type, marks, topic_id, subtopic_id, exam_board_id')
       .eq('id', question_id)
       .single()
 
     if (qErr || !question) {
-      console.log('[generate-answer] question not found — id:', question_id, 'err:', qErr?.message)
+      console.error('[generate-answer] question not found — id:', question_id, 'err:', qErr?.message)
       return NextResponse.json({ error: 'Question not found' }, { status: 404 })
     }
+
+    // Fetch related rows separately
+    const [topicRes, subtopicRes, boardRes] = await Promise.all([
+      question.topic_id
+        ? supabase.from('topics').select('ref, name').eq('id', question.topic_id).single()
+        : Promise.resolve({ data: null }),
+      question.subtopic_id
+        ? supabase.from('subtopics').select('ref, name').eq('id', question.subtopic_id).single()
+        : Promise.resolve({ data: null }),
+      question.exam_board_id
+        ? supabase.from('exam_boards').select('name').eq('id', question.exam_board_id).single()
+        : Promise.resolve({ data: null }),
+    ])
+
+    const topic    = topicRes.data
+    const subtopic = subtopicRes.data
+    const board    = boardRes.data
+
     console.log('[generate-answer] question loaded:', question_id)
 
     const anthropic = createAnthropicClient()
@@ -44,14 +58,12 @@ export async function POST(request: NextRequest) {
     const systemPrompt =
       'You are an expert Cambridge IGCSE Mathematics tutor. Generate a complete worked solution for this exam question. Return JSON with: step_by_step (array of strings, each a clear working step using LaTeX for math), final_answer (string), mark_scheme (string describing what earns marks), confidence_score (0.0 to 1.0).'
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const q = question as any
     const context = [
       `Exam: Cambridge IGCSE Mathematics 0580`,
-      `Topic: ${q.topics?.ref} – ${q.topics?.name}`,
-      `Subtopic: ${q.subtopics?.ref} – ${q.subtopics?.name}`,
-      `Type: ${q.question_type}  |  Marks: ${q.marks}  |  Difficulty: ${q.difficulty}/5`,
-    ].join('\n')
+      topic    ? `Topic: ${topic.ref} – ${topic.name}`       : '',
+      subtopic ? `Subtopic: ${subtopic.ref} – ${subtopic.name}` : '',
+      `Type: ${question.question_type}  |  Marks: ${question.marks}  |  Difficulty: ${question.difficulty}/5`,
+    ].filter(Boolean).join('\n')
 
     const aiResponse = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -60,7 +72,7 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: `${context}\n\nQuestion:\n${q.content_text}\n\nReturn only valid JSON — no markdown fences.`,
+          content: `${context}\n\nQuestion:\n${question.content_text}\n\nReturn only valid JSON — no markdown fences.`,
         },
       ],
     })
