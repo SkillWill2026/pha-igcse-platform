@@ -123,7 +123,7 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
       const fd = new FormData()
       fd.append('file', file)
       fd.append('exam_board_id', boardId)
-      fd.append('subtopic_id', subtopicId)
+      fd.append('subtopic_id', subtopicId!)
       if (subSubtopicId) fd.append('sub_subtopic_id', subSubtopicId)
 
       const res = await fetch('/api/ingest', { method: 'POST', body: fd })

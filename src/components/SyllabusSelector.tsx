@@ -25,7 +25,8 @@ interface Subtopic {
 
 interface SubSubtopic {
   id: string
-  ext_num: number
+  ext_num: number | null
+  sort_order: number
   core_num: number | null
   outcome: string
   tier: string
@@ -46,21 +47,31 @@ function TierBadge({ tier }: { tier: string }) {
 interface Props {
   onSubSubtopicChange: (id: string | null) => void
   onSubtopicChange?: (id: string | null) => void
+  onTopicChange?: (id: string | null) => void
   showTierBadge?: boolean
 }
 
 export function SyllabusSelector({
   onSubSubtopicChange,
   onSubtopicChange,
+  onTopicChange,
   showTierBadge = true,
 }: Props) {
-  const [topics, setTopics]           = useState<Topic[]>([])
-  const [subtopics, setSubtopics]     = useState<Subtopic[]>([])
+  const [topics, setTopics]             = useState<Topic[]>([])
+  const [subtopics, setSubtopics]       = useState<Subtopic[]>([])
   const [subSubtopics, setSubSubtopics] = useState<SubSubtopic[]>([])
 
   const [topicId, setTopicId]             = useState('')
   const [subtopicId, setSubtopicId]       = useState('')
   const [subSubtopicId, setSubSubtopicId] = useState('')
+
+  // Emit initial null state so parent knows no filter is active
+  useEffect(() => {
+    onSubSubtopicChange(null)
+    onSubtopicChange?.(null)
+    onTopicChange?.(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     fetch('/api/topics')
@@ -77,6 +88,7 @@ export function SyllabusSelector({
     setSubSubtopics([])
     onSubSubtopicChange(null)
     onSubtopicChange?.(null)
+    onTopicChange?.(id || null)
     if (id) {
       fetch(`/api/subtopics?topic_id=${id}`)
         .then((r) => r.json())
@@ -168,7 +180,9 @@ export function SyllabusSelector({
           <SelectTrigger className="h-8 text-xs w-full">
             {selectedSubSubtopic ? (
               <span className="truncate">
-                <span className="font-mono text-muted-foreground mr-1">{selectedSubSubtopic.ext_num}.</span>
+                <span className="font-mono text-muted-foreground mr-1">
+                  {Number(selectedSubSubtopic.ext_num ?? selectedSubSubtopic.sort_order)}.
+                </span>
                 {selectedSubSubtopic.outcome.length > 80
                   ? selectedSubSubtopic.outcome.slice(0, 80) + '…'
                   : selectedSubSubtopic.outcome}
@@ -178,15 +192,18 @@ export function SyllabusSelector({
             )}
           </SelectTrigger>
           <SelectContent className="max-h-64 overflow-y-auto" alignItemWithTrigger={false}>
-            {subSubtopics.map((s) => (
-              <SelectItem key={s.id} value={s.id} label={`${s.ext_num}. ${s.outcome}`}>
-                <span className="font-mono text-xs mr-1 text-muted-foreground">{s.ext_num}.</span>
-                <span>
-                  {s.outcome.length > 80 ? s.outcome.slice(0, 80) + '…' : s.outcome}
-                </span>
-                {showTierBadge && <TierBadge tier={s.tier} />}
-              </SelectItem>
-            ))}
+            {subSubtopics.map((s) => {
+              const num = Number(s.ext_num ?? s.sort_order)
+              return (
+                <SelectItem key={s.id} value={s.id} label={`${num}. ${s.outcome}`}>
+                  <span className="font-mono text-xs mr-1 text-muted-foreground">{num}.</span>
+                  <span>
+                    {s.outcome.length > 80 ? s.outcome.slice(0, 80) + '…' : s.outcome}
+                  </span>
+                  {showTierBadge && <TierBadge tier={s.tier} />}
+                </SelectItem>
+              )
+            })}
           </SelectContent>
         </Select>
       </div>

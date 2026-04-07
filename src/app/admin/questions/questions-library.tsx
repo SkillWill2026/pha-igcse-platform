@@ -97,6 +97,8 @@ export function QuestionsLibrary({ questions, boards }: Props) {
   const router = useRouter()
   const [deletingId,        setDeletingId]        = useState<string | null>(null)
   const [boardId,           setBoardId]           = useState(ALL)
+  const [topicFilter,       setTopicFilter]       = useState<string | null>(null)
+  const [subtopicFilter,    setSubtopicFilter]    = useState<string | null>(null)
   const [subSubtopicFilter, setSubSubtopicFilter] = useState<string | null>(null)
   const [qtype,             setQtype]             = useState(ALL)
   const [status,            setStatus]            = useState(ALL)
@@ -190,16 +192,17 @@ export function QuestionsLibrary({ questions, boards }: Props) {
   const filteredGroups = useMemo(() => {
     return groups.filter((g) => {
       const q = g.original
-      // Board filter: pass if any member is from this board
       if (boardId          && boardId !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
+      if (topicFilter       && q.topic_id        !== topicFilter)       return false
+      if (subtopicFilter    && q.subtopic_id     !== subtopicFilter)    return false
       if (subSubtopicFilter && q.sub_subtopic_id !== subSubtopicFilter) return false
-      if (qtype  && qtype  !== ALL && q.question_type !== qtype)      return false
-      if (status && status !== ALL && q.status        !== status)     return false
+      if (qtype  && qtype  !== ALL && q.question_type !== qtype)       return false
+      if (status && status !== ALL && q.status        !== status)      return false
       if (diffMin && diffMin !== ALL && q.difficulty < Number(diffMin)) return false
       if (diffMax && diffMax !== ALL && q.difficulty > Number(diffMax)) return false
       return true
     })
-  }, [groups, boardId, subSubtopicFilter, qtype, status, diffMin, diffMax])
+  }, [groups, boardId, topicFilter, subtopicFilter, subSubtopicFilter, qtype, status, diffMin, diffMax])
 
   // ── Counts (groups, not rows) ──────────────────────────────────────────────
   const counts = useMemo(() => ({
@@ -210,11 +213,12 @@ export function QuestionsLibrary({ questions, boards }: Props) {
   }), [filteredGroups])
 
   const hasFilters =
-    boardId !== ALL || subSubtopicFilter !== null ||
+    boardId !== ALL || topicFilter !== null || subtopicFilter !== null || subSubtopicFilter !== null ||
     qtype !== ALL || status !== ALL || diffMin !== ALL || diffMax !== ALL
 
   const clearFilters = () => {
-    setBoardId(ALL); setSubSubtopicFilter(null)
+    setBoardId(ALL)
+    setTopicFilter(null); setSubtopicFilter(null); setSubSubtopicFilter(null)
     setQtype(ALL); setStatus(ALL); setDiffMin(ALL); setDiffMax(ALL)
   }
 
@@ -308,7 +312,11 @@ export function QuestionsLibrary({ questions, boards }: Props) {
         <div className="flex flex-wrap gap-4 items-start">
           {/* Three-level syllabus selector */}
           <div className="w-72">
-            <SyllabusSelector onSubSubtopicChange={setSubSubtopicFilter} />
+            <SyllabusSelector
+              onTopicChange={setTopicFilter}
+              onSubtopicChange={setSubtopicFilter}
+              onSubSubtopicChange={setSubSubtopicFilter}
+            />
           </div>
 
           {/* Other filters */}
