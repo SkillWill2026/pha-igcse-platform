@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Loader2, Sparkles, Star, Trash2, Upload, X } from 'lucide-react'
@@ -12,7 +12,10 @@ import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
 } from '@/components/ui/select'
 import { MathRenderer } from '@/components/admin/math-renderer'
@@ -39,12 +42,18 @@ const STATUS_COLORS: Record<QuestionStatus, string> = {
   rejected: 'text-red-700',
 }
 
+const UNASSIGNED = '__unassigned__'
+
 export function ReviewClient({
   question,
   allBoards,
+  allSubtopics,
+  allTopics,
 }: {
   question: QuestionWithRelations
   allBoards: { id: string; name: string }[]
+  allSubtopics: { id: string; ref: string; title: string; topic_id: string }[]
+  allTopics: { id: string; ref: string; name: string }[]
 }) {
   const router = useRouter()
 
@@ -55,6 +64,18 @@ export function ReviewClient({
   const [status,           setStatus]           = useState<QuestionStatus>(question.status)
   const [imageUrl,         setImageUrl]         = useState<string | null>(question.image_url)
   const [linkedBoardIds,   setLinkedBoardIds]   = useState<Set<string>>(new Set())
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [subtopicId, setSubtopicId] = useState<string | null>((question as any).subtopic_id ?? null)
+
+  const topicGroups = useMemo(() => {
+    const map = new Map(allTopics.map((t) => ({ ...t, items: [] as typeof allSubtopics })).map((t) => [t.id, t]))
+    for (const s of allSubtopics) {
+      const g = map.get(s.topic_id)
+      if (g) g.items.push(s)
+    }
+    return Array.from(map.values()).filter((g) => g.items.length > 0)
+  }, [allSubtopics, allTopics])
 
   const [isSaving,         setIsSaving]         = useState(false)
   const [isApproving,      setIsApproving]      = useState(false)
@@ -98,6 +119,18 @@ export function ReviewClient({
       toast.success(`Status changed to ${newStatus}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Status update failed')
+    }
+  }
+
+  async function handleSubtopicChange(value: string) {
+    const newId = value === UNASSIGNED ? null : value
+    const subtopic = allSubtopics.find((s) => s.id === newId)
+    try {
+      await patchQuestion({ subtopic_id: newId, topic_id: subtopic?.topic_id ?? null })
+      setSubtopicId(newId)
+      toast.success('Subtopic updated')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Update failed')
     }
   }
 
@@ -260,6 +293,43 @@ export function ReviewClient({
               <SelectItem key={s.value} value={s.value} label={s.label}>
                 <span className={STATUS_COLORS[s.value]}>{s.label}</span>
               </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* ── Subtopic selector ───────────────────────────────────────────── */}
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-muted-foreground">Subtopic:</span>
+        <Select
+          value={subtopicId ?? UNASSIGNED}
+          onValueChange={handleSubtopicChange}
+        >
+          <SelectTrigger className="h-8 w-72 text-xs">
+            {subtopicId
+              ? (() => {
+                  const s = allSubtopics.find((x) => x.id === subtopicId)
+                  return s
+                    ? <span className="truncate"><span className="font-mono text-muted-foreground mr-1">{s.ref}</span>{s.title}</span>
+                    : <span className="text-muted-foreground truncate">— Unassigned —</span>
+                })()
+              : <span className="text-muted-foreground">— Unassigned —</span>}
+          </SelectTrigger>
+          <SelectContent className="max-h-72" alignItemWithTrigger={false}>
+            <SelectItem value={UNASSIGNED} label="— Unassigned —">
+              <span className="text-muted-foreground">— Unassigned —</span>
+            </SelectItem>
+            <SelectSeparator />
+            {topicGroups.map((group) => (
+              <SelectGroup key={group.id}>
+                <SelectLabel>{group.ref} {group.name}</SelectLabel>
+                {group.items.map((s) => (
+                  <SelectItem key={s.id} value={s.id} label={`${s.ref} – ${s.title}`}>
+                    <span className="font-mono text-xs text-muted-foreground mr-1.5">{s.ref}</span>
+                    {s.title}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             ))}
           </SelectContent>
         </Select>

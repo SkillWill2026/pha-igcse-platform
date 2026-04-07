@@ -16,6 +16,8 @@ export default async function QuestionReviewPage({
   noStore()
   let question: QuestionWithRelations | null = null
   let allBoards: { id: string; name: string }[] = []
+  let allSubtopics: { id: string; ref: string; title: string; topic_id: string }[] = []
+  let allTopics: { id: string; ref: string; name: string }[] = []
 
   try {
     const supabase = createAdminClient()
@@ -30,8 +32,8 @@ export default async function QuestionReviewPage({
         .eq('id', params.id)
         .single(),
       supabase.from('exam_boards').select('id, name').order('name'),
-      supabase.from('topics').select('id, ref, name'),
-      supabase.from('subtopics').select('id, ref, title'),
+      supabase.from('topics').select('id, ref, name').order('sort_order'),
+      supabase.from('subtopics').select('id, ref, title, topic_id').order('sort_order'),
     ])
 
     if (qRes.error || !qRes.data) {
@@ -39,12 +41,15 @@ export default async function QuestionReviewPage({
       notFound()
     }
 
-    allBoards = bRes.data ?? []
-
-    const boardMap    = new Map((bRes.data ?? []).map((b) => [b.id, b]))
-    const topicMap    = new Map((tRes.data ?? []).map((t) => [t.id, t]))
+    allBoards    = bRes.data ?? []
+    allTopics    = (tRes.data ?? []) as typeof allTopics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const subtopicMap = new Map((sRes.data ?? []).map((s: any) => [s.id, { id: s.id, ref: s.ref, name: s.title ?? '' }]))
+    allSubtopics = (sRes.data ?? []) as any
+
+    const boardMap    = new Map(allBoards.map((b) => [b.id, b]))
+    const topicMap    = new Map(allTopics.map((t) => [t.id, t]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subtopicMap = new Map(allSubtopics.map((s: any) => [s.id, { id: s.id, ref: s.ref, name: s.title ?? '' }]))
 
     question = {
       ...qRes.data,
@@ -82,7 +87,7 @@ export default async function QuestionReviewPage({
         </div>
       </div>
 
-      <ReviewClient question={question} allBoards={allBoards} />
+      <ReviewClient question={question} allBoards={allBoards} allSubtopics={allSubtopics} allTopics={allTopics} />
     </div>
   )
 }
