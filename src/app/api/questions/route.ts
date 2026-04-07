@@ -12,11 +12,12 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createAdminClient()
 
-    // Use * so missing columns (e.g. sub_subtopic_id before 006c runs) don't break the query.
-    // topics + subtopics embedded joins are safe — those FKs exist from the original schema.
+    // Flat fetch — no embedded joins until FK constraints are confirmed.
+    // Reference tables (topics, subtopics, exam_boards, sub_subtopics) are
+    // fetched separately and stitched by id.
     let query = supabase
       .from('questions')
-      .select('*, topics(ref, name), subtopics(ref, title), exam_boards(id, name)')
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (topicId       && topicId       !== '') query = query.eq('topic_id',        topicId)
@@ -29,25 +30,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Stitch sub_subtopics separately — FK constraint may not exist yet
     const rows = data ?? []
-    const sstIds = [...new Set(rows.flatMap((q: any) => q.sub_subtopic_id ? [q.sub_subtopic_id as string] : []))]
-    const sstMap = new Map<string, any>()
-    if (sstIds.length > 0) {
-      const { data: sstData } = await supabase
-        .from('sub_subtopics')
-        .select('id, ext_num, outcome, tier')
-        .in('id', sstIds)
-      ;(sstData ?? []).forEach((s: any) => sstMap.set(s.id, s))
-    }
 
-    const questions = rows.map((q: any) => ({
-      ...q,
-      exam_boards:   q.exam_boards ?? null,
-      topics:        q.topics      ?? null,
-      subtopics:     q.subtopics   ? { id: q.subtopic_id, ref: q.subtopics.ref, name: q.subtopics.title ?? '' } : null,
-      sub_subtopics: q.sub_subtopic_id ? (sstMap.get(q.sub_subtopic_id) ?? null) : null,
-    }))
+    // Collect unique FK ids for parallel reference fetches
+    const topicIds     = [...new Set(rows.map((q: any) => q.topic_id).filter(Boolean))]
+    const subtopicIds  = [...new Set(rows.map((q: any) => q.subtopic_id).filter(Boolean))]
+    const boardIds     = [...new Set(rows.map((q: any) => q.exam_board_id).filter(Boolean))]
+    const sstIds       = [...new Set(rows.map((q: any) => q.sub_subtopic_id).filter(Boolean))]
+
+    const [topicsRes, subtopicsRes, boardsRes, sstRes] = await Promise.all([
+      topicIds.length    > 0 ? supabase.from('topics').select('id, ref, name').in('id', topicIds) : { data: [] },
+      subtopicIds.length > 0 ? supabase.from('subtopics').select('id, ref, title').in('id', subtopicIds) : { data: [] },
+      boardIds.length    > 0 ? supabase.from('exam_boards').select('id, name').in('id', boardIds) : { data: [] },
+      sstIds.length      > 0 ? supabase.from('sub_subtopics').select('id, ext_num, outcome, tier').in('id', sstIds) : { data: [] },
+    ])
+
+    const topicMap    = new Map((topicsRes.data    ?? []).map((r: any) => [r.id, r]))
+    const subtopicMap = new Map((subtopicsRes.data ?? []).map((r: any) => [r.id, r]))
+    const boardMap    = new Map((boardsRes.data    ?? []).map((r: any) => [r.id, r]))
+    const sstMap      = new Map((sstRes.data       ?? []).map((r: any) => [r.id, r]))
+
+    const questions = rows.map((q: any) => {
+      const sub = subtopicMap.get(q.subtopic_id)
+      return {
+        ...q,
+        exam_boards:   boardMap.get(q.exam_board_id)  ?? null,
+        topics:        topicMap.get(q.topic_id)        ?? null,
+        subtopics:     sub ? { id: q.subtopic_id, ref: sub.ref, name: sub.title ?? '' } : null,
+        sub_subtopics: sstMap.get(q.sub_subtopic_id)  ?? null,
+      }
+    })
 
     return NextResponse.json(questions)
   } catch (err) {
