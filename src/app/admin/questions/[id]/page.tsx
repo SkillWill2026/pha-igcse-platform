@@ -19,26 +19,41 @@ export default async function QuestionReviewPage({
 
   try {
     const supabase = createAdminClient()
-    const [qRes, bRes] = await Promise.all([
+    const [qRes, bRes, tRes, sRes] = await Promise.all([
       supabase
         .from('questions')
-        .select(`
-          id, content_text, difficulty, question_type, marks, status,
-          ai_extracted, created_at, updated_at,
-          exam_board_id, topic_id, subtopic_id, image_url, source_question_id,
-          exam_boards(id, name),
-          topics(id, ref, name),
-          subtopics(id, ref, name)
-        `)
+        .select(
+          'id, content_text, difficulty, question_type, marks, status,' +
+          'ai_extracted, created_at, updated_at,' +
+          'exam_board_id, topic_id, subtopic_id, image_url, source_question_id',
+        )
         .eq('id', params.id)
         .single(),
       supabase.from('exam_boards').select('id, name').order('name'),
+      supabase.from('topics').select('id, ref, name'),
+      supabase.from('subtopics').select('id, ref, name'),
     ])
 
-    if (qRes.error || !qRes.data) notFound()
-    question = qRes.data as unknown as QuestionWithRelations
+    if (qRes.error || !qRes.data) {
+      console.error('[QuestionReviewPage] question fetch error:', qRes.error)
+      notFound()
+    }
+
     allBoards = bRes.data ?? []
-  } catch {
+
+    const boardMap    = new Map((bRes.data ?? []).map((b) => [b.id, b]))
+    const topicMap    = new Map((tRes.data ?? []).map((t) => [t.id, t]))
+    const subtopicMap = new Map((sRes.data ?? []).map((s) => [s.id, { id: s.id, ref: s.ref, name: s.name }]))
+
+    question = {
+      ...qRes.data,
+      exam_boards: boardMap.get(qRes.data.exam_board_id)    ?? null,
+      topics:      topicMap.get(qRes.data.topic_id)          ?? null,
+      subtopics:   subtopicMap.get(qRes.data.subtopic_id)    ?? null,
+    } as unknown as QuestionWithRelations
+
+  } catch (err) {
+    console.error('[QuestionReviewPage] unexpected error:', err)
     notFound()
   }
 

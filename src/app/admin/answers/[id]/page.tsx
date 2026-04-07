@@ -16,26 +16,53 @@ export default async function AnswerReviewPage({
 
   try {
     const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('answers')
-      .select(`
-        id, content_text, step_by_step, mark_scheme, confidence_score,
-        status, ai_generated, created_at, updated_at, question_id,
-        questions(
-          id, content_text, difficulty, question_type, marks, status,
-          ai_extracted, created_at, updated_at,
-          exam_board_id, topic_id, subtopic_id, image_url,
-          exam_boards(id, name),
-          topics(id, ref, name),
-          subtopics(id, ref, name)
+    const [aRes, bRes, tRes, sRes] = await Promise.all([
+      supabase
+        .from('answers')
+        .select(
+          'id, content_text, step_by_step, mark_scheme, confidence_score,' +
+          'status, ai_generated, created_at, updated_at, question_id',
         )
-      `)
-      .eq('id', params.id)
+        .eq('id', params.id)
+        .single(),
+      supabase.from('exam_boards').select('id, name'),
+      supabase.from('topics').select('id, ref, name'),
+      supabase.from('subtopics').select('id, ref, name'),
+    ])
+
+    if (aRes.error || !aRes.data) {
+      console.error('[AnswerReviewPage] answer fetch error:', aRes.error)
+      notFound()
+    }
+
+    // Fetch the associated question separately (no joins)
+    const qRes = await supabase
+      .from('questions')
+      .select(
+        'id, content_text, difficulty, question_type, marks, status,' +
+        'ai_extracted, created_at, updated_at,' +
+        'exam_board_id, topic_id, subtopic_id, image_url',
+      )
+      .eq('id', aRes.data.question_id)
       .single()
 
-    if (error || !data) notFound()
-    answer = data as unknown as AnswerWithQuestion
-  } catch {
+    const boardMap    = new Map((bRes.data ?? []).map((b) => [b.id, b]))
+    const topicMap    = new Map((tRes.data ?? []).map((t) => [t.id, t]))
+    const subtopicMap = new Map((sRes.data ?? []).map((s) => [s.id, { id: s.id, ref: s.ref, name: s.name }]))
+
+    const q = qRes.data
+      ? {
+          ...qRes.data,
+          exam_boards: boardMap.get(qRes.data.exam_board_id) ?? null,
+          topics:      topicMap.get(qRes.data.topic_id)      ?? null,
+          subtopics:   subtopicMap.get(qRes.data.subtopic_id) ?? null,
+        }
+      : null
+
+    answer = { ...aRes.data, questions: q } as unknown as AnswerWithQuestion
+
+  } catch (err) {
+    console.error('[AnswerReviewPage] unexpected error:', err)
     notFound()
   }
 
