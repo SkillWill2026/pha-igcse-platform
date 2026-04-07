@@ -31,7 +31,7 @@ export default async function QuestionReviewPage({
         .single(),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name'),
-      supabase.from('subtopics').select('id, ref, name:title'),
+      supabase.from('subtopics').select('id, ref, title'),
     ])
 
     if (qRes.error || !qRes.data) {
@@ -43,7 +43,8 @@ export default async function QuestionReviewPage({
 
     const boardMap    = new Map((bRes.data ?? []).map((b) => [b.id, b]))
     const topicMap    = new Map((tRes.data ?? []).map((t) => [t.id, t]))
-    const subtopicMap = new Map((sRes.data ?? []).map((s) => [s.id, { id: s.id, ref: s.ref, name: s.name }]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subtopicMap = new Map((sRes.data ?? []).map((s: any) => [s.id, { id: s.id, ref: s.ref, name: s.title ?? '' }]))
 
     question = {
       ...qRes.data,

@@ -41,7 +41,7 @@ export async function POST() {
     // 2. Fetch all subtopics
     const { data: subtopicsRaw, error: sErr } = await supabase
       .from('subtopics')
-      .select('id, ref, name:title, topic_id')
+      .select('id, ref, title, topic_id')
 
     if (sErr) {
       console.error('[assign-subtopics] subtopics fetch error:', sErr.message)
@@ -66,7 +66,8 @@ export async function POST() {
     const subtopicIds = new Set(subtopics.map((s) => s.id))
 
     const subtopicList = subtopics
-      .map((s) => `${s.id} | ${s.ref} | ${s.name}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((s: any) => `${s.id} | ${s.ref} | ${s.title ?? ''}`)
       .join('\n')
 
     let assigned = 0

@@ -34,7 +34,7 @@ export default async function AnswersPage() {
         ),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('ref'),
-      supabase.from('subtopics').select('id, ref, name:title, topic_id').order('ref'),
+      supabase.from('subtopics').select('id, ref, title, topic_id').order('ref'),
     ])
 
     if (aRes.error) console.error('[AnswersPage] answers error:',   aRes.error)
@@ -50,6 +50,8 @@ export default async function AnswersPage() {
     // Build lookup maps
     const boardMap    = new Map(boards.map((b) => [b.id, b]))
     const topicMap    = new Map(topics.map((t) => [t.id, t]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    subtopics = (subtopics as any[]).map((s) => ({ id: s.id, ref: s.ref, name: s.title ?? '', topic_id: s.topic_id }))
     const subtopicMap = new Map(subtopics.map((s) => [s.id, { id: s.id, ref: s.ref, name: s.name }]))
     const questionMap = new Map((qRes.data ?? []).map((q) => [q.id, q]))
 

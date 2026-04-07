@@ -28,7 +28,7 @@ export default async function QuestionsPage() {
         .order('created_at', { ascending: false }),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('ref'),
-      supabase.from('subtopics').select('id, ref, name:title, topic_id').order('ref'),
+      supabase.from('subtopics').select('id, ref, title, topic_id').order('ref'),
     ])
 
     if (qRes.error) console.error('[QuestionsPage] questions error:', qRes.error)
@@ -43,6 +43,8 @@ export default async function QuestionsPage() {
     // Build lookup maps so we can stitch relations without relying on FK constraints
     const boardMap    = new Map(boards.map((b) => [b.id, b]))
     const topicMap    = new Map(topics.map((t) => [t.id, t]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    subtopics = (subtopics as any[]).map((s) => ({ id: s.id, ref: s.ref, name: s.title ?? '', topic_id: s.topic_id }))
     const subtopicMap = new Map(subtopics.map((s) => [s.id, { id: s.id, ref: s.ref, name: s.name }]))
 
     questions = (qRes.data ?? []).map((q) => ({

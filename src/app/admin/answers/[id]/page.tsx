@@ -27,7 +27,7 @@ export default async function AnswerReviewPage({
         .single(),
       supabase.from('exam_boards').select('id, name'),
       supabase.from('topics').select('id, ref, name'),
-      supabase.from('subtopics').select('id, ref, name:title'),
+      supabase.from('subtopics').select('id, ref, title'),
     ])
 
     if (aRes.error || !aRes.data) {
@@ -48,7 +48,8 @@ export default async function AnswerReviewPage({
 
     const boardMap    = new Map((bRes.data ?? []).map((b) => [b.id, b]))
     const topicMap    = new Map((tRes.data ?? []).map((t) => [t.id, t]))
-    const subtopicMap = new Map((sRes.data ?? []).map((s) => [s.id, { id: s.id, ref: s.ref, name: s.name }]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subtopicMap = new Map((sRes.data ?? []).map((s: any) => [s.id, { id: s.id, ref: s.ref, name: s.title ?? '' }]))
 
     const q = qRes.data
       ? {

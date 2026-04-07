@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     if (!isMixed) {
       const { data: s } = await supabase
         .from('subtopics')
-        .select('ref, name:title, topic_id')
+        .select('ref, title, topic_id')
         .eq('id', subtopic_id)
         .single()
       subtopic = s
@@ -118,7 +118,8 @@ Rules:
 
     const contextLine = isMixed
       ? 'This paper contains mixed topics — extract all questions without assuming a specific subtopic.'
-      : `Context: Topic ${topic?.ref ?? '?'} – ${topic?.name ?? 'Unknown'} | Subtopic ${subtopic?.ref ?? '?'} – ${subtopic?.name ?? 'Unknown'}`
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      : `Context: Topic ${topic?.ref ?? '?'} – ${topic?.name ?? 'Unknown'} | Subtopic ${subtopic?.ref ?? '?'} – ${(subtopic as any)?.title ?? 'Unknown'}`
 
     const userContent = `Extract all exam questions from this Cambridge IGCSE Mathematics document.
 ${contextLine}

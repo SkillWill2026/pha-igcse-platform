@@ -190,12 +190,12 @@ export function UploadClient({
 
   // ── Trigger label for subtopic selector ─────────────────────────────────────
   const subtopicTriggerLabel = () => {
-    if (!subtopicId) return <span className="text-muted-foreground">Select subtopic…</span>
-    if (subtopicId === 'mixed') return <span className="italic text-violet-600">Mixed Topics</span>
+    if (!subtopicId) return <span className="text-muted-foreground truncate">Select subtopic…</span>
+    if (subtopicId === 'mixed') return <span className="italic text-violet-600 truncate">Mixed Topics</span>
     const s = subtopics.find((x) => x.id === subtopicId)
     if (!s) return null
     return (
-      <span>
+      <span className="truncate">
         <span className="font-mono text-xs text-muted-foreground mr-1">{s.ref}</span>
         {s.name}
       </span>
@@ -236,7 +236,7 @@ export function UploadClient({
           <div className="space-y-1.5">
             <Label>Subtopic</Label>
             <Select value={subtopicId} onValueChange={(v) => setSubtopicId(v ?? '')}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full max-w-full overflow-hidden">
                 {subtopicTriggerLabel()}
               </SelectTrigger>
               <SelectContent className="max-h-72" alignItemWithTrigger={false}>

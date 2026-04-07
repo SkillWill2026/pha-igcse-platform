@@ -332,6 +332,7 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
             value={subtopicId}
             onValueChange={setSubtopicId}
             options={filteredSubtopics.map((s) => ({ value: s.id, label: `${s.ref} – ${s.name}` }))}
+            className="w-56"
           />
           <FilterSelect
             placeholder="All Types"
@@ -487,18 +488,20 @@ function FilterSelect({
   value,
   onValueChange,
   options,
+  className,
 }: {
   placeholder: string
   value: string
   onValueChange: (v: string) => void
   options: { value: string; label: string }[]
+  className?: string
 }) {
   return (
     <Select value={value} onValueChange={(v) => onValueChange(v ?? ALL)}>
-      <SelectTrigger className="h-8 w-36 text-xs">
+      <SelectTrigger className={cn('h-8 text-xs', className ?? 'w-36')}>
         {value !== ALL
-          ? <span>{options.find((o) => o.value === value)?.label}</span>
-          : <span className="text-muted-foreground">{placeholder}</span>}
+          ? <span className="truncate">{options.find((o) => o.value === value)?.label}</span>
+          : <span className="text-muted-foreground truncate">{placeholder}</span>}
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false}>
         <SelectItem value={ALL} label={placeholder}>{placeholder}</SelectItem>

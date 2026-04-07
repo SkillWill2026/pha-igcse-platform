@@ -17,16 +17,20 @@ export default async function UploadPage() {
     const supabase = createAdminClient()
     const [boardsRes, subtopicsRes, topicsRes] = await Promise.all([
       supabase.from('exam_boards').select('id, name').order('name'),
-      supabase.from('subtopics').select('id, ref, name:title, topic_id').order('ref'),
+      supabase.from('subtopics').select('id, ref, title, topic_id').order('ref'),
       supabase.from('topics').select('id, ref, name'),
     ])
     boards = boardsRes.data ?? []
 
     // Stitch topics onto subtopics manually (no PostgREST join needed)
     const topicMap = new Map((topicsRes.data ?? []).map((t) => [t.id, { ref: t.ref, name: t.name }]))
-    subtopics = (subtopicsRes.data ?? []).map((s) => ({
-      ...s,
-      topics: topicMap.get(s.topic_id) ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    subtopics = (subtopicsRes.data ?? []).map((s: any) => ({
+      id:       s.id,
+      ref:      s.ref,
+      name:     s.title ?? '',
+      topic_id: s.topic_id,
+      topics:   topicMap.get(s.topic_id) ?? null,
     }))
   } catch {
     // Env vars not set yet — page renders with empty dropdowns
