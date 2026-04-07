@@ -138,50 +138,56 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       : `Context: Topic ${topic?.ref ?? '?'} – ${topic?.name ?? 'Unknown'} | Subtopic ${subtopic?.ref ?? '?'} – ${(subtopic as any)?.title ?? 'Unknown'}`
 
-    // Truncate to 12 000 chars to stay within reliable JSON response limits.
-    // Larger documents cause Claude to produce truncated/malformed JSON.
-    const truncatedText = text.slice(0, 6_000)
-    console.log('Text sent to Claude (length):', truncatedText.length)
+    // Chunk-based extraction: process up to 3 chunks of 3 000 chars each.
+    // If a chunk fails to parse it is skipped — resilient to garbled PDFs.
+    const CHUNK_SIZE = 3000
+    const sourceText = text.slice(0, 9_000)
+    const chunks: string[] = []
+    for (let i = 0; i < sourceText.length; i += CHUNK_SIZE) {
+      chunks.push(sourceText.slice(i, i + CHUNK_SIZE))
+    }
+    console.log(`[ingest] chunks: ${chunks.length}, total chars: ${sourceText.length}`)
 
-    const userContent = `Extract all exam questions from this Cambridge IGCSE Mathematics document.
-${contextLine}
+    const extractionPrompt = `${systemPrompt}\n\n${contextLine}`
 
----
-${truncatedText}
----`
+    const allQuestions: AIQuestion[] = []
+    for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+      const chunk = chunks[chunkIdx]
+      try {
+        const response = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          messages: [{
+            role: 'user',
+            content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${chunk}`,
+          }],
+        })
+        const raw = response.content[0].type === 'text' ? response.content[0].text : ''
+        console.log(`[ingest] chunk ${chunkIdx} raw (first 200):`, raw.slice(0, 200))
+        const cleaned = raw
+          .replace(/^```json\s*/i, '')
+          .replace(/^```\s*/i, '')
+          .replace(/```\s*$/i, '')
+          .trim()
+        const parsed = JSON.parse(cleaned)
+        if (Array.isArray(parsed)) {
+          allQuestions.push(...(parsed as AIQuestion[]))
+        }
+      } catch (err) {
+        console.log(`[ingest] chunk ${chunkIdx} failed:`, err)
+        continue
+      }
+    }
 
-    const aiResponse = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }],
-    })
-
-    const raw = aiResponse.content[0].type === 'text' ? aiResponse.content[0].text : ''
-    console.log('Claude raw response (first 500):', raw.slice(0, 500))
-
-    // Strip markdown fences that the model occasionally wraps around JSON
-    const cleaned = raw
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim()
-    console.log('Cleaned JSON (first 500):', cleaned.slice(0, 500))
-
-    let aiQuestions: AIQuestion[] = []
-    try {
-      aiQuestions = JSON.parse(cleaned)
-      if (!Array.isArray(aiQuestions)) throw new Error('Response is not an array')
-    } catch (err) {
-      console.log('JSON parse error:', err, 'Full cleaned text:', cleaned)
+    if (allQuestions.length === 0) {
       return NextResponse.json(
-        { error: 'AI returned malformed JSON', raw: cleaned.slice(0, 200) },
+        { error: 'No questions could be extracted from this document' },
         { status: 422 },
       )
     }
 
     // ── Insert into questions table ──────────────────────────────────────────
-    const rows = aiQuestions.map((q) => ({
+    const rows = allQuestions.map((q) => ({
       exam_board_id,
       topic_id: isMixed ? null : (subtopic?.topic_id ?? null),
       subtopic_id: isMixed ? null : subtopic_id,
@@ -211,7 +217,7 @@ ${truncatedText}
     // Merge subtopic_ref back for the UI (best-effort from AI or context)
     const questions = (saved ?? []).map((q, i) => ({
       ...q,
-      subtopic_ref: aiQuestions[i]?.subtopic_ref ?? subtopic?.ref ?? '',
+      subtopic_ref: allQuestions[i]?.subtopic_ref ?? subtopic?.ref ?? '',
     }))
 
     return NextResponse.json({ questions, count: questions.length })

@@ -163,8 +163,8 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
         const data = await res.json() as { count?: number; questions?: unknown[]; error?: string }
 
         if (!res.ok) {
-          const msg = data.error === 'AI returned malformed JSON'
-            ? 'document too complex, try a shorter file'
+          const msg = data.error === 'No questions could be extracted from this document'
+            ? 'no questions extracted'
             : (data.error ?? `Server error ${res.status}`)
           throw new Error(msg)
         }
