@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase'
 import type { QuestionWithRelations } from '@/types/database'
 import { QuestionsLibrary } from './questions-library'
@@ -5,6 +6,7 @@ import { QuestionsLibrary } from './questions-library'
 export const dynamic = 'force-dynamic'
 
 export default async function QuestionsPage() {
+  noStore()
   let questions: QuestionWithRelations[] = []
   let boards: { id: string; name: string }[] = []
   let topics: { id: string; ref: string; name: string }[] = []
