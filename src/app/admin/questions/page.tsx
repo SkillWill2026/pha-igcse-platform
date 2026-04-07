@@ -30,12 +30,16 @@ export default async function QuestionsPage() {
       supabase.from('topics').select('id, ref, name').order('ref'),
       supabase.from('subtopics').select('id, ref, name, topic_id').order('ref'),
     ])
+    if (qRes.error)  console.error('[QuestionsPage] questions query error:', qRes.error)
+    if (bRes.error)  console.error('[QuestionsPage] boards query error:',    bRes.error)
+    if (tRes.error)  console.error('[QuestionsPage] topics query error:',    tRes.error)
+    if (sRes.error)  console.error('[QuestionsPage] subtopics query error:', sRes.error)
     questions = (qRes.data as unknown as QuestionWithRelations[]) ?? []
-    boards = bRes.data ?? []
-    topics = tRes.data ?? []
+    boards    = bRes.data ?? []
+    topics    = tRes.data ?? []
     subtopics = sRes.data ?? []
-  } catch {
-    // DB not yet configured
+  } catch (err) {
+    console.error('[QuestionsPage] unexpected error:', err)
   }
 
   return (

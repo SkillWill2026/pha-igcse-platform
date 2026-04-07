@@ -133,7 +133,24 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
     const result: QuestionGroup[] = []
     for (const [rootId, members] of Array.from(buckets)) {
       const original = byId.get(rootId)
-      if (!original) continue   // root not in dataset — skip orphan chain
+
+      if (!original) {
+        // Root is not in this dataset (was deleted or from a different upload batch).
+        // Surface each member as its own standalone group instead of silently dropping them.
+        for (const m of members) {
+          result.push({
+            id: m.id,
+            original: m,
+            boardEntries: [{
+              id:         m.exam_board_id,
+              name:       m.exam_boards?.name ?? '',
+              abbr:       getBoardAbbr(m.exam_boards?.name ?? ''),
+              isOriginal: true,
+            }],
+          })
+        }
+        continue
+      }
 
       // Deduplicate by board id (a board can appear multiple times from chained copies)
       const seenBoards = new Set<string>()
@@ -306,7 +323,7 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
                 <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
                   {questions.length === 0
                     ? 'No questions yet — upload a paper to get started.'
-                    : 'No questions match the current filters.'}
+                    : `No questions match the current filters. (${questions.length} loaded)`}
                 </TableCell>
               </TableRow>
             ) : (

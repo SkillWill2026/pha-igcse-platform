@@ -143,7 +143,7 @@ export function AnswersLibrary({ answers, boards, topics, subtopics }: Props) {
                 <TableCell colSpan={6} className="text-center text-muted-foreground py-12">
                   {answers.length === 0
                     ? 'No answers yet — approve a question to generate one.'
-                    : 'No answers match the current filters.'}
+                    : `No answers match the current filters. (${answers.length} loaded)`}
                 </TableCell>
               </TableRow>
             ) : (

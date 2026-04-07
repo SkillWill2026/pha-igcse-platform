@@ -34,12 +34,16 @@ export default async function AnswersPage() {
       supabase.from('topics').select('id, ref, name').order('ref'),
       supabase.from('subtopics').select('id, ref, name, topic_id').order('ref'),
     ])
+    if (aRes.error)  console.error('[AnswersPage] answers query error:',   aRes.error)
+    if (bRes.error)  console.error('[AnswersPage] boards query error:',    bRes.error)
+    if (tRes.error)  console.error('[AnswersPage] topics query error:',    tRes.error)
+    if (sRes.error)  console.error('[AnswersPage] subtopics query error:', sRes.error)
     answers   = (aRes.data as unknown as AnswerWithQuestion[]) ?? []
     boards    = bRes.data ?? []
     topics    = tRes.data ?? []
     subtopics = sRes.data ?? []
-  } catch {
-    // DB not yet configured
+  } catch (err) {
+    console.error('[AnswersPage] unexpected error:', err)
   }
 
   return (
