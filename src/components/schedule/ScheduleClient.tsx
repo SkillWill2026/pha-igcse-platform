@@ -120,17 +120,26 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
       (t) => t.subtopics.length > 0 && t.subtopics.every((s) => s.status === 'approved'),
     ).length
 
-    const today       = new Date(); today.setHours(0, 0, 0, 0)
-    const futureSubs  = allSubs.filter(
-      (s) => s.sprint_week != null && s.due_date && new Date(s.due_date) >= today,
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+
+    // Subtopics that have both a due_date and a sprint_week string, and are not yet approved
+    const incomplete = allSubs.filter(
+      (s) => s.sprint_week != null && s.due_date && s.status !== 'approved',
     )
-    const allWithSprint = allSubs.filter((s) => s.sprint_week != null)
-    const currentSprint =
-      futureSubs.length > 0
-        ? Math.min(...futureSubs.map((s) => s.sprint_week!))
-        : allWithSprint.length > 0
-          ? Math.max(...allWithSprint.map((s) => s.sprint_week!))
-          : null
+
+    let currentSprint: string | null = null
+
+    if (incomplete.length > 0) {
+      // Prefer subtopics due today or in the future; fall back to overdue ones
+      const upcoming = incomplete.filter((s) => new Date(s.due_date!) >= today)
+      const pool     = upcoming.length > 0 ? upcoming : incomplete
+
+      // Pick the subtopic with the earliest due_date
+      const earliest = pool.reduce((best, s) =>
+        new Date(s.due_date!) < new Date(best.due_date!) ? s : best,
+      )
+      currentSprint = String(earliest.sprint_week)
+    }
 
     return { totalQs, approvedCount: approved.length, approvedQs, topicsComplete, currentSprint }
   }, [topics])
@@ -287,7 +296,7 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
         />
         <StatCard
           label="Current Sprint"
-          value={stats.currentSprint != null ? `Wk ${stats.currentSprint}` : '—'}
+          value={stats.currentSprint ?? '—'}
           sub="based on due dates"
         />
         <StatCard
