@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, supabase } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 
@@ -7,8 +8,14 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const serverClient = createServerClient()
+  const { data: { user } } = await serverClient.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const adminClient = createAdminClient()
+  const { data: profile } = await adminClient.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
+
   try {
-    const adminClient = createAdminClient()
 
     // Look up the user's email via the admin API
     const { data: { user }, error: lookupErr } = await adminClient.auth.admin.getUserById(params.id)

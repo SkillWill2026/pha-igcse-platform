@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 
+async function requireAdmin(): Promise<{ error: NextResponse } | { error: null }> {
+  const serverClient = createServerClient()
+  const { data: { user } } = await serverClient.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const adminClient = createAdminClient()
+  const { data: profile } = await adminClient.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
+  return { error: null }
+}
+
 export async function POST(request: NextRequest) {
+  const check = await requireAdmin()
+  if (check.error) return check.error
+
   try {
     const { full_name, email, password, role } =
       await request.json() as {
