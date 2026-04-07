@@ -156,8 +156,13 @@ export function AnswersLibrary({ answers, boards, topics, subtopics }: Props) {
                   : '—'
                 return (
                   <TableRow key={a.id} className="hover:bg-muted/30">
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {q?.subtopics?.ref ?? '—'}
+                    <TableCell>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {q?.subtopics?.ref ?? '—'}
+                      </span>
+                      {q?.subtopics?.name && (
+                        <span className="ml-1.5 text-xs">{q.subtopics.name}</span>
+                      )}
                     </TableCell>
                     <TableCell className="max-w-xs">
                       <p className="text-sm line-clamp-2">

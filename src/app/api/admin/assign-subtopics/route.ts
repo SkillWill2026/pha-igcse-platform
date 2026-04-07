@@ -133,7 +133,8 @@ export async function POST() {
               continue
             }
 
-            const matchedSubtopic = subtopics.find((s) => s.id === subtopicId)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const matchedSubtopic = subtopics.find((s: any) => s.id === subtopicId) as any
             console.log(
               '[assign-subtopics] Assigned question',
               question.id,
@@ -142,6 +143,13 @@ export async function POST() {
             )
             assigned++
           } else {
+            // Log skipped questions so we can debug why Claude returned null
+            console.log(
+              '[assign-subtopics] Skipped question',
+              question.id,
+              '— content preview:',
+              question.content_text.slice(0, 120),
+            )
             skipped++
           }
         } catch (err) {
@@ -150,9 +158,9 @@ export async function POST() {
         }
       }
 
-      // 500ms delay between batches (not after the last batch)
+      // 1000ms delay between batches to avoid rate limits (not after the last batch)
       if (i + BATCH_SIZE < questions.length) {
-        await sleep(500)
+        await sleep(1000)
       }
     }
 
