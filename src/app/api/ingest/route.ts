@@ -3,6 +3,8 @@ import { createAnthropicClient } from '@/lib/anthropic'
 import { createAdminClient } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
 
 const VALID_QUESTION_TYPES = ['mcq', 'short_answer', 'structured', 'extended'] as const
 type QuestionType = (typeof VALID_QUESTION_TYPES)[number]
@@ -138,7 +140,7 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
 
     // Truncate to 12 000 chars to stay within reliable JSON response limits.
     // Larger documents cause Claude to produce truncated/malformed JSON.
-    const truncatedText = text.slice(0, 12_000)
+    const truncatedText = text.slice(0, 6_000)
     console.log('Text sent to Claude (length):', truncatedText.length)
 
     const userContent = `Extract all exam questions from this Cambridge IGCSE Mathematics document.
@@ -149,8 +151,8 @@ ${truncatedText}
 ---`
 
     const aiResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
     })
