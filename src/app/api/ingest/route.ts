@@ -8,11 +8,13 @@ const VALID_QUESTION_TYPES = ['mcq', 'short_answer', 'structured', 'extended'] a
 type QuestionType = (typeof VALID_QUESTION_TYPES)[number]
 
 interface AIQuestion {
-  content_text: string
-  difficulty: number
+  content: string
+  parent_question_ref: string | null
+  part_label: string | null
   question_type: QuestionType
-  marks: number
-  subtopic_ref: string
+  difficulty: number
+  marks: number | null
+  subtopic_ref?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -98,24 +100,35 @@ export async function POST(request: NextRequest) {
     const anthropic = createAnthropicClient()
 
     const systemPrompt = `You are an expert Cambridge IGCSE Mathematics (0580) question extractor.
-Your sole job is to extract every individual exam question from the provided document text.
 
-Return ONLY a valid JSON array where each element has exactly these keys:
-  "content_text"  – string: the complete question including all sub-parts (a), (b), (c) etc.
-  "difficulty"    – integer 1–5:
-                      1 = single-step recall
-                      2 = routine multi-step
-                      3 = moderate application / unfamiliar context
-                      4 = challenging reasoning or proof
-                      5 = extended problem solving / investigation
-  "question_type" – string, exactly one of: "mcq" | "short_answer" | "structured" | "extended"
-  "marks"         – integer: estimated total mark allocation for this question
-  "subtopic_ref"  – string: closest Cambridge 0580 subtopic reference e.g. "1.1", "2.3", "6.4"
+EXTRACTION RULES:
+- Extract every question and sub-question from the document.
+- When a question has parts labelled (a), (b), (c), (i), (ii), (iii) etc., treat EACH PART as a completely separate, independent question.
+- For each part, the "content" field must contain: the full context needed to answer that part (include any shared stem or scenario from the parent question at the top), then the specific part question. Do NOT include the parent question number in the content.
+- Set "parent_question_ref" to the original question number from the paper (e.g. "3" for Question 3).
+- Set "part_label" to the part letter or number (e.g. "a", "b", "i", "ii"). Leave null if the question has no parts.
+- If a question has no parts, set both parent_question_ref and part_label to null.
+- Never merge multiple parts into a single question.
+- Include ALL parts — do not skip any.
 
-Rules:
-• Each numbered question (including all its lettered sub-parts) is ONE array element.
-• Never split sub-parts into separate objects.
-• Output ONLY the JSON array — no markdown fences, no explanation, no extra text.`
+Return ONLY a valid JSON array where each element is one independent question with exactly these fields:
+{
+  "content": "full question text including any shared context",
+  "parent_question_ref": "3" or null,
+  "part_label": "a" or null,
+  "question_type": "mcq" | "short_answer" | "structured" | "extended",
+  "difficulty": 1-5,
+  "marks": number or null
+}
+
+difficulty scale:
+  1 = single-step recall
+  2 = routine multi-step
+  3 = moderate application / unfamiliar context
+  4 = challenging reasoning or proof
+  5 = extended problem solving / investigation
+
+Output ONLY the JSON array — no markdown fences, no explanation, no extra text.`
 
     const contextLine = isMixed
       ? 'This paper contains mixed topics — extract all questions without assuming a specific subtopic.'
@@ -159,12 +172,14 @@ ${text.slice(0, 14_000)}
       topic_id: isMixed ? null : (subtopic?.topic_id ?? null),
       subtopic_id: isMixed ? null : subtopic_id,
       sub_subtopic_id: sub_subtopic_id || null,
-      content_text: String(q.content_text ?? '').trim(),
+      content_text: String(q.content ?? '').trim(),
+      parent_question_ref: q.parent_question_ref ?? null,
+      part_label: q.part_label ?? null,
       difficulty: Math.min(5, Math.max(1, Math.round(Number(q.difficulty) || 2))),
       question_type: VALID_QUESTION_TYPES.includes(q.question_type)
         ? q.question_type
         : ('structured' as QuestionType),
-      marks: Math.max(1, Math.round(Number(q.marks) || 1)),
+      marks: q.marks != null ? Math.max(1, Math.round(Number(q.marks))) : 1,
       status: 'draft' as const,
       ai_extracted: true,
     }))
@@ -178,7 +193,7 @@ ${text.slice(0, 14_000)}
       return NextResponse.json({ error: dbError.message }, { status: 500 })
     }
 
-    // Merge AI-computed subtopic_ref back into the saved rows for the UI
+    // Merge subtopic_ref back for the UI (best-effort from AI or context)
     const questions = (saved ?? []).map((q, i) => ({
       ...q,
       subtopic_ref: aiQuestions[i]?.subtopic_ref ?? subtopic?.ref ?? '',

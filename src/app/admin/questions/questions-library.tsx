@@ -423,7 +423,14 @@ export function QuestionsLibrary({ boards }: Props) {
                 return (
                   <TableRow key={g.id} className="hover:bg-muted/30">
                     <TableCell>
-                      <SerialPill serial={q.serial_number ?? null} />
+                      <div className="flex flex-col gap-0.5">
+                        <SerialPill serial={q.serial_number ?? null} />
+                        {q.parent_question_ref && (
+                          <span className="font-mono text-[11px] text-muted-foreground">
+                            Q{q.parent_question_ref}{q.part_label ? `(${q.part_label})` : ''}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div>
