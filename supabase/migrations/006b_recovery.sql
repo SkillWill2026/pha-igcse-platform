@@ -10,8 +10,11 @@ alter table public.subtopics add column if not exists tier       text;
 alter table public.subtopics add column if not exists sort_order integer not null default 0;
 
 -- ────────────────────────────────────────────
--- 2. Insert 72 subtopics — skip any that already exist (ref is unique)
+-- 2. Insert 72 subtopics — skip any that already exist
 -- ────────────────────────────────────────────
+alter table public.subtopics drop constraint if exists subtopics_ref_key;
+alter table public.subtopics add constraint subtopics_ref_key unique (ref);
+
 insert into public.subtopics (topic_id, ref, title, tier, sort_order)
 select t.id, s.ref, s.title, s.tier, s.sort_order
 from public.topics t
@@ -99,7 +102,7 @@ join (values
   ('C9','E9.7',  'Histograms',                               'extended', 7)
 ) as s(topic_ref, ref, title, tier, sort_order)
 on t.ref = s.topic_ref
-on conflict (ref) do nothing;
+on conflict do nothing;
 
 -- ────────────────────────────────────────────
 -- 3. Create sub_subtopics table if it doesn't exist
