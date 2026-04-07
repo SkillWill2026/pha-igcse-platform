@@ -261,7 +261,7 @@ export function TopicRow({
                         {dueStr}
                       </TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground">
-                        {sub.sprint_week ? `Wk ${sub.sprint_week}` : '—'}
+                        {sub.sprint_week ?? '—'}
                       </TableCell>
                       <TableCell className="text-center text-sm font-medium">{sub.qs_total}</TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground">{sub.mcq_count}</TableCell>
