@@ -65,14 +65,6 @@ export function SyllabusSelector({
   const [subtopicId, setSubtopicId]       = useState('')
   const [subSubtopicId, setSubSubtopicId] = useState('')
 
-  // Emit initial null state so parent knows no filter is active
-  useEffect(() => {
-    onSubSubtopicChange(null)
-    onSubtopicChange?.(null)
-    onTopicChange?.(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   useEffect(() => {
     fetch('/api/topics')
       .then((r) => r.json())

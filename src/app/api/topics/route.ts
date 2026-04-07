@@ -8,7 +8,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('topics')
     .select('id, ref, name')
-    .order('ref')
+    .order('sort_order')
   if (error) return NextResponse.json([], { status: 500 })
   return NextResponse.json(data)
 }

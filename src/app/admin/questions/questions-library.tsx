@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowRight, Loader2, Trash2, Wand2, X } from 'lucide-react'
@@ -79,7 +79,7 @@ interface BoardEntry {
 }
 
 interface QuestionGroup {
-  id:           string                 // original question's id — used for navigation
+  id:           string
   original:     QuestionWithRelations
   boardEntries: BoardEntry[]
 }
@@ -87,51 +87,76 @@ interface QuestionGroup {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  questions: QuestionWithRelations[]
-  boards:    { id: string; name: string }[]
+  boards: { id: string; name: string }[]
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function QuestionsLibrary({ questions, boards }: Props) {
+export function QuestionsLibrary({ boards }: Props) {
   const router = useRouter()
+
+  // ── Questions state (fetched client-side) ──────────────────────────────────
+  const [questions,  setQuestions]  = useState<QuestionWithRelations[]>([])
+  const [loading,    setLoading]    = useState(true)
+
+  // ── Filter state ───────────────────────────────────────────────────────────
+  const [selectorKey,      setSelectorKey]      = useState(0)          // remount to reset SyllabusSelector
+  const [topicFilter,      setTopicFilter]      = useState<string | null>(null)
+  const [subtopicFilter,   setSubtopicFilter]   = useState<string | null>(null)
+  const [subSubtopicFilter,setSubSubtopicFilter]= useState<string | null>(null)
+  const [boardId,          setBoardId]          = useState(ALL)
+  const [qtype,            setQtype]            = useState(ALL)
+  const [status,           setStatus]           = useState(ALL)
+  const [diffMin,          setDiffMin]          = useState(ALL)
+  const [diffMax,          setDiffMax]          = useState(ALL)
+
   const [deletingId,        setDeletingId]        = useState<string | null>(null)
-  const [boardId,           setBoardId]           = useState(ALL)
-  const [topicFilter,       setTopicFilter]       = useState<string | null>(null)
-  const [subtopicFilter,    setSubtopicFilter]    = useState<string | null>(null)
-  const [subSubtopicFilter, setSubSubtopicFilter] = useState<string | null>(null)
-  const [qtype,             setQtype]             = useState(ALL)
-  const [status,            setStatus]            = useState(ALL)
-  const [diffMin,           setDiffMin]           = useState(ALL)
-  const [diffMax,           setDiffMax]           = useState(ALL)
   const [assignLoading,     setAssignLoading]     = useState(false)
   const [showAssignConfirm, setShowAssignConfirm] = useState(false)
 
-  const unassignedCount = useMemo(
-    () => questions.filter((q) => !q.subtopics).length,
-    [questions],
-  )
+  // ── Fetch questions whenever syllabus filters change ───────────────────────
+  const fetchQuestions = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (topicFilter       && topicFilter       !== '') params.set('topic_id',        topicFilter)
+      if (subtopicFilter    && subtopicFilter    !== '') params.set('subtopic_id',     subtopicFilter)
+      if (subSubtopicFilter && subSubtopicFilter !== '') params.set('sub_subtopic_id', subSubtopicFilter)
+
+      const url = '/api/questions' + (params.size > 0 ? '?' + params.toString() : '')
+      const res = await fetch(url)
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        console.error('[QuestionsLibrary] fetch error:', d.error)
+        return
+      }
+      const data = await res.json()
+      setQuestions(Array.isArray(data) ? data as QuestionWithRelations[] : [])
+    } catch (err) {
+      console.error('[QuestionsLibrary] unexpected:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [topicFilter, subtopicFilter, subSubtopicFilter])
+
+  useEffect(() => {
+    fetchQuestions()
+  }, [fetchQuestions])
 
   // ── Build groups ───────────────────────────────────────────────────────────
   const groups = useMemo<QuestionGroup[]>(() => {
     const byId = new Map<string, QuestionWithRelations>(questions.map((q) => [q.id, q]))
 
-    // Walk the source_question_id chain upward to find the ultimate root.
-    // Memoised to avoid repeated traversal for siblings in the same chain.
     const rootCache = new Map<string, string>()
     function findRoot(id: string): string {
       if (rootCache.has(id)) return rootCache.get(id)!
       const q = byId.get(id)
-      if (!q || !q.source_question_id) {
-        rootCache.set(id, id)
-        return id
-      }
+      if (!q || !q.source_question_id) { rootCache.set(id, id); return id }
       const root = findRoot(q.source_question_id)
       rootCache.set(id, root)
       return root
     }
 
-    // Bucket every question under its root id
     const buckets = new Map<string, QuestionWithRelations[]>()
     for (const q of questions) {
       const rootId = findRoot(q.id)
@@ -144,73 +169,62 @@ export function QuestionsLibrary({ questions, boards }: Props) {
       const original = byId.get(rootId)
 
       if (!original) {
-        // Root is not in this dataset (was deleted or from a different upload batch).
-        // Surface each member as its own standalone group instead of silently dropping them.
         for (const m of members) {
           result.push({
-            id: m.id,
-            original: m,
+            id: m.id, original: m,
             boardEntries: [{
-              id:         m.exam_board_id,
-              name:       m.exam_boards?.name ?? '',
-              abbr:       getBoardAbbr(m.exam_boards?.name ?? ''),
-              isOriginal: true,
+              id: m.exam_board_id, name: m.exam_boards?.name ?? '',
+              abbr: getBoardAbbr(m.exam_boards?.name ?? ''), isOriginal: true,
             }],
           })
         }
         continue
       }
 
-      // Deduplicate by board id (a board can appear multiple times from chained copies)
       const seenBoards = new Set<string>()
       const boardEntries: BoardEntry[] = []
-      // Put original's board first so it gets the solid pill
-      for (const m of [original, ...members.filter((member: QuestionWithRelations) => member.id !== original.id)]) {
+      for (const m of [original, ...members.filter((member) => member.id !== original.id)]) {
         if (seenBoards.has(m.exam_board_id)) continue
         seenBoards.add(m.exam_board_id)
         boardEntries.push({
-          id:         m.exam_board_id,
-          name:       m.exam_boards?.name ?? '',
-          abbr:       getBoardAbbr(m.exam_boards?.name ?? ''),
-          isOriginal: m.id === rootId,
+          id: m.exam_board_id, name: m.exam_boards?.name ?? '',
+          abbr: getBoardAbbr(m.exam_boards?.name ?? ''), isOriginal: m.id === rootId,
         })
       }
-
       result.push({ id: rootId, original, boardEntries })
     }
 
-    // Preserve server sort order (created_at desc of the original)
     result.sort(
-      (a, b) =>
-        new Date(b.original.created_at).getTime() -
-        new Date(a.original.created_at).getTime(),
+      (a, b) => new Date(b.original.created_at).getTime() - new Date(a.original.created_at).getTime(),
     )
     return result
   }, [questions])
 
-  // ── Filter groups ──────────────────────────────────────────────────────────
+  // ── Client-side filters (board / type / status / difficulty) ──────────────
   const filteredGroups = useMemo(() => {
     return groups.filter((g) => {
       const q = g.original
-      if (boardId          && boardId !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
-      if (topicFilter       && q.topic_id        !== topicFilter)       return false
-      if (subtopicFilter    && q.subtopic_id     !== subtopicFilter)    return false
-      if (subSubtopicFilter && q.sub_subtopic_id !== subSubtopicFilter) return false
+      if (boardId && boardId !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
       if (qtype  && qtype  !== ALL && q.question_type !== qtype)       return false
       if (status && status !== ALL && q.status        !== status)      return false
       if (diffMin && diffMin !== ALL && q.difficulty < Number(diffMin)) return false
       if (diffMax && diffMax !== ALL && q.difficulty > Number(diffMax)) return false
       return true
     })
-  }, [groups, boardId, topicFilter, subtopicFilter, subSubtopicFilter, qtype, status, diffMin, diffMax])
+  }, [groups, boardId, qtype, status, diffMin, diffMax])
 
-  // ── Counts (groups, not rows) ──────────────────────────────────────────────
+  // ── Counts ─────────────────────────────────────────────────────────────────
   const counts = useMemo(() => ({
     total:    filteredGroups.length,
     draft:    filteredGroups.filter((g) => g.original.status === 'draft').length,
     approved: filteredGroups.filter((g) => g.original.status === 'approved').length,
     rejected: filteredGroups.filter((g) => g.original.status === 'rejected').length,
   }), [filteredGroups])
+
+  const unassignedCount = useMemo(
+    () => questions.filter((q) => !q.subtopics).length,
+    [questions],
+  )
 
   const hasFilters =
     boardId !== ALL || topicFilter !== null || subtopicFilter !== null || subSubtopicFilter !== null ||
@@ -219,8 +233,11 @@ export function QuestionsLibrary({ questions, boards }: Props) {
   const clearFilters = () => {
     setBoardId(ALL)
     setTopicFilter(null); setSubtopicFilter(null); setSubSubtopicFilter(null)
+    setSelectorKey((k) => k + 1)  // force SyllabusSelector to re-mount and reset
     setQtype(ALL); setStatus(ALL); setDiffMin(ALL); setDiffMax(ALL)
   }
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
   async function handleAssignSubtopics() {
     setShowAssignConfirm(false)
@@ -234,7 +251,7 @@ export function QuestionsLibrary({ questions, boards }: Props) {
       }
       const d = await res.json() as { total: number; assigned: number; skipped: number; errors: number }
       toast.success(`Assigned ${d.assigned} of ${d.total} questions`)
-      window.location.reload()
+      await fetchQuestions()
     } catch {
       toast.error('Auto-assign failed')
     } finally {
@@ -252,7 +269,7 @@ export function QuestionsLibrary({ questions, boards }: Props) {
         return
       }
       toast.success('Question deleted')
-      router.refresh()
+      await fetchQuestions()
     } catch {
       toast.error('Delete failed')
     } finally {
@@ -260,28 +277,22 @@ export function QuestionsLibrary({ questions, boards }: Props) {
     }
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="space-y-4">
       {/* ── Auto-assign button ─────────────────────────────────────────── */}
       {unassignedCount > 0 && (
         <div className="flex justify-end">
           <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
+            variant="outline" size="sm" className="gap-1.5"
             disabled={assignLoading}
             onClick={() => setShowAssignConfirm(true)}
           >
             {assignLoading ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Assigning...
-              </>
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" />Assigning...</>
             ) : (
-              <>
-                <Wand2 className="h-3.5 w-3.5" />
-                Auto-assign Subtopics ({unassignedCount})
-              </>
+              <><Wand2 className="h-3.5 w-3.5" />Auto-assign Subtopics ({unassignedCount})</>
             )}
           </Button>
         </div>
@@ -297,12 +308,8 @@ export function QuestionsLibrary({ questions, boards }: Props) {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAssignConfirm(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAssignSubtopics}>
-              Continue
-            </Button>
+            <Button variant="outline" onClick={() => setShowAssignConfirm(false)}>Cancel</Button>
+            <Button onClick={handleAssignSubtopics}>Continue</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -310,16 +317,17 @@ export function QuestionsLibrary({ questions, boards }: Props) {
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
       <div className="rounded-lg border bg-card p-4 space-y-3">
         <div className="flex flex-wrap gap-4 items-start">
-          {/* Three-level syllabus selector */}
+          {/* Three-level syllabus selector (drives server-side filtering) */}
           <div className="w-72">
             <SyllabusSelector
+              key={selectorKey}
               onTopicChange={setTopicFilter}
               onSubtopicChange={setSubtopicFilter}
               onSubSubtopicChange={setSubSubtopicFilter}
             />
           </div>
 
-          {/* Other filters */}
+          {/* Client-side filters */}
           <div className="flex flex-wrap gap-2 items-center flex-1 pt-5">
             <FilterSelect
               placeholder="All Boards"
@@ -393,7 +401,14 @@ export function QuestionsLibrary({ questions, boards }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredGroups.length === 0 ? (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                  <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
+                  Loading questions…
+                </TableCell>
+              </TableRow>
+            ) : filteredGroups.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
                   {questions.length === 0
@@ -449,7 +464,7 @@ export function QuestionsLibrary({ questions, boards }: Props) {
                     <TableCell><StatusBadge status={q.status} /></TableCell>
                     <TableCell>
                       <button
-                        onClick={() => { router.refresh(); router.push(`/admin/questions/${g.id}`) }}
+                        onClick={() => router.push(`/admin/questions/${g.id}`)}
                         className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1')}
                       >
                         Review <ArrowRight className="h-3 w-3" />
