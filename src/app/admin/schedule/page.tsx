@@ -3,7 +3,7 @@ import { unstable_noStore as noStore } from 'next/cache'
 import { createServerClient } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase'
 import { ScheduleClient } from '@/components/schedule/ScheduleClient'
-import type { TopicWithSubtopics } from '@/types/schedule'
+import type { TopicWithSubtopics, SubSubtopic } from '@/types/schedule'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +60,18 @@ export default async function SchedulePage() {
     console.error('[SchedulePage] examples count fetch failed (column may not exist yet):', err)
   }
 
+  const subSubtopicsMap: Record<string, SubSubtopic[]> = {}
+  try {
+    const { data: sst } = await adminClient.from('sub_subtopics').select('*').order('sort_order')
+    for (const s of sst ?? []) {
+      const row = s as { subtopic_id: string } & SubSubtopic
+      if (!subSubtopicsMap[row.subtopic_id]) subSubtopicsMap[row.subtopic_id] = []
+      subSubtopicsMap[row.subtopic_id].push(s as SubSubtopic)
+    }
+  } catch (err) {
+    console.error('[SchedulePage] sub_subtopics fetch failed:', err)
+  }
+
   const topics: TopicWithSubtopics[] = (topicsRaw ?? []).map((t) => ({
     ...t,
     subtopics: ((t.subtopics ?? []) as TopicWithSubtopics['subtopics'])
@@ -67,6 +79,7 @@ export default async function SchedulePage() {
         ...s,
         ppt_decks:      pptDecksMap[s.id] ?? [],
         examples_count: examplesMap[s.id] ?? 0,
+        sub_subtopics:  subSubtopicsMap[s.id] ?? [],
       }))
       .sort((a, b) => a.sort_order - b.sort_order),
   }))

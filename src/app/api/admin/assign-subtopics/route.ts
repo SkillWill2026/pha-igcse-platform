@@ -6,10 +6,11 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 const SYSTEM_PROMPT = `You are an IGCSE Mathematics content classifier.
-You will be given a question text and a list of subtopics.
-Your job is to identify which subtopic this question belongs to.
-Respond with ONLY a JSON object in this exact format: {"subtopic_id": "uuid-here"}
-If you cannot confidently assign a subtopic, respond with: {"subtopic_id": null}
+You will be given a question text and a list of subtopics with their sub-subtopics.
+Your job is to identify the most specific classification for this question.
+Respond with ONLY a JSON object in this exact format: {"subtopic_id": "uuid-here", "sub_subtopic_id": "uuid-here-or-null"}
+If you cannot confidently assign a subtopic, use null for both.
+If you can assign a subtopic but not a sub-subtopic, use null for sub_subtopic_id only.
 Do not explain. Do not add any other text. JSON only.`
 
 function isValidUuid(s: string): boolean {
@@ -61,16 +62,47 @@ export async function POST() {
     }
 
     const _topics = topicsRaw ?? []
-    void _topics // fetched per spec; available for future context use
+    void _topics
+
+    // 4. Fetch all sub_subtopics
+    const { data: subSubtopicsRaw, error: sstErr } = await supabase
+      .from('sub_subtopics')
+      .select('id, ref, title, subtopic_id')
+
+    if (sstErr) {
+      console.error('[assign-subtopics] sub_subtopics fetch error:', sstErr.message)
+      // Non-fatal — continue without sub-subtopic assignment
+    }
+
+    const subSubtopics = subSubtopicsRaw ?? []
+    const subSubtopicIds = new Set(subSubtopics.map((s) => s.id))
+
+    // Build a map from subtopic_id → sub_subtopics[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sstBySubtopic = new Map<string, any[]>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const ss of subSubtopics as any[]) {
+      if (!sstBySubtopic.has(ss.subtopic_id)) sstBySubtopic.set(ss.subtopic_id, [])
+      sstBySubtopic.get(ss.subtopic_id)!.push(ss)
+    }
 
     const subtopicIds = new Set(subtopics.map((s) => s.id))
 
+    // Build the subtopic list for AI context (with nested sub-subtopics)
     const subtopicList = subtopics
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((s: any) => `${s.id} | ${s.ref} | ${s.title ?? ''}`)
+      .map((s: any) => {
+        const sstList = sstBySubtopic.get(s.id) ?? []
+        const sstLines = sstList
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .map((ss: any) => `  → sub-subtopic: ${ss.id} | ${ss.ref} | ${ss.title ?? ''}`)
+          .join('\n')
+        return `Subtopic: ${s.id} | ${s.ref} | ${s.title ?? ''}` + (sstLines ? '\n' + sstLines : '')
+      })
       .join('\n')
 
     let assigned = 0
+    let subAssigned = 0
     let skipped = 0
     let errors = 0
 
@@ -79,13 +111,12 @@ export async function POST() {
     for (let i = 0; i < questions.length; i += BATCH_SIZE) {
       const batch = questions.slice(i, i + BATCH_SIZE)
 
-      // Process sequentially within each batch
       for (const question of batch) {
         try {
           const userMessage =
             `Question: ${question.content_text}\n\n` +
-            `Available subtopics:\n${subtopicList}\n\n` +
-            `Which subtopic does this question belong to?`
+            `Available subtopics (with sub-subtopics):\n${subtopicList}\n\n` +
+            `Which subtopic (and optionally sub-subtopic) does this question belong to?`
 
           const aiResponse = await anthropic.messages.create({
             model: 'claude-sonnet-4-20250514',
@@ -99,15 +130,14 @@ export async function POST() {
               ? aiResponse.content[0].text.trim()
               : ''
 
-          // Strip markdown fences
           const jsonStr = raw
             .replace(/^```(?:json)?\s*/i, '')
             .replace(/\s*```$/i, '')
             .trim()
 
-          let parsed: { subtopic_id: string | null }
+          let parsed: { subtopic_id: string | null; sub_subtopic_id?: string | null }
           try {
-            parsed = JSON.parse(jsonStr) as { subtopic_id: string | null }
+            parsed = JSON.parse(jsonStr) as { subtopic_id: string | null; sub_subtopic_id?: string | null }
           } catch {
             console.error('[assign-subtopics] JSON parse failed for question', question.id, '— raw:', raw.slice(0, 200))
             errors++
@@ -115,6 +145,7 @@ export async function POST() {
           }
 
           const subtopicId = parsed.subtopic_id
+          const subSubtopicId = parsed.sub_subtopic_id ?? null
 
           if (
             subtopicId !== null &&
@@ -122,9 +153,22 @@ export async function POST() {
             isValidUuid(subtopicId) &&
             subtopicIds.has(subtopicId)
           ) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const updatePayload: any = { subtopic_id: subtopicId }
+
+            const validSubSst =
+              subSubtopicId !== null &&
+              typeof subSubtopicId === 'string' &&
+              isValidUuid(subSubtopicId) &&
+              subSubtopicIds.has(subSubtopicId)
+
+            if (validSubSst) {
+              updatePayload.sub_subtopic_id = subSubtopicId
+            }
+
             const { error: updateErr } = await supabase
               .from('questions')
-              .update({ subtopic_id: subtopicId })
+              .update(updatePayload)
               .eq('id', question.id)
 
             if (updateErr) {
@@ -140,10 +184,11 @@ export async function POST() {
               question.id,
               '→ subtopic',
               matchedSubtopic?.ref ?? subtopicId,
+              validSubSst ? `→ sub-subtopic ${subSubtopicId}` : '',
             )
             assigned++
+            if (validSubSst) subAssigned++
           } else {
-            // Log skipped questions so we can debug why Claude returned null
             console.log(
               '[assign-subtopics] Skipped question',
               question.id,
@@ -158,16 +203,15 @@ export async function POST() {
         }
       }
 
-      // 1000ms delay between batches to avoid rate limits (not after the last batch)
       if (i + BATCH_SIZE < questions.length) {
         await sleep(1000)
       }
     }
 
     const total = questions.length
-    console.log(`[assign-subtopics] Done — total: ${total}, assigned: ${assigned}, skipped: ${skipped}, errors: ${errors}`)
+    console.log(`[assign-subtopics] Done — total: ${total}, assigned: ${assigned}, sub_assigned: ${subAssigned}, skipped: ${skipped}, errors: ${errors}`)
 
-    return NextResponse.json({ total, assigned, skipped, errors })
+    return NextResponse.json({ total, assigned, sub_assigned: subAssigned, skipped, errors })
   } catch (err) {
     console.error('[POST /api/admin/assign-subtopics]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

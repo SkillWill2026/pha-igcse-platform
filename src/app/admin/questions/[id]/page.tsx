@@ -18,22 +18,24 @@ export default async function QuestionReviewPage({
   let allBoards: { id: string; name: string }[] = []
   let allSubtopics: { id: string; ref: string; title: string; topic_id: string }[] = []
   let allTopics: { id: string; ref: string; name: string }[] = []
+  let allSubSubtopics: { id: string; ref: string; title: string; subtopic_id: string }[] = []
 
   try {
     const supabase = createAdminClient()
-    const [qRes, bRes, tRes, sRes] = await Promise.all([
+    const [qRes, bRes, tRes, sRes, sstRes] = await Promise.all([
       supabase
         .from('questions')
         .select(
           'id, content_text, difficulty, question_type, marks, status,' +
           'ai_extracted, created_at, updated_at,' +
-          'exam_board_id, topic_id, subtopic_id, image_url, source_question_id',
+          'exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, source_question_id',
         )
         .eq('id', params.id)
         .single(),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('sort_order'),
       supabase.from('subtopics').select('id, ref, title, topic_id').order('sort_order'),
+      supabase.from('sub_subtopics').select('id, ref, title, subtopic_id').order('sort_order'),
     ])
 
     if (qRes.error || !qRes.data) {
@@ -41,10 +43,11 @@ export default async function QuestionReviewPage({
       notFound()
     }
 
-    allBoards    = bRes.data ?? []
-    allTopics    = (tRes.data ?? []) as typeof allTopics
+    allBoards       = bRes.data ?? []
+    allTopics       = (tRes.data ?? []) as typeof allTopics
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    allSubtopics = (sRes.data ?? []) as any
+    allSubtopics    = (sRes.data ?? []) as any
+    allSubSubtopics = (sstRes.data ?? []) as typeof allSubSubtopics
 
     const boardMap    = new Map(allBoards.map((b) => [b.id, b]))
     const topicMap    = new Map(allTopics.map((t) => [t.id, t]))
@@ -87,7 +90,7 @@ export default async function QuestionReviewPage({
         </div>
       </div>
 
-      <ReviewClient question={question} allBoards={allBoards} allSubtopics={allSubtopics} allTopics={allTopics} />
+      <ReviewClient question={question} allBoards={allBoards} allSubtopics={allSubtopics} allTopics={allTopics} allSubSubtopics={allSubSubtopics} />
     </div>
   )
 }

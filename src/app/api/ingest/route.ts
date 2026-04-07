@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null
     const exam_board_id = formData.get('exam_board_id') as string | null
     const subtopic_id = formData.get('subtopic_id') as string | null
+    const sub_subtopic_id = (formData.get('sub_subtopic_id') as string | null) || null
 
     if (!file || !exam_board_id || !subtopic_id) {
       return NextResponse.json(
@@ -157,6 +158,7 @@ ${text.slice(0, 14_000)}
       exam_board_id,
       topic_id: isMixed ? null : (subtopic?.topic_id ?? null),
       subtopic_id: isMixed ? null : subtopic_id,
+      sub_subtopic_id: sub_subtopic_id || null,
       content_text: String(q.content_text ?? '').trim(),
       difficulty: Math.min(5, Math.max(1, Math.round(Number(q.difficulty) || 2))),
       question_type: VALID_QUESTION_TYPES.includes(q.question_type)

@@ -8,16 +8,17 @@ export const dynamic = 'force-dynamic'
 export default async function AnswersPage() {
   noStore()
   let answers: AnswerWithQuestion[] = []
-  let boards:    { id: string; name: string }[]                              = []
-  let topics:    { id: string; ref: string; name: string }[]                 = []
-  let subtopics: { id: string; ref: string; name: string; topic_id: string }[] = []
+  let boards:       { id: string; name: string }[]                                      = []
+  let topics:       { id: string; ref: string; name: string }[]                         = []
+  let subtopics:    { id: string; ref: string; name: string; topic_id: string }[]       = []
+  let subSubtopics: { id: string; ref: string; title: string; subtopic_id: string }[]   = []
 
   try {
     const supabase = createAdminClient()
 
     // Fetch everything in parallel — no embedded joins so missing FK constraints
     // cannot silently zero out results.
-    const [aRes, qRes, bRes, tRes, sRes] = await Promise.all([
+    const [aRes, qRes, bRes, tRes, sRes, sstRes] = await Promise.all([
       supabase
         .from('answers')
         .select(
@@ -30,22 +31,25 @@ export default async function AnswersPage() {
         .select(
           'id, content_text, difficulty, question_type, marks, status,' +
           'ai_extracted, created_at, updated_at,' +
-          'exam_board_id, topic_id, subtopic_id, image_url',
+          'exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url',
         ),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('ref'),
       supabase.from('subtopics').select('id, ref, title, topic_id').order('ref'),
+      supabase.from('sub_subtopics').select('id, ref, title, subtopic_id').order('sort_order'),
     ])
 
-    if (aRes.error) console.error('[AnswersPage] answers error:',   aRes.error)
-    if (qRes.error) console.error('[AnswersPage] questions error:', qRes.error)
-    if (bRes.error) console.error('[AnswersPage] boards error:',    bRes.error)
-    if (tRes.error) console.error('[AnswersPage] topics error:',    tRes.error)
-    if (sRes.error) console.error('[AnswersPage] subtopics error:', sRes.error)
+    if (aRes.error) console.error('[AnswersPage] answers error:',       aRes.error)
+    if (qRes.error) console.error('[AnswersPage] questions error:',     qRes.error)
+    if (bRes.error) console.error('[AnswersPage] boards error:',        bRes.error)
+    if (tRes.error) console.error('[AnswersPage] topics error:',        tRes.error)
+    if (sRes.error) console.error('[AnswersPage] subtopics error:',     sRes.error)
+    if (sstRes.error) console.error('[AnswersPage] sub_subtopics error:', sstRes.error)
 
-    boards    = bRes.data ?? []
-    topics    = tRes.data ?? []
-    subtopics = sRes.data ?? []
+    boards       = bRes.data ?? []
+    topics       = tRes.data ?? []
+    subtopics    = sRes.data ?? []
+    subSubtopics = (sstRes.data ?? []) as typeof subSubtopics
 
     // Build lookup maps
     const boardMap    = new Map(boards.map((b) => [b.id, b]))
@@ -85,6 +89,7 @@ export default async function AnswersPage() {
         boards={boards}
         topics={topics}
         subtopics={subtopics}
+        subSubtopics={subSubtopics}
       />
     </div>
   )

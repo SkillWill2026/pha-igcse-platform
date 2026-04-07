@@ -86,20 +86,22 @@ interface QuestionGroup {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  questions: QuestionWithRelations[]
-  boards:    { id: string; name: string }[]
-  topics:    { id: string; ref: string; name: string }[]
-  subtopics: { id: string; ref: string; name: string; topic_id: string }[]
+  questions:     QuestionWithRelations[]
+  boards:        { id: string; name: string }[]
+  topics:        { id: string; ref: string; name: string }[]
+  subtopics:     { id: string; ref: string; name: string; topic_id: string }[]
+  subSubtopics:  { id: string; ref: string; title: string; subtopic_id: string }[]
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props) {
+export function QuestionsLibrary({ questions, boards, topics, subtopics, subSubtopics }: Props) {
   const router = useRouter()
   const [deletingId,        setDeletingId]        = useState<string | null>(null)
   const [boardId,           setBoardId]           = useState(ALL)
   const [topicId,           setTopicId]           = useState(ALL)
   const [subtopicId,        setSubtopicId]        = useState(ALL)
+  const [subSubtopicId,     setSubSubtopicId]     = useState(ALL)
   const [qtype,             setQtype]             = useState(ALL)
   const [status,            setStatus]            = useState(ALL)
   const [diffMin,           setDiffMin]           = useState(ALL)
@@ -116,6 +118,12 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
   const filteredSubtopics = useMemo(
     () => (topicId === ALL ? subtopics : subtopics.filter((s) => s.topic_id === topicId)),
     [topicId, subtopics],
+  )
+
+  // Cascade sub-subtopics
+  const filteredSubSubtopics = useMemo(
+    () => (subtopicId === ALL ? subSubtopics : subSubtopics.filter((s) => s.subtopic_id === subtopicId)),
+    [subtopicId, subSubtopics],
   )
 
   // ── Build groups ───────────────────────────────────────────────────────────
@@ -199,16 +207,17 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
     return groups.filter((g) => {
       const q = g.original
       // Board filter: pass if any member is from this board
-      if (boardId    && boardId    !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
-      if (topicId    && topicId    !== ALL && q.topics?.id    !== topicId)    return false
-      if (subtopicId && subtopicId !== ALL && q.subtopics?.id !== subtopicId) return false
-      if (qtype      && qtype      !== ALL && q.question_type !== qtype)      return false
-      if (status     && status     !== ALL && q.status        !== status)     return false
-      if (diffMin    && diffMin    !== ALL && q.difficulty < Number(diffMin)) return false
-      if (diffMax    && diffMax    !== ALL && q.difficulty > Number(diffMax)) return false
+      if (boardId       && boardId       !== ALL && !g.boardEntries.some((b) => b.id === boardId)) return false
+      if (topicId       && topicId       !== ALL && q.topics?.id    !== topicId)    return false
+      if (subtopicId    && subtopicId    !== ALL && q.subtopics?.id !== subtopicId) return false
+      if (subSubtopicId && subSubtopicId !== ALL && (q as any).sub_subtopic_id !== subSubtopicId) return false
+      if (qtype         && qtype         !== ALL && q.question_type !== qtype)      return false
+      if (status        && status        !== ALL && q.status        !== status)     return false
+      if (diffMin       && diffMin       !== ALL && q.difficulty < Number(diffMin)) return false
+      if (diffMax       && diffMax       !== ALL && q.difficulty > Number(diffMax)) return false
       return true
     })
-  }, [groups, boardId, topicId, subtopicId, qtype, status, diffMin, diffMax])
+  }, [groups, boardId, topicId, subtopicId, subSubtopicId, qtype, status, diffMin, diffMax])
 
   // ── Counts (groups, not rows) ──────────────────────────────────────────────
   const counts = useMemo(() => ({
@@ -219,11 +228,11 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
   }), [filteredGroups])
 
   const hasFilters =
-    boardId !== ALL || topicId !== ALL || subtopicId !== ALL ||
+    boardId !== ALL || topicId !== ALL || subtopicId !== ALL || subSubtopicId !== ALL ||
     qtype !== ALL || status !== ALL || diffMin !== ALL || diffMax !== ALL
 
   const clearFilters = () => {
-    setBoardId(ALL); setTopicId(ALL); setSubtopicId(ALL)
+    setBoardId(ALL); setTopicId(ALL); setSubtopicId(ALL); setSubSubtopicId(ALL)
     setQtype(ALL); setStatus(ALL); setDiffMin(ALL); setDiffMax(ALL)
   }
 
@@ -330,10 +339,19 @@ export function QuestionsLibrary({ questions, boards, topics, subtopics }: Props
           <FilterSelect
             placeholder="All Subtopics"
             value={subtopicId}
-            onValueChange={setSubtopicId}
+            onValueChange={(v) => { setSubtopicId(v); setSubSubtopicId(ALL) }}
             options={filteredSubtopics.map((s) => ({ value: s.id, label: `${s.ref} – ${s.name}` }))}
             className="w-56"
           />
+          {filteredSubSubtopics.length > 0 && (
+            <FilterSelect
+              placeholder="All Sub-subtopics"
+              value={subSubtopicId}
+              onValueChange={setSubSubtopicId}
+              options={filteredSubSubtopics.map((s) => ({ value: s.id, label: `${s.ref} – ${s.title}` }))}
+              className="w-56"
+            />
+          )}
           <FilterSelect
             placeholder="All Types"
             value={qtype}

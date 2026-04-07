@@ -1,5 +1,20 @@
 export type SubtopicStatus = 'draft' | 'in_progress' | 'review' | 'approved'
 
+export interface SubSubtopic {
+  id: string
+  subtopic_id: string
+  ref: string
+  title: string
+  syllabus_code?: string
+  qs_total: number
+  mcq_count: number
+  short_ans_count: number
+  structured_count: number
+  extended_count: number
+  sort_order: number
+  created_at: string
+}
+
 export interface Topic {
   id: string
   ref: string
@@ -42,6 +57,7 @@ export interface Subtopic {
   examples_required: number
   ppt_decks?: PPTDeck[]
   examples_count?: number
+  sub_subtopics?: SubSubtopic[]
 }
 
 export interface TopicWithSubtopics extends Topic {

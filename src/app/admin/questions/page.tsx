@@ -11,34 +11,38 @@ export default async function QuestionsPage() {
   let boards: { id: string; name: string }[] = []
   let topics: { id: string; ref: string; name: string }[] = []
   let subtopics: { id: string; ref: string; name: string; topic_id: string }[] = []
+  let subSubtopics: { id: string; ref: string; title: string; subtopic_id: string }[] = []
 
   try {
     const supabase = createAdminClient()
 
     // Fetch all four tables in parallel — questions with NO embedded joins so that
     // missing FK constraints cannot silently zero out the entire result.
-    const [qRes, bRes, tRes, sRes] = await Promise.all([
+    const [qRes, bRes, tRes, sRes, sstRes] = await Promise.all([
       supabase
         .from('questions')
         .select(
           'id, content_text, difficulty, question_type, marks, status,' +
           'ai_extracted, created_at, updated_at,' +
-          'exam_board_id, topic_id, subtopic_id, image_url, source_question_id',
+          'exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, source_question_id',
         )
         .order('created_at', { ascending: false }),
       supabase.from('exam_boards').select('id, name').order('name'),
       supabase.from('topics').select('id, ref, name').order('ref'),
       supabase.from('subtopics').select('id, ref, title, topic_id').order('ref'),
+      supabase.from('sub_subtopics').select('id, ref, title, subtopic_id').order('sort_order'),
     ])
 
     if (qRes.error) console.error('[QuestionsPage] questions error:', qRes.error)
     if (bRes.error) console.error('[QuestionsPage] boards error:',    bRes.error)
     if (tRes.error) console.error('[QuestionsPage] topics error:',    tRes.error)
     if (sRes.error) console.error('[QuestionsPage] subtopics error:', sRes.error)
+    if (sstRes.error) console.error('[QuestionsPage] sub_subtopics error:', sstRes.error)
 
     boards    = bRes.data ?? []
     topics    = tRes.data ?? []
     subtopics = sRes.data ?? []
+    subSubtopics = (sstRes.data ?? []) as typeof subSubtopics
 
     // Build lookup maps so we can stitch relations without relying on FK constraints
     const boardMap    = new Map(boards.map((b) => [b.id, b]))
@@ -69,6 +73,7 @@ export default async function QuestionsPage() {
         boards={boards}
         topics={topics}
         subtopics={subtopics}
+        subSubtopics={subSubtopics}
       />
     </div>
   )

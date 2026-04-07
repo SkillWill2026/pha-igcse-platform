@@ -49,11 +49,13 @@ export function ReviewClient({
   allBoards,
   allSubtopics,
   allTopics,
+  allSubSubtopics,
 }: {
   question: QuestionWithRelations
   allBoards: { id: string; name: string }[]
   allSubtopics: { id: string; ref: string; title: string; topic_id: string }[]
   allTopics: { id: string; ref: string; name: string }[]
+  allSubSubtopics: { id: string; ref: string; title: string; subtopic_id: string }[]
 }) {
   const router = useRouter()
 
@@ -66,7 +68,14 @@ export function ReviewClient({
   const [linkedBoardIds,   setLinkedBoardIds]   = useState<Set<string>>(new Set())
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [subtopicId, setSubtopicId] = useState<string | null>((question as any).subtopic_id ?? null)
+  const [subtopicId,    setSubtopicId]    = useState<string | null>((question as any).subtopic_id ?? null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [subSubtopicId, setSubSubtopicId] = useState<string | null>((question as any).sub_subtopic_id ?? null)
+
+  const relevantSubSubtopics = useMemo(
+    () => (subtopicId ? allSubSubtopics.filter((s) => s.subtopic_id === subtopicId) : []),
+    [subtopicId, allSubSubtopics],
+  )
 
   const topicGroups = useMemo(() => {
     const map = new Map(allTopics.map((t) => ({ ...t, items: [] as typeof allSubtopics })).map((t) => [t.id, t]))
@@ -126,9 +135,21 @@ export function ReviewClient({
     const newId = value === UNASSIGNED ? null : value
     const subtopic = allSubtopics.find((s) => s.id === newId)
     try {
-      await patchQuestion({ subtopic_id: newId, topic_id: subtopic?.topic_id ?? null })
+      await patchQuestion({ subtopic_id: newId, topic_id: subtopic?.topic_id ?? null, sub_subtopic_id: null })
       setSubtopicId(newId)
+      setSubSubtopicId(null)
       toast.success('Subtopic updated')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Update failed')
+    }
+  }
+
+  async function handleSubSubtopicChange(value: string) {
+    const newId = value === UNASSIGNED ? null : value
+    try {
+      await patchQuestion({ sub_subtopic_id: newId })
+      setSubSubtopicId(newId)
+      toast.success('Sub-subtopic updated')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Update failed')
     }
@@ -334,6 +355,40 @@ export function ReviewClient({
           </SelectContent>
         </Select>
       </div>
+
+      {/* ── Sub-subtopic selector ──────────────────────────────────────── */}
+      {subtopicId && relevantSubSubtopics.length > 0 && (
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Sub-subtopic:</span>
+          <Select
+            value={subSubtopicId ?? UNASSIGNED}
+            onValueChange={handleSubSubtopicChange}
+          >
+            <SelectTrigger className="h-8 w-72 text-xs">
+              {subSubtopicId
+                ? (() => {
+                    const s = allSubSubtopics.find((x) => x.id === subSubtopicId)
+                    return s
+                      ? <span className="truncate"><span className="font-mono text-muted-foreground mr-1">{s.ref}</span>{s.title}</span>
+                      : <span className="text-muted-foreground truncate">— Unassigned —</span>
+                  })()
+                : <span className="text-muted-foreground">— Unassigned —</span>}
+            </SelectTrigger>
+            <SelectContent className="max-h-64" alignItemWithTrigger={false}>
+              <SelectItem value={UNASSIGNED} label="— Unassigned —">
+                <span className="text-muted-foreground">— Unassigned —</span>
+              </SelectItem>
+              <SelectSeparator />
+              {relevantSubSubtopics.map((s) => (
+                <SelectItem key={s.id} value={s.id} label={`${s.ref} – ${s.title}`}>
+                  <span className="font-mono text-xs text-muted-foreground mr-1.5">{s.ref}</span>
+                  {s.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* ── Also applies to (cross-board linking) ────────────────────────── */}
       {/* Only show for root originals — copies (source_question_id set) should not spawn more copies */}

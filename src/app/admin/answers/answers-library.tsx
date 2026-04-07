@@ -26,22 +26,29 @@ import type { AnswerWithQuestion } from '@/types/database'
 const ALL = '__all__'
 
 interface Props {
-  answers:   AnswerWithQuestion[]
-  boards:    { id: string; name: string }[]
-  topics:    { id: string; ref: string; name: string }[]
-  subtopics: { id: string; ref: string; name: string; topic_id: string }[]
+  answers:      AnswerWithQuestion[]
+  boards:       { id: string; name: string }[]
+  topics:       { id: string; ref: string; name: string }[]
+  subtopics:    { id: string; ref: string; name: string; topic_id: string }[]
+  subSubtopics: { id: string; ref: string; title: string; subtopic_id: string }[]
 }
 
-export function AnswersLibrary({ answers, boards, topics, subtopics }: Props) {
+export function AnswersLibrary({ answers, boards, topics, subtopics, subSubtopics }: Props) {
   const router = useRouter()
-  const [boardId,    setBoardId]    = useState(ALL)
-  const [topicId,    setTopicId]    = useState(ALL)
-  const [subtopicId, setSubtopicId] = useState(ALL)
-  const [status,     setStatus]     = useState(ALL)
+  const [boardId,       setBoardId]       = useState(ALL)
+  const [topicId,       setTopicId]       = useState(ALL)
+  const [subtopicId,    setSubtopicId]    = useState(ALL)
+  const [subSubtopicId, setSubSubtopicId] = useState(ALL)
+  const [status,        setStatus]        = useState(ALL)
 
   const filteredSubtopics = useMemo(
     () => (topicId === ALL ? subtopics : subtopics.filter((s) => s.topic_id === topicId)),
     [topicId, subtopics],
+  )
+
+  const filteredSubSubtopics = useMemo(
+    () => (subtopicId === ALL ? subSubtopics : subSubtopics.filter((s) => s.subtopic_id === subtopicId)),
+    [subtopicId, subSubtopics],
   )
 
   const filtered = useMemo(() => {
@@ -50,13 +57,14 @@ export function AnswersLibrary({ answers, boards, topics, subtopics }: Props) {
       if (!q) return false
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const qAny = q as any
-      if (boardId    && boardId    !== ALL && qAny.exam_boards?.id !== boardId)    return false
-      if (topicId    && topicId    !== ALL && qAny.topics?.id     !== topicId)    return false
-      if (subtopicId && subtopicId !== ALL && qAny.subtopics?.id  !== subtopicId) return false
-      if (status     && status     !== ALL && a.status            !== status)     return false
+      if (boardId       && boardId       !== ALL && qAny.exam_boards?.id   !== boardId)       return false
+      if (topicId       && topicId       !== ALL && qAny.topics?.id        !== topicId)       return false
+      if (subtopicId    && subtopicId    !== ALL && qAny.subtopics?.id     !== subtopicId)    return false
+      if (subSubtopicId && subSubtopicId !== ALL && qAny.sub_subtopic_id   !== subSubtopicId) return false
+      if (status        && status        !== ALL && a.status               !== status)        return false
       return true
     })
-  }, [answers, boardId, topicId, subtopicId, status])
+  }, [answers, boardId, topicId, subtopicId, subSubtopicId, status])
 
   const counts = useMemo(() => ({
     total:    filtered.length,
@@ -65,8 +73,8 @@ export function AnswersLibrary({ answers, boards, topics, subtopics }: Props) {
     rejected: filtered.filter((a) => a.status === 'rejected').length,
   }), [filtered])
 
-  const hasFilters = boardId !== ALL || topicId !== ALL || subtopicId !== ALL || status !== ALL
-  const clearFilters = () => { setBoardId(ALL); setTopicId(ALL); setSubtopicId(ALL); setStatus(ALL) }
+  const hasFilters = boardId !== ALL || topicId !== ALL || subtopicId !== ALL || subSubtopicId !== ALL || status !== ALL
+  const clearFilters = () => { setBoardId(ALL); setTopicId(ALL); setSubtopicId(ALL); setSubSubtopicId(ALL); setStatus(ALL) }
 
   return (
     <div className="space-y-4">
@@ -88,10 +96,19 @@ export function AnswersLibrary({ answers, boards, topics, subtopics }: Props) {
           <FilterSelect
             placeholder="All Subtopics"
             value={subtopicId}
-            onValueChange={setSubtopicId}
+            onValueChange={(v) => { setSubtopicId(v); setSubSubtopicId(ALL) }}
             options={filteredSubtopics.map((s) => ({ value: s.id, label: `${s.ref} – ${s.name}` }))}
             className="w-56"
           />
+          {filteredSubSubtopics.length > 0 && (
+            <FilterSelect
+              placeholder="All Sub-subtopics"
+              value={subSubtopicId}
+              onValueChange={setSubSubtopicId}
+              options={filteredSubSubtopics.map((s) => ({ value: s.id, label: `${s.ref} – ${s.title}` }))}
+              className="w-56"
+            />
+          )}
           <FilterSelect
             placeholder="All Statuses"
             value={status}
