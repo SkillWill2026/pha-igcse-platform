@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 
 interface PDFCropModalProps {
@@ -13,80 +13,53 @@ interface PDFCropModalProps {
 }
 
 export default function PDFCropModal({
-  isOpen, onClose, batchId, questionId, imageType, questionNumber, onSave
+  isOpen, onClose, batchId, questionNumber
 }: PDFCropModalProps) {
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [opened, setOpened] = useState(false)
 
-  useEffect(() => {
-    if (!isOpen || !batchId) return
+  const handleOpenPDF = async () => {
+    if (!batchId) return
     setLoading(true)
-    setError(null)
-    fetch(`/api/upload-batches/${batchId}/pdf-url`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.url) setPdfUrl(data.url)
-        else setError('PDF not available for this batch')
-      })
-      .catch(() => setError('Failed to load PDF'))
-      .finally(() => setLoading(false))
-  }, [isOpen, batchId])
+    try {
+      const res = await fetch(`/api/upload-batches/${batchId}/pdf-url`)
+      const data = await res.json()
+      if (data.url) {
+        // Open PDF in new browser tab with page hint
+        const url = questionNumber ? `${data.url}#page=${questionNumber}` : data.url
+        window.open(url, '_blank')
+        setOpened(true)
+      }
+    } catch (e) {
+      console.error('Failed to get PDF URL:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (!isOpen) return null
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', flexDirection: 'column', background: 'white' }}>
-
-      {/* Header */}
-      <div style={{ height: '60px', flexShrink: 0, display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', padding: '0 20px', borderBottom: '1px solid #e5e7eb',
-        background: 'white' }}>
-        <div>
-          <span style={{ fontSize: '18px', fontWeight: 600 }}>📄 PDF Viewer</span>
-          <span style={{ marginLeft: '12px', fontSize: '13px', color: '#6b7280' }}>
-            Navigate to your diagram, then screenshot and paste below (Ctrl+V)
-          </span>
-        </div>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: '12px', padding: '32px', maxWidth: '480px', width: '90%', textAlign: 'center' }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '12px' }}>📄 Open Exam Paper</h2>
+        <p style={{ color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' }}>
+          The PDF will open in a new browser tab.<br/>
+          Find your diagram, take a screenshot<br/>
+          <strong>(Windows: Win+Shift+S · Mac: Cmd+Shift+4)</strong><br/>
+          then paste it below with <strong>Ctrl+V</strong>
+        </p>
+        {!opened ? (
+          <Button onClick={handleOpenPDF} disabled={loading} style={{ marginRight: '12px' }}>
+            {loading ? 'Loading...' : '📄 Open PDF in New Tab'}
+          </Button>
+        ) : (
+          <p style={{ color: '#16a34a', marginBottom: '16px', fontWeight: 500 }}>
+            ✅ PDF opened! Screenshot and paste your diagram below.
+          </p>
+        )}
         <Button variant="outline" onClick={onClose}>Close</Button>
       </div>
-
-      {/* Instructions bar */}
-      <div style={{ padding: '10px 20px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe',
-        fontSize: '13px', color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span>💡</span>
-        <span>
-          <strong>How to extract a diagram:</strong> Find the diagram in the PDF →
-          Take a screenshot (Windows: <kbd>Win+Shift+S</kbd> · Mac: <kbd>Cmd+Shift+4</kbd>) →
-          Paste with <kbd>Ctrl+V</kbd> in the image section below the PDF
-        </span>
-      </div>
-
-      {/* PDF iframe - browser native viewer */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#6b7280' }}>
-            Loading PDF...
-          </div>
-        )}
-        {error && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', height: '100%', gap: '12px' }}>
-            <span style={{ color: '#dc2626' }}>{error}</span>
-            <span style={{ color: '#6b7280', fontSize: '13px' }}>
-              Re-upload the exam paper to enable PDF viewing
-            </span>
-          </div>
-        )}
-        {pdfUrl && !loading && (
-          <iframe
-            src={`${pdfUrl}#page=${questionNumber ?? 1}`}
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            title="Exam Paper PDF"
-          />
-        )}
-      </div>
-
     </div>
   )
 }
