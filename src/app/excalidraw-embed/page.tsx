@@ -1,37 +1,49 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 const Excalidraw = dynamic(
   () => import('@excalidraw/excalidraw').then(m => m.Excalidraw),
   { ssr: false }
 )
 
-export default function ExcalidrawEmbed() {
-  let api: any = null
+export default function ExcalidrawEmbedPage() {
+  const apiRef = useRef<any>(null)
 
   useEffect(() => {
-    window.addEventListener('message', async (event) => {
-      if (event.data.type !== 'EXPORT_PNG' || !api) return
+    const handler = async (event: MessageEvent) => {
+      if (event.data?.type !== 'EXPORT_PNG') return
+      if (!apiRef.current) return
+
       const { exportToBlob } = await import('@excalidraw/excalidraw')
       const blob = await exportToBlob({
-        elements: api.getSceneElements(),
-        appState: { ...api.getAppState(), exportBackground: true },
-        files: api.getFiles(),
+        elements: apiRef.current.getSceneElements(),
+        appState: {
+          ...apiRef.current.getAppState(),
+          exportBackground: true
+        },
+        files: apiRef.current.getFiles(),
         mimeType: 'image/png'
       })
+
       const reader = new FileReader()
-      reader.onload = () => {
-        window.parent.postMessage({ type: 'EXPORT_RESULT', dataUrl: reader.result }, '*')
+      reader.onloadend = () => {
+        window.parent.postMessage({
+          type: 'EXPORT_RESULT',
+          dataUrl: reader.result
+        }, '*')
       }
       reader.readAsDataURL(blob)
-    })
+    }
+
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
   }, [])
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <Excalidraw
-        excalidrawAPI={(a) => { api = a }}
+        excalidrawAPI={(api) => { apiRef.current = api }}
         gridModeEnabled={true}
         initialData={{ appState: { gridSize: 20 } }}
       />
