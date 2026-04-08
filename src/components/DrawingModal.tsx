@@ -93,29 +93,54 @@ export function DrawingModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
       <div
-        className="bg-white rounded-xl shadow-2xl flex flex-col"
-        style={{ width: '95vw', minWidth: '900px', height: '90vh' }}
+        style={{
+          position: 'relative',
+          width: '95vw',
+          minWidth: '900px',
+          height: '90vh',
+          background: 'white',
+          borderRadius: '12px',
+          overflow: 'hidden',
+        }}
       >
-        {/* Header - exactly 60px */}
+        {/* Header */}
         <div
-          className="flex items-center justify-between px-4 border-b"
-          style={{ height: '60px', flexShrink: 0 }}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '60px',
+            borderBottom: '1px solid #e5e7eb',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 16px',
+            zIndex: 10,
+            background: 'white',
+          }}
         >
-          <h2 className="text-lg font-semibold">✏️ Draw Diagram</h2>
+          <span style={{ fontSize: '18px', fontWeight: 600 }}>✏️ Draw Diagram</span>
           <button
             onClick={onClose}
             disabled={saving}
-            className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#9ca3af',
+              padding: '4px',
+            }}
             aria-label="Close"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Excalidraw - explicit height = 90vh minus header(60px) minus footer(64px) */}
-        <div style={{ height: 'calc(90vh - 124px)', position: 'relative' }}>
+        {/* Excalidraw fills middle */}
+        <div style={{ position: 'absolute', top: '60px', left: 0, right: 0, bottom: '64px' }}>
           <ExcalidrawComponent
             excalidrawAPI={(api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api)}
             gridModeEnabled={true}
@@ -123,10 +148,23 @@ export function DrawingModal({
           />
         </div>
 
-        {/* Footer - exactly 64px */}
+        {/* Footer */}
         <div
-          className="flex items-center justify-end gap-3 px-4 border-t"
-          style={{ height: '64px', flexShrink: 0 }}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '64px',
+            borderTop: '1px solid #e5e7eb',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: '12px',
+            padding: '0 16px',
+            zIndex: 10,
+            background: 'white',
+          }}
         >
           <Button
             variant="outline"
