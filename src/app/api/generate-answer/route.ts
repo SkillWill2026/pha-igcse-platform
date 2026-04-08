@@ -123,11 +123,13 @@ export async function POST(request: NextRequest) {
     console.log('[generate-answer] parsed OK — steps:', aiAnswer.step_by_step.length)
 
     // ── Check-then-branch: update existing or insert new ──────────────────────
+    console.log('[generate-answer] Checking for existing answer for question:', question_id)
     const { data: existing } = await supabase
       .from('answers')
       .select('id')
       .eq('question_id', question_id)
       .maybeSingle()
+    console.log('[generate-answer] Found existing:', existing)
 
     let dbErr: any = null
     let saved: any = null
