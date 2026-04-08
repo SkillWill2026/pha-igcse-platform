@@ -93,104 +93,45 @@ export function DrawingModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
-      <div
-        style={{
-          position: 'relative',
-          width: '95vw',
-          minWidth: '900px',
-          height: '90vh',
-          background: 'white',
-          borderRadius: '12px',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '60px',
-            borderBottom: '1px solid #e5e7eb',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 16px',
-            zIndex: 10,
-            background: 'white',
-          }}
-        >
-          <span style={{ fontSize: '18px', fontWeight: 600 }}>✏️ Draw Diagram</span>
-          <button
-            onClick={onClose}
-            disabled={saving}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#9ca3af',
-              padding: '4px',
-            }}
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 100,
+      display: 'flex',
+      flexDirection: 'column',
+      background: 'white'
+    }}>
+
+      {/* Header - 60px */}
+      <div style={{
+        height: '60px',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 20px',
+        borderBottom: '1px solid #e5e7eb',
+        background: 'white',
+        zIndex: 10
+      }}>
+        <span style={{ fontSize: '18px', fontWeight: 600 }}>✏️ Draw Diagram</span>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', border: '1px solid #e5e7eb', borderRadius: '8px', cursor: 'pointer' }}>Cancel</button>
+          <button onClick={handleSave} disabled={saving} style={{ padding: '8px 16px', background: saving ? '#94a3b8' : '#1d4ed8', color: 'white', borderRadius: '8px', cursor: 'pointer', border: 'none' }}>
+            {saving ? 'Saving...' : '💾 Save as Image'}
           </button>
         </div>
-
-        {/* Excalidraw fills middle */}
-        <div style={{ position: 'absolute', top: '60px', left: 0, right: 0, bottom: '64px' }}>
-          <ExcalidrawComponent
-            excalidrawAPI={(api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api)}
-            gridModeEnabled={true}
-            initialData={{ appState: { gridSize: 20 } }}
-          />
-        </div>
-
-        {/* Footer */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '64px',
-            borderTop: '1px solid #e5e7eb',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: '12px',
-            padding: '0 16px',
-            zIndex: 10,
-            background: 'white',
-          }}
-        >
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="gap-2 bg-green-600 hover:bg-green-700"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                💾 Save as Image
-              </>
-            )}
-          </Button>
-        </div>
       </div>
+
+      {/* Excalidraw fills everything below header */}
+      <div style={{ flex: 1, position: 'relative' }}>
+        <ExcalidrawComponent
+          excalidrawAPI={(api: any) => setExcalidrawAPI(api)}
+          gridModeEnabled={true}
+          initialData={{ appState: { gridSize: 20 } }}
+        />
+      </div>
+
     </div>
   )
 }
