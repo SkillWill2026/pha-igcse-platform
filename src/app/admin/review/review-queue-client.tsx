@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -12,6 +13,9 @@ import { MathRenderer } from '@/components/admin/math-renderer'
 import { QuestionImageUpload } from '@/components/QuestionImageUpload'
 import { displayQuestionSerial, serialBadgeColor } from '@/lib/serial'
 import type { QuestionWithRelations, AnswerRow } from '@/types/database'
+
+const DrawingModal = dynamic(() => import('@/components/DrawingModal').then(m => m.DrawingModal), { ssr: false })
+const PDFCropModal = dynamic(() => import('@/components/PDFCropModal').then(m => m.PDFCropModal), { ssr: false })
 
 interface DraftQuestion extends QuestionWithRelations {
   answer: AnswerRow | null
@@ -32,6 +36,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [editing, setEditing] = useState(false)
   const [editedText, setEditedText] = useState('')
   const [editSaving, setEditSaving] = useState(false)
+  const [showDrawing, setShowDrawing] = useState(false)
+  const [showCropper, setShowCropper] = useState(false)
+  const [drawingTarget, setDrawingTarget] = useState<'question' | 'answer'>('answer')
 
   const remaining = drafts.length - currentIdx - 1
 
@@ -305,6 +312,30 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                 {currentQuestion && (
                   <div className="border-t pt-4">
                     <h4 className="text-sm font-semibold mb-3">Question Images</h4>
+                    <div className="flex gap-2 mb-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDrawingTarget('question')
+                          setShowDrawing(true)
+                        }}
+                      >
+                        ✏️ Draw
+                      </Button>
+                      {currentQuestion.batch_id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setDrawingTarget('question')
+                            setShowCropper(true)
+                          }}
+                        >
+                          📄 Crop from PDF
+                        </Button>
+                      )}
+                    </div>
                     <QuestionImageUpload
                       questionId={currentQuestion.id}
                       imageType="question"
@@ -374,6 +405,30 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
               {currentQuestion && (
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-semibold mb-3">Answer Images</h4>
+                  <div className="flex gap-2 mb-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setDrawingTarget('answer')
+                        setShowDrawing(true)
+                      }}
+                    >
+                      ✏️ Draw
+                    </Button>
+                    {currentQuestion.batch_id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDrawingTarget('answer')
+                          setShowCropper(true)
+                        }}
+                      >
+                        📄 Crop from PDF
+                      </Button>
+                    )}
+                  </div>
                   <QuestionImageUpload
                     questionId={currentQuestion.id}
                     imageType="answer"
@@ -452,6 +507,30 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           Next <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
+
+      {/* Modals */}
+      <DrawingModal
+        isOpen={showDrawing}
+        onClose={() => setShowDrawing(false)}
+        onSave={() => {
+          setShowDrawing(false)
+        }}
+        questionId={currentQuestion?.id ?? ''}
+        imageType={drawingTarget}
+      />
+      {currentQuestion?.batch_id && (
+        <PDFCropModal
+          isOpen={showCropper}
+          onClose={() => setShowCropper(false)}
+          onSave={() => {
+            setShowCropper(false)
+          }}
+          questionId={currentQuestion.id}
+          batchId={currentQuestion.batch_id}
+          questionNumber={currentQuestion.parent_question_ref ? parseInt(currentQuestion.parent_question_ref) : null}
+          imageType={drawingTarget}
+        />
+      )}
     </div>
   )
 }
