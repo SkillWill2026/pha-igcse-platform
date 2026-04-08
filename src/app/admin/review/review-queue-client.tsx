@@ -14,7 +14,7 @@ import { QuestionImageUpload } from '@/components/QuestionImageUpload'
 import { displayQuestionSerial, serialBadgeColor } from '@/lib/serial'
 import type { QuestionWithRelations, AnswerRow } from '@/types/database'
 
-const DrawingModal = dynamic(() => import('@/components/DrawingModal').then(m => m.DrawingModal), { ssr: false })
+const DrawingModal = dynamic(() => import('@/components/DrawingModal'), { ssr: false })
 const PDFCropModal = dynamic(() => import('@/components/PDFCropModal').then(m => m.PDFCropModal), { ssr: false })
 
 interface DraftQuestion extends QuestionWithRelations {
