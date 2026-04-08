@@ -59,77 +59,54 @@ export async function POST(request: NextRequest) {
 
     const anthropic = createAnthropicClient()
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const subtopicName = subtopic ? (subtopic as any).title ?? '' : ''
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const subSubtopicName = sst ? (sst as any).name ?? '' : ''
+    let generatedContent = ''
+    try {
+      const message = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: `You are an IGCSE Maths tutor.
+START your response with exactly these two lines:
+**Working:**
+Step 1:
 
-    const systemPrompt = 'You are an expert IGCSE Mathematics tutor. Return valid JSON with: step_by_step (array of strings), final_answer (string), mark_scheme (string), confidence_score (0-1).'
+Then continue with numbered steps showing full working.
+End with:
+**Answer:**
+[final answer with units]
 
-    // ── Retry logic for 529 overloaded_error ──────────────────────────────────
-    let aiResponse: any = null
-    const maxAttempts = 3
-    const retryDelays = [0, 500, 1000]
+Topic: ${question.subtopics?.name ?? 'Mathematics'}
+Marks: ${question.marks ?? 'N/A'}
+Question: ${question.content_text}
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        aiResponse = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 4096,
-          system: systemPrompt,
-          messages: [
-            {
-              role: 'user',
-              content: `Solve this IGCSE Maths question. Topic: ${subtopicName || 'Mathematics'}, Marks: ${question.marks ?? 'N/A'}
-
-If the question refers to a diagram or image that is not provided, make reasonable assumptions and solve based on typical IGCSE question patterns for this topic. Always provide Working and Answer sections.
-
-Question:
-${question.content_text}
-
-Return as JSON with this structure:
-{
-  "step_by_step": ["Step 1: ...", "Step 2: ...", ...],
-  "final_answer": "...",
-  "mark_scheme": "...",
-  "confidence_score": 0.0 to 1.0
-}`,
-            },
-            {
-              role: 'assistant',
-              content: '**Working:**\nStep 1:',
-            },
-          ],
-        })
-        break
-      } catch (err: any) {
-        const isOverloaded = err?.status === 529 || err?.error?.type === 'overloaded_error'
-        const isLastAttempt = attempt === maxAttempts - 1
-
-        if (isOverloaded && !isLastAttempt) {
-          console.warn(`[generate-answer] API overloaded on attempt ${attempt + 1}, retrying in ${retryDelays[attempt + 1]}ms`)
-          await new Promise(r => setTimeout(r, retryDelays[attempt + 1]))
-        } else {
-          throw err
-        }
-      }
-    }
-
-    if (!aiResponse) {
+After your markdown working and answer, output JSON: {"step_by_step": ["..."], "final_answer": "...", "mark_scheme": "...", "confidence_score": 0.8}`
+          }
+        ]
+      })
+      generatedContent = message.content[0].type === 'text' ? message.content[0].text : ''
+    } catch (err: any) {
+      console.error('[generate-answer] Anthropic error:', err)
       return NextResponse.json(
-        { error: 'AI is busy right now — please try again in a few seconds.' },
-        { status: 503 },
+        { error: 'Generation failed — please try again.' },
+        { status: 503 }
       )
     }
 
-    const raw =
-      aiResponse.content[0].type === 'text' ? aiResponse.content[0].text.trim() : ''
+    const raw = generatedContent.trim()
     console.log('[generate-answer] AI raw response (first 200):', raw.slice(0, 200))
-    const jsonStr = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+
+    // Extract JSON from mixed markdown + JSON response
+    const jsonMatch = raw.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      console.log('[generate-answer] No JSON found, raw:', raw.slice(0, 500))
+      return NextResponse.json({ error: 'AI did not return JSON', raw }, { status: 502 })
+    }
 
     let aiAnswer: AIAnswer
     try {
-      aiAnswer = JSON.parse(jsonStr)
+      aiAnswer = JSON.parse(jsonMatch[0])
       if (!aiAnswer.step_by_step || !Array.isArray(aiAnswer.step_by_step)) {
         throw new Error('Missing step_by_step array')
       }
