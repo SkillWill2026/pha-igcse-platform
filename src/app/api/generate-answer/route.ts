@@ -64,35 +64,7 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const subSubtopicName = sst ? (sst as any).name ?? '' : ''
 
-    const systemPrompt = `You are an expert IGCSE Mathematics tutor.
-You MUST format your response EXACTLY like this with no exceptions:
-
-**Working:**
-Step 1: [first step with full calculation shown]
-Step 2: [second step with full calculation shown]
-Step 3: [continue until solution is complete]
-
-**Answer:**
-[final answer stated clearly with units]
-
-Rules you must follow:
-- ALWAYS begin with "**Working:**" on its own line
-- ALWAYS number every step starting from Step 1
-- ALWAYS end with "**Answer:**" on its own line
-- Show ALL arithmetic even if trivial
-- Minimum steps = number of marks awarded
-- Never give just a final answer without working
-
-Topic: ${subtopicName || 'Mathematics'}
-Sub-topic: ${subSubtopicName || ''}
-Marks: ${question.marks ?? 'N/A'}
-
-Question:
-${question.content_text}
-
-Return valid JSON with: step_by_step (array of strings, each a step), final_answer (string), mark_scheme (string), confidence_score (0.0 to 1.0).`
-
-    const context = `Topic: ${topic?.name ?? 'Mathematics'}\nSub-topic: ${subtopicName}\nMarks: ${question.marks ?? 'N/A'}`
+    const systemPrompt = 'You are an expert IGCSE Mathematics tutor. Return valid JSON with: step_by_step (array of strings), final_answer (string), mark_scheme (string), confidence_score (0-1).'
 
     // ── Retry logic for 529 overloaded_error ──────────────────────────────────
     let aiResponse: any = null
@@ -108,7 +80,30 @@ Return valid JSON with: step_by_step (array of strings, each a step), final_answ
           messages: [
             {
               role: 'user',
-              content: `${context}\n\nQuestion:\n${question.content_text}\n\nReturn only valid JSON — no markdown fences.`,
+              content: `<instructions>
+You are an IGCSE Maths tutor. Your response MUST contain exactly two sections in this order with no exceptions:
+
+SECTION 1 - Start your response with this exact line:
+**Working:**
+Then show numbered steps (Step 1:, Step 2:, etc.)
+Show every calculation even for simple questions.
+
+SECTION 2 - End your response with this exact line:
+**Answer:**
+Then state the final answer with units on the next line.
+
+DO NOT skip the Working section even for 1-mark questions.
+DO NOT give just the final answer.
+</instructions>
+
+Topic: ${subtopicName || 'Mathematics'}
+Sub-topic: ${subSubtopicName || ''}
+Marks: ${question.marks ?? 'N/A'}
+
+Question:
+${question.content_text}
+
+Return only valid JSON with no markdown fences.`,
             },
           ],
         })
