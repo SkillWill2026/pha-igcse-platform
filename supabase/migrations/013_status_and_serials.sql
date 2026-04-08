@@ -1,19 +1,9 @@
 -- 013_status_and_serials.sql
 -- Adds rejected/deleted status support, answer serials, and backfills question serials to Q-XXXX format
 
--- 1. Add check constraints to allow rejected and deleted status values
--- (status columns are text, not enum — just ensure the values are valid)
-alter table public.questions
-  drop constraint if exists questions_status_check;
-alter table public.questions
-  add constraint questions_status_check
-  check (status in ('draft', 'approved', 'rejected', 'deleted'));
-
-alter table public.answers
-  drop constraint if exists answers_status_check;
-alter table public.answers
-  add constraint answers_status_check
-  check (status in ('draft', 'approved', 'rejected', 'deleted'));
+-- 1. Extend the shared content_status_enum used by both questions and answers
+alter type content_status_enum add value if not exists 'rejected';
+alter type content_status_enum add value if not exists 'deleted';
 
 -- 2. Add serial_number to answers table
 create sequence if not exists public.answer_serial_seq start 1;
