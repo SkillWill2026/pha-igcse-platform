@@ -20,7 +20,7 @@ export default async function AnswerReviewPage({
       supabase
         .from('answers')
         .select(
-          'id, content_text, step_by_step, mark_scheme, confidence_score,' +
+          'id, content, step_by_step, mark_scheme, confidence_score,' +
           'status, ai_generated, created_at, updated_at, question_id',
         )
         .eq('id', params.id)

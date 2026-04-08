@@ -53,7 +53,7 @@ export function ExamplesSection({ subtopic, topicName, isAdmin, onCountChange }:
         const [exRes, countRes] = await Promise.all([
           supabase
             .from('questions')
-            .select('id, content_text, answers(id, content_text, step_by_step, status)')
+            .select('id, content_text, answers(id, content, step_by_step, status)')
             .eq('subtopic_id', subtopic.id)
             .eq('is_example', true),
           supabase
@@ -192,10 +192,10 @@ export function ExamplesSection({ subtopic, topicName, isAdmin, onCountChange }:
                       )}
                     </div>
                     <p className="text-xs leading-relaxed line-clamp-3">{ex.content_text}</p>
-                    {ans?.content_text && (
+                    {ans?.content && (
                       <div className="border-t pt-1.5 mt-1.5">
                         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-4">
-                          {ans.content_text}
+                          {ans.content}
                         </p>
                       </div>
                     )}
