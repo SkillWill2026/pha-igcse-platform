@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, ArrowRight, Check, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MathRenderer } from '@/components/admin/math-renderer'
+import { QuestionImageUpload } from '@/components/QuestionImageUpload'
 import { displayQuestionSerial, serialBadgeColor } from '@/lib/serial'
 import type { QuestionWithRelations, AnswerRow } from '@/types/database'
 
@@ -289,13 +290,25 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           <section className="space-y-3">
             <h3 className="font-semibold">Question</h3>
             {editing ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <textarea
                   value={editedText}
                   onChange={(e) => setEditedText(e.target.value)}
                   className="w-full h-48 p-4 rounded-lg border bg-white text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Question content..."
                 />
+
+                {/* Image upload in edit mode */}
+                {currentQuestion && (
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-semibold mb-3">Question Images</h4>
+                    <QuestionImageUpload
+                      questionId={currentQuestion.id}
+                      imageType="question"
+                    />
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveEdit}
