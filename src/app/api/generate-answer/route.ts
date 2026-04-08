@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Fetch question flat — no PostgREST join syntax to avoid FK constraint failures
     const { data: question, error: qErr } = await supabase
       .from('questions')
-      .select('id, content_text, difficulty, question_type, marks, topic_id, subtopic_id, exam_board_id')
+      .select('id, content_text, difficulty, question_type, marks, status, topic_id, subtopic_id, exam_board_id')
       .eq('id', question_id)
       .single()
 
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
           step_by_step: aiAnswer.step_by_step.map(String),
           mark_scheme: String(aiAnswer.mark_scheme ?? ''),
           confidence_score: Math.min(1, Math.max(0, Number(aiAnswer.confidence_score) || 0)),
-          status: 'draft' as const,
+          status: question.status,
           ai_generated: true,
           updated_at: new Date().toISOString(),
         })
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
           step_by_step: aiAnswer.step_by_step.map(String),
           mark_scheme: String(aiAnswer.mark_scheme ?? ''),
           confidence_score: Math.min(1, Math.max(0, Number(aiAnswer.confidence_score) || 0)),
-          status: 'draft' as const,
+          status: question.status,
           ai_generated: true,
         })
         .select('id, content_text, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
