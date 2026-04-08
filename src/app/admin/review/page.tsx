@@ -17,10 +17,14 @@ export default async function ReviewPage() {
   try {
     const supabase = createAdminClient()
 
-    // Fetch all draft questions ordered by subtopic, with answers
+    // Fetch all draft questions ordered by subtopic, with answers and images
     const { data: questions, error: qErr } = await supabase
       .from('questions')
-      .select('id, serial_number, content_text, difficulty, question_type, marks, status, exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, parent_question_ref, part_label, ai_extracted, source_question_id, created_at, updated_at, batch_id, answers(id, content, confidence_score, serial_number, status)')
+      .select(`
+        id, serial_number, content_text, difficulty, question_type, marks, status, exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, parent_question_ref, part_label, ai_extracted, source_question_id, created_at, updated_at, batch_id,
+        answers(id, content, confidence_score, serial_number, status),
+        question_images!question_id(id, storage_path, public_url, image_type, sort_order)
+      `)
       .eq('status', 'draft')
       .order('subtopic_id')
 
@@ -54,6 +58,7 @@ export default async function ReviewPage() {
         answer_status: null,
         // Use answer from nested select first, fallback to answerMap for backward compat
         answer: Array.isArray(q.answers) && q.answers.length > 0 ? q.answers[0] : answerMap.get(q.id) ?? null,
+        // question_images already included in q from select
       })) as DraftQuestion[]
     }
   } catch (err) {

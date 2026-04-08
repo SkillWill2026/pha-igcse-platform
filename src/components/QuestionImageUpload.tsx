@@ -20,6 +20,7 @@ interface Props {
   onUploadComplete?: () => void
   batchId?: string | null
   questionNumber?: number | null
+  initialImages?: any[]
 }
 
 interface UploadingFile {
@@ -28,8 +29,8 @@ interface UploadingFile {
   error?: string
 }
 
-export function QuestionImageUpload({ questionId, imageType, onUploadComplete, batchId, questionNumber }: Props) {
-  const [images,    setImages]    = useState<QuestionImageWithDisplay[]>([])
+export function QuestionImageUpload({ questionId, imageType, onUploadComplete, batchId, questionNumber, initialImages }: Props) {
+  const [images,    setImages]    = useState<QuestionImageWithDisplay[]>(initialImages ?? [])
   const [uploading, setUploading] = useState<UploadingFile[]>([])
   const [deleting,  setDeleting]  = useState<Set<string>>(new Set())
   const [showDrawing, setShowDrawing] = useState(false)
@@ -52,7 +53,9 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete, b
     }
   }, [questionId, imageType])
 
-  useEffect(() => { fetchImages() }, [fetchImages])
+  useEffect(() => {
+    if (!initialImages) fetchImages()
+  }, [fetchImages, initialImages])
 
   const handleFiles = useCallback(async (files: File[]) => {
     if (files.length === 0) return

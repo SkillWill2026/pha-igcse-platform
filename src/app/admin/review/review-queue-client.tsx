@@ -42,6 +42,15 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
   const remaining = drafts.length - currentIdx - 1
 
+  // Split images by type for each section
+  const questionImages = useMemo(() => {
+    return currentQuestion?.question_images?.filter((img: any) => img.image_type === 'question') ?? []
+  }, [currentQuestion?.id, currentQuestion?.question_images])
+
+  const answerImages = useMemo(() => {
+    return currentQuestion?.question_images?.filter((img: any) => img.image_type === 'answer') ?? []
+  }, [currentQuestion?.id, currentQuestion?.question_images])
+
   // Update currentQuestion when index changes
   useEffect(() => {
     setCurrentQuestion(drafts[currentIdx] ?? null)
@@ -341,6 +350,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                       imageType="question"
                       batchId={currentQuestion.batch_id ?? null}
                       questionNumber={currentQuestion.parent_question_ref ? parseInt(currentQuestion.parent_question_ref) : null}
+                      initialImages={questionImages}
                     />
                   </div>
                 )}
@@ -457,6 +467,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                 imageType="answer"
                 batchId={currentQuestion.batch_id ?? null}
                 questionNumber={currentQuestion.parent_question_ref ? parseInt(currentQuestion.parent_question_ref) : null}
+                initialImages={answerImages}
               />
             </div>
           )}

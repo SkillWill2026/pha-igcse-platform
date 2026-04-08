@@ -1,5 +1,4 @@
 'use client'
-import '@excalidraw/excalidraw/index.css'
 import dynamic from 'next/dynamic'
 import { useEffect, useRef } from 'react'
 
@@ -10,6 +9,35 @@ const Excalidraw = dynamic(
 
 export default function ExcalidrawEmbedPage() {
   const apiRef = useRef<any>(null)
+
+  useEffect(() => {
+    // Inject Excalidraw CSS — isolated layout strips root CSS imports
+    const styleId = 'excalidraw-icon-fix'
+    if (document.getElementById(styleId)) return
+    const style = document.createElement('style')
+    style.id = styleId
+    style.textContent = `
+      .excalidraw .ToolIcon__icon {
+        width: 2rem !important;
+        height: 2rem !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+      }
+      .excalidraw .ToolIcon__icon svg {
+        width: 1.25rem !important;
+        height: 1.25rem !important;
+        max-width: 1.25rem !important;
+        max-height: 1.25rem !important;
+      }
+      .excalidraw .App-toolbar {
+        height: auto !important;
+        max-height: none !important;
+      }
+    `
+    document.head.appendChild(style)
+    return () => document.getElementById(styleId)?.remove()
+  }, [])
 
   useEffect(() => {
     const handler = async (event: MessageEvent) => {
@@ -42,7 +70,7 @@ export default function ExcalidrawEmbedPage() {
   }, [])
 
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'fixed', top: 0, left: 0 }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <Excalidraw
         excalidrawAPI={(api) => { apiRef.current = api }}
         gridModeEnabled={true}
@@ -51,7 +79,6 @@ export default function ExcalidrawEmbedPage() {
           appState: {
             gridSize: 20,
             viewBackgroundColor: '#ffffff',
-            collaborators: new Map(),
           }
         }}
         UIOptions={{
@@ -59,7 +86,6 @@ export default function ExcalidrawEmbedPage() {
             loadScene: false,
             export: false,
             saveToActiveFile: false,
-            changeViewBackgroundColor: true,
           }
         }}
       />
