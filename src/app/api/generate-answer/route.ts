@@ -71,17 +71,13 @@ export async function POST(request: NextRequest) {
 START your response with exactly these two lines:
 **Working:**
 Step 1:
-
 Then continue with numbered steps showing full working.
 End with:
 **Answer:**
 [final answer with units]
 
-Topic: ${question.subtopics?.name ?? 'Mathematics'}
-Marks: ${question.marks ?? 'N/A'}
-Question: ${question.content_text}
-
-After your markdown working and answer, output JSON: {"step_by_step": ["..."], "final_answer": "...", "mark_scheme": "...", "confidence_score": 0.8}`
+Topic: ${question.subtopics?.name ?? 'Mathematics'}, Marks: ${question.marks ?? 'N/A'}
+Question: ${question.content_text}`
           }
         ]
       })
@@ -97,24 +93,13 @@ After your markdown working and answer, output JSON: {"step_by_step": ["..."], "
     const raw = generatedContent.trim()
     console.log('[generate-answer] AI raw response (first 200):', raw.slice(0, 200))
 
-    // Extract JSON from mixed markdown + JSON response
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      console.log('[generate-answer] No JSON found, raw:', raw.slice(0, 500))
-      return NextResponse.json({ error: 'AI did not return JSON', raw }, { status: 502 })
+    // Use full markdown response as answer content
+    const aiAnswer: AIAnswer = {
+      step_by_step: [],
+      final_answer: raw,
+      mark_scheme: '',
+      confidence_score: 0.75
     }
-
-    let aiAnswer: AIAnswer
-    try {
-      aiAnswer = JSON.parse(jsonMatch[0])
-      if (!aiAnswer.step_by_step || !Array.isArray(aiAnswer.step_by_step)) {
-        throw new Error('Missing step_by_step array')
-      }
-    } catch {
-      console.log('[generate-answer] JSON parse failed, raw:', raw.slice(0, 500))
-      return NextResponse.json({ error: 'AI returned malformed JSON', raw }, { status: 502 })
-    }
-    console.log('[generate-answer] parsed OK — steps:', aiAnswer.step_by_step.length)
 
     // ── Check-then-branch: update existing or insert new ──────────────────────
     console.log('[generate-answer] Checking for existing answer for question:', question_id)
