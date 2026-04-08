@@ -25,12 +25,17 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [actionLoading, setActionLoading] = useState(false)
   const [generatingAnswer, setGeneratingAnswer] = useState(false)
   const [currentQuestion, setCurrentQuestion] = useState(drafts[currentIdx] ?? null)
+  const [editing, setEditing] = useState(false)
+  const [editedText, setEditedText] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
 
   const remaining = drafts.length - currentIdx - 1
 
   // Update currentQuestion when index changes
   useEffect(() => {
     setCurrentQuestion(drafts[currentIdx] ?? null)
+    setEditing(false)
+    setEditedText('')
   }, [currentIdx, drafts])
 
   // Keyboard shortcuts
@@ -147,6 +152,45 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
   }
 
+  async function handleSaveEdit() {
+    if (!currentQuestion || editSaving || !editedText.trim()) return
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/questions/${currentQuestion.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editedText.trim() }),
+      })
+
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        throw new Error(d.error ?? 'Save failed')
+      }
+
+      // Update current question with new content
+      setCurrentQuestion((q) => q ? { ...q, content_text: editedText.trim() } : null)
+      setEditing(false)
+      setEditedText('')
+      toast.success('Question updated')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Save failed'
+      toast.error(msg)
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  function handleCancelEdit() {
+    setEditing(false)
+    setEditedText('')
+  }
+
+  function handleStartEdit() {
+    if (!currentQuestion) return
+    setEditedText(currentQuestion.content_text)
+    setEditing(true)
+  }
+
   function handleNext() {
     if (currentIdx < drafts.length - 1) {
       setCurrentIdx(currentIdx + 1)
@@ -221,15 +265,13 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             <span className={`inline-flex items-center rounded px-2 py-0.5 font-mono text-xs font-semibold ${serialBadgeColor(currentQuestion.status)}`}>
               {displayQuestionSerial(currentQuestion.serial_number, currentQuestion.status)}
             </span>
-            <a
-              href={`/admin/questions/${currentQuestion.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-muted transition-colors"
-              title="Open in new tab"
+            <button
+              onClick={handleStartEdit}
+              disabled={editing}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-muted transition-colors disabled:opacity-60"
             >
-              ✏ Edit
-            </a>
+              ✏ {editing ? 'Editing...' : 'Edit'}
+            </button>
           </div>
 
           {/* Breadcrumb */}
@@ -246,9 +288,37 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           {/* Question content */}
           <section className="space-y-3">
             <h3 className="font-semibold">Question</h3>
-            <div className="rounded-lg border bg-muted/30 p-4">
-              <MathRenderer text={currentQuestion.content_text} />
-            </div>
+            {editing ? (
+              <div className="space-y-3">
+                <textarea
+                  value={editedText}
+                  onChange={(e) => setEditedText(e.target.value)}
+                  className="w-full h-48 p-4 rounded-lg border bg-white text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Question content..."
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={editSaving || !editedText.trim()}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓'}
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    disabled={editSaving}
+                    className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md bg-gray-300 text-gray-800 hover:bg-gray-400 disabled:opacity-50"
+                  >
+                    ✗ Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <MathRenderer text={currentQuestion.content_text} />
+              </div>
+            )}
           </section>
 
           {/* Metadata */}

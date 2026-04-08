@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Fetch question flat — no PostgREST join syntax to avoid FK constraint failures
     const { data: question, error: qErr } = await supabase
       .from('questions')
-      .select('id, content_text, difficulty, question_type, marks, status, topic_id, subtopic_id, exam_board_id')
+      .select('id, content_text, difficulty, question_type, marks, status, topic_id, subtopic_id, sub_subtopic_id, exam_board_id')
       .eq('id', question_id)
       .single()
 
@@ -35,12 +35,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch related rows separately
-    const [topicRes, subtopicRes, boardRes] = await Promise.all([
+    const [topicRes, subtopicRes, sstRes, boardRes] = await Promise.all([
       question.topic_id
         ? supabase.from('topics').select('ref, name').eq('id', question.topic_id).single()
         : Promise.resolve({ data: null }),
       question.subtopic_id
         ? supabase.from('subtopics').select('ref, title').eq('id', question.subtopic_id).single()
+        : Promise.resolve({ data: null }),
+      question.sub_subtopic_id
+        ? supabase.from('sub_subtopics').select('outcome').eq('id', question.sub_subtopic_id).single()
         : Promise.resolve({ data: null }),
       question.exam_board_id
         ? supabase.from('exam_boards').select('name').eq('id', question.exam_board_id).single()
@@ -49,6 +52,7 @@ export async function POST(request: NextRequest) {
 
     const topic    = topicRes.data
     const subtopic = subtopicRes.data
+    const sst      = sstRes.data
     const board    = boardRes.data
 
     console.log('[generate-answer] question loaded:', question_id)
@@ -56,14 +60,17 @@ export async function POST(request: NextRequest) {
     const anthropic = createAnthropicClient()
 
     const systemPrompt =
-      'You are an expert Cambridge IGCSE Mathematics tutor. Generate a complete worked solution for this exam question. Return JSON with: step_by_step (array of strings, each a clear working step using LaTeX for math), final_answer (string), mark_scheme (string describing what earns marks), confidence_score (0.0 to 1.0).'
+      'You are an expert IGCSE Mathematics tutor. Generate a complete worked solution with this EXACT structure:\n\n**Working:**\n[Show every step clearly numbered, e.g. Step 1: ... Step 2: ... Step 3: ...]\n\n**Answer:**\n[State the final answer clearly, with units if applicable]\n\nReturn valid JSON with: step_by_step (array of strings, each a step), final_answer (string), mark_scheme (string), confidence_score (0.0 to 1.0).'
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subtopicName = subtopic ? (subtopic as any).title ?? '' : ''
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sstOutcome = sst ? (sst as any).outcome ?? '' : ''
 
     const context = [
-      `Exam: Cambridge IGCSE Mathematics 0580`,
-      topic    ? `Topic: ${topic.ref} – ${topic.name}`       : '',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      subtopic ? `Subtopic: ${subtopic.ref} – ${(subtopic as any).title ?? ''}` : '',
-      `Type: ${question.question_type}  |  Marks: ${question.marks}  |  Difficulty: ${question.difficulty}/5`,
+      `Topic: ${topic?.name ?? 'Mathematics'}`,
+      `Sub-topic: ${subtopicName}`,
+      `Marks: ${question.marks ?? 'N/A'}`,
     ].filter(Boolean).join('\n')
 
     // ── Retry logic for 529 overloaded_error ──────────────────────────────────
