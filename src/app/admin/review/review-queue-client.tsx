@@ -397,9 +397,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         </div>
 
         {/* Right panel - Answer */}
-        <div className="flex-[2] rounded-lg border bg-muted/20 p-5">
+        <div className="flex-[2] rounded-lg border bg-muted/20 p-5 flex flex-col space-y-4">
           {currentQuestion.answer ? (
-            <div className="space-y-4">
+            <>
               <div className="text-sm font-semibold">Answer</div>
               <div className="prose prose-sm max-w-none leading-relaxed">
                 <ReactMarkdown
@@ -409,46 +409,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                   {currentQuestion.answer.content ?? ''}
                 </ReactMarkdown>
               </div>
-
-              {/* Answer images */}
-              {currentQuestion && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-semibold mb-3">Answer Images</h4>
-                  <div className="flex gap-2 mb-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setDrawingTarget('answer')
-                        setShowDrawing(true)
-                      }}
-                    >
-                      ✏️ Draw
-                    </Button>
-                    {currentQuestion.batch_id && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setDrawingTarget('answer')
-                          setShowCropper(true)
-                        }}
-                      >
-                        📄 Crop from PDF
-                      </Button>
-                    )}
-                  </div>
-                  <QuestionImageUpload
-                    questionId={currentQuestion.id}
-                    imageType="answer"
-                    batchId={currentQuestion.batch_id ?? null}
-                    questionNumber={currentQuestion.parent_question_ref ? parseInt(currentQuestion.parent_question_ref) : null}
-                  />
-                </div>
-              )}
-            </div>
+            </>
           ) : (
-            <div className="text-center py-12 space-y-4">
+            <div className="text-center py-8 space-y-4">
               <div className="text-muted-foreground">
                 <p className="mb-2">No answer yet</p>
                 <p className="text-xs">Generate one now or approve to generate later</p>
@@ -467,6 +430,43 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                   '✨ Generate Answer'
                 )}
               </button>
+            </div>
+          )}
+
+          {/* Answer images - always visible */}
+          {currentQuestion && (
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-semibold mb-3">Answer Images</h4>
+              <div className="flex gap-2 mb-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDrawingTarget('answer')
+                    setShowDrawing(true)
+                  }}
+                >
+                  ✏️ Draw
+                </Button>
+                {currentQuestion.batch_id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setDrawingTarget('answer')
+                      setShowCropper(true)
+                    }}
+                  >
+                    📄 Crop from PDF
+                  </Button>
+                )}
+              </div>
+              <QuestionImageUpload
+                questionId={currentQuestion.id}
+                imageType="answer"
+                batchId={currentQuestion.batch_id ?? null}
+                questionNumber={currentQuestion.parent_question_ref ? parseInt(currentQuestion.parent_question_ref) : null}
+              />
             </div>
           )}
         </div>

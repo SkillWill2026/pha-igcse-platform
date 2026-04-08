@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
     let pdfStoragePath: string | null = null
     if (isPDF && batch_id) {
       try {
+        console.log('[ingest] Storing PDF to Supabase Storage...', { batchId: batch_id, fileName: file.name, fileSize: buffer.length })
         const { data: uploadData, error: uploadErr } = await supabase.storage
           .from('pdfs')
           .upload(`${batch_id}/${file.name}`, buffer, {
@@ -86,13 +87,18 @@ export async function POST(request: NextRequest) {
           })
 
         if (uploadErr) {
-          console.warn('[ingest] PDF storage upload warning:', uploadErr.message)
+          console.error('[ingest] PDF storage failed:', { code: uploadErr.name, message: uploadErr.message })
         } else if (uploadData?.path) {
           pdfStoragePath = uploadData.path
+          console.log('[ingest] PDF stored successfully at:', pdfStoragePath)
         }
       } catch (err) {
-        console.warn('[ingest] PDF storage exception:', err instanceof Error ? err.message : String(err))
+        console.error('[ingest] PDF storage exception:', err instanceof Error ? err.message : String(err))
       }
+    } else if (!isPDF) {
+      console.log('[ingest] Not a PDF file, skipping PDF storage')
+    } else if (!batch_id) {
+      console.log('[ingest] No batch_id provided, skipping PDF storage')
     }
 
     // ── Fetch subtopic + topic for context (skipped for mixed) ──────────────

@@ -93,8 +93,11 @@ export function DrawingModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-      <div className="w-[95vw] h-[92vh] bg-white rounded-xl shadow-2xl flex flex-col">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
+      <div
+        className="relative flex flex-col bg-white rounded-xl shadow-2xl"
+        style={{ width: '95vw', height: '90vh', minWidth: '900px' }}
+      >
         {/* Header */}
         <div className="border-b p-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">✏️ Draw Diagram</h2>
@@ -109,7 +112,7 @@ export function DrawingModal({
         </div>
 
         {/* Excalidraw canvas */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 relative" style={{ minHeight: '400px', overflow: 'visible' }}>
           <ExcalidrawComponent
             excalidrawAPI={(api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api)}
             onChange={() => {}}

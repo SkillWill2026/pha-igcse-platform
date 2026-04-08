@@ -54,7 +54,7 @@ export function AnswerReviewClient({ answer }: { answer: AnswerWithQuestion }) {
   async function handleApprove() {
     setIsApproving(true)
     try {
-      await patchAnswer({ content_text: contentText, mark_scheme: markScheme, status: 'approved' })
+      await patchAnswer({ content: contentText, mark_scheme: markScheme, status: 'approved' })
       setStatus('approved')
       toast.success('Answer approved')
       router.refresh()

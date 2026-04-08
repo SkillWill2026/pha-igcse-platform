@@ -17,7 +17,7 @@ export default async function AnswersPage() {
     const [aRes, qRes] = await Promise.all([
       supabase
         .from('answers')
-        .select('id, content_text, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at, question_id')
+        .select('id, content, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at, question_id')
         .order('created_at', { ascending: false }),
       supabase
         .from('questions')

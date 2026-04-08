@@ -200,7 +200,7 @@ export function AnswersStatusLibrary({ answers: allAnswers, mode }: Props) {
                 const isSelected = selectedIds.has(a.id)
                 const aStatus = a.status
                 const qStatus = a.questions?.status ?? 'draft'
-                const preview = (a.content_text ?? '').substring(0, 80).trim() + (a.content_text && a.content_text.length > 80 ? '…' : '')
+                const preview = (a.content ?? '').substring(0, 80).trim() + (a.content && a.content.length > 80 ? '…' : '')
                 const createdDate = new Date(a.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' })
 
                 return (
