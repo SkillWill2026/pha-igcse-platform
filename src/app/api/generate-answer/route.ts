@@ -76,6 +76,12 @@ End with:
 **Answer:**
 [final answer with units]
 
+Use LaTeX notation for ALL mathematical expressions:
+- Inline math: $expression$ (e.g. $x^2$, $\frac{a}{b}$, $\sqrt{x}$)
+- Display math: $$expression$$ for standalone equations
+- Examples: $8000 \times (0.75)^3$, $\frac{360° - 48°}{360°} \times \pi r^2$
+Always use LaTeX for fractions, powers, roots, and Greek letters.
+
 Topic: ${question.subtopics?.name ?? 'Mathematics'}, Marks: ${question.marks ?? 'N/A'}
 Question: ${question.content_text}`
           }

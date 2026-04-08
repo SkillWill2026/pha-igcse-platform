@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { ArrowLeft, ArrowRight, Check, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MathRenderer } from '@/components/admin/math-renderer'
@@ -358,7 +360,12 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             <div className="space-y-4">
               <div className="text-sm font-semibold">Answer</div>
               <div className="prose prose-sm max-w-none leading-relaxed">
-                <ReactMarkdown>{currentQuestion.answer.content ?? ''}</ReactMarkdown>
+                <ReactMarkdown
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                >
+                  {currentQuestion.answer.content ?? ''}
+                </ReactMarkdown>
               </div>
 
               {/* Answer images */}
