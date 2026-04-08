@@ -1,4 +1,5 @@
 'use client'
+import '@excalidraw/excalidraw/index.css'
 import dynamic from 'next/dynamic'
 import { useEffect, useRef } from 'react'
 
