@@ -1,8 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import dynamic from 'next/dynamic'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Loader2, X } from 'lucide-react'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ExcalidrawImperativeAPI = any
+
+const ExcalidrawComponent = dynamic(
+  async () => {
+    const mod = await import('@excalidraw/excalidraw')
+    return { default: mod.Excalidraw }
+  },
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-96 text-gray-400">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        Loading canvas...
+      </div>
+    ),
+  }
+)
 
 interface Props {
   isOpen: boolean
@@ -17,50 +37,53 @@ export function DrawingModal({
   onClose,
   onSave,
   questionId,
-  imageType
+  imageType,
 }: Props) {
+  const excalidrawAPI = useRef<ExcalidrawImperativeAPI | null>(null)
   const [saving, setSaving] = useState(false)
 
   if (!isOpen) return null
 
   async function handleSave() {
+    if (!excalidrawAPI.current) {
+      alert('Canvas not ready yet, please try again')
+      return
+    }
+
     setSaving(true)
     try {
-      // Placeholder: create a simple colored canvas as proof of concept
-      const canvas = document.createElement('canvas')
-      canvas.width = 800
-      canvas.height = 600
-      const ctx = canvas.getContext('2d')
-      if (!ctx) throw new Error('Could not get canvas context')
+      // Lazy-load exportToBlob to avoid build issues
+      const { exportToBlob } = await import('@excalidraw/excalidraw')
 
-      // Draw a simple placeholder
-      ctx.fillStyle = '#f0f0f0'
-      ctx.fillRect(0, 0, 800, 600)
-      ctx.fillStyle = '#333'
-      ctx.font = '24px Arial'
-      ctx.fillText('Drawing placeholder', 250, 300)
+      const blob = await exportToBlob({
+        elements: excalidrawAPI.current.getSceneElements(),
+        appState: {
+          ...excalidrawAPI.current.getAppState(),
+          exportBackground: true,
+          exportWithDarkMode: false,
+        },
+        files: excalidrawAPI.current.getFiles(),
+        mimeType: 'image/png',
+      })
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) throw new Error('Failed to create blob')
+      // Upload to Supabase via existing endpoint
+      const formData = new FormData()
+      formData.append('file', new File([blob], `drawing-${Date.now()}.png`, { type: 'image/png' }))
+      formData.append('question_id', questionId)
+      formData.append('image_type', imageType)
 
-        const formData = new FormData()
-        formData.append('file', new File([blob], `drawing-${Date.now()}.png`, { type: 'image/png' }))
-        formData.append('question_id', questionId)
-        formData.append('image_type', imageType)
+      const res = await fetch('/api/question-images', {
+        method: 'POST',
+        body: formData,
+      })
 
-        const res = await fetch('/api/question-images', {
-          method: 'POST',
-          body: formData
-        })
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        throw new Error(d.error ?? 'Upload failed')
+      }
 
-        if (!res.ok) {
-          const d = await res.json() as { error?: string }
-          throw new Error(d.error ?? 'Upload failed')
-        }
-
-        const { public_url: url, storage_path: path } = await res.json() as { public_url: string; storage_path: string }
-        onSave(url, path)
-      }, 'image/png')
+      const { public_url: url, storage_path: path } = await res.json() as { public_url: string; storage_path: string }
+      onSave(url, path)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Save failed'
       alert(msg)
@@ -85,13 +108,15 @@ export function DrawingModal({
           </button>
         </div>
 
-        {/* Canvas placeholder */}
-        <div className="flex-1 overflow-hidden bg-gray-100 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <p className="text-lg text-gray-600">Drawing canvas placeholder</p>
-            <p className="text-sm text-gray-500">Full Excalidraw integration coming soon</p>
-            <p className="text-xs text-gray-400">Click Save to upload placeholder image</p>
-          </div>
+        {/* Excalidraw canvas */}
+        <div className="flex-1 overflow-hidden">
+          <ExcalidrawComponent
+            onChange={() => {}}
+            onPointerUpdate={() => {}}
+            onScrollChange={() => {}}
+            ref={excalidrawAPI}
+            gridModeEnabled={true}
+          />
         </div>
 
         {/* Footer */}
