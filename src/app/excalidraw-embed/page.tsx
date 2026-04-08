@@ -45,7 +45,22 @@ export default function ExcalidrawEmbedPage() {
       <Excalidraw
         excalidrawAPI={(api) => { apiRef.current = api }}
         gridModeEnabled={true}
-        initialData={{ appState: { gridSize: 20 } }}
+        initialData={{
+          elements: [],
+          appState: {
+            gridSize: 20,
+            viewBackgroundColor: '#ffffff',
+            collaborators: new Map(),
+          }
+        }}
+        UIOptions={{
+          canvasActions: {
+            loadScene: false,
+            export: false,
+            saveToActiveFile: false,
+            changeViewBackgroundColor: true,
+          }
+        }}
       />
     </div>
   )

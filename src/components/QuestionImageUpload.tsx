@@ -96,20 +96,23 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete, b
     onUploadComplete?.()
   }, [questionId, imageType, fetchImages, onUploadComplete])
 
-  // Clipboard paste support
-  useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items
-      if (!items) return
-      const imageItems = Array.from(items).filter((item) => item.type.startsWith('image/'))
-      if (imageItems.length === 0) return
-      const files = imageItems
-        .map((item) => item.getAsFile())
-        .filter((f): f is File => f !== null)
-      if (files.length > 0) handleFiles(files)
+  // Clipboard paste support - explicit button only (not global)
+  const handlePasteButton = useCallback(async () => {
+    try {
+      const clipboardItems = await navigator.clipboard.read()
+      for (const item of clipboardItems) {
+        const imageType_mime = item.types.find(t => t.startsWith('image/'))
+        if (imageType_mime) {
+          const blob = await item.getType(imageType_mime)
+          const file = new File([blob], `paste-${Date.now()}.png`, { type: imageType_mime })
+          await handleFiles([file])
+          return
+        }
+      }
+    } catch (err) {
+      console.error('Failed to read clipboard:', err)
+      alert('Could not paste from clipboard. Try dragging and dropping an image instead.')
     }
-    window.addEventListener('paste', handlePaste)
-    return () => window.removeEventListener('paste', handlePaste)
   }, [handleFiles])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -156,6 +159,12 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete, b
             📄 Crop from PDF
           </button>
         )}
+        <button
+          onClick={handlePasteButton}
+          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md hover:bg-muted transition-colors"
+        >
+          📋 Paste
+        </button>
       </div>
 
       {/* Drop zone */}
