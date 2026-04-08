@@ -308,6 +308,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                     <QuestionImageUpload
                       questionId={currentQuestion.id}
                       imageType="question"
+                      batchId={currentQuestion.batch_id ?? null}
+                      questionNumber={currentQuestion.parent_question_ref ? parseInt(currentQuestion.parent_question_ref) : null}
                     />
                   </div>
                 )}
@@ -375,6 +377,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                   <QuestionImageUpload
                     questionId={currentQuestion.id}
                     imageType="answer"
+                    batchId={currentQuestion.batch_id ?? null}
+                    questionNumber={currentQuestion.parent_question_ref ? parseInt(currentQuestion.parent_question_ref) : null}
                   />
                 </div>
               )}

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { ImageIcon, Loader2, Trash2, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { DrawingModal } from '@/components/DrawingModal'
+import { PDFCropModal } from '@/components/PDFCropModal'
 import type { QuestionImage } from '@/types/database'
 
 interface QuestionImageWithDisplay extends QuestionImage {
@@ -14,6 +16,8 @@ interface Props {
   questionId: string
   imageType: 'question' | 'answer' | 'diagram'
   onUploadComplete?: () => void
+  batchId?: string | null
+  questionNumber?: number | null
 }
 
 interface UploadingFile {
@@ -22,10 +26,12 @@ interface UploadingFile {
   error?: string
 }
 
-export function QuestionImageUpload({ questionId, imageType, onUploadComplete }: Props) {
+export function QuestionImageUpload({ questionId, imageType, onUploadComplete, batchId, questionNumber }: Props) {
   const [images,    setImages]    = useState<QuestionImageWithDisplay[]>([])
   const [uploading, setUploading] = useState<UploadingFile[]>([])
   const [deleting,  setDeleting]  = useState<Set<string>>(new Set())
+  const [showDrawing, setShowDrawing] = useState(false)
+  const [showCropper, setShowCropper] = useState(false)
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -132,6 +138,24 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete }:
 
   return (
     <div className="space-y-3">
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowDrawing(true)}
+          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md hover:bg-muted transition-colors"
+        >
+          ✏️ Draw
+        </button>
+        {batchId && (
+          <button
+            onClick={() => setShowCropper(true)}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md hover:bg-muted transition-colors"
+          >
+            📄 Crop from PDF
+          </button>
+        )}
+      </div>
+
       {/* Drop zone */}
       <div
         {...getRootProps()}
@@ -202,6 +226,32 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete }:
             </div>
           ))}
         </div>
+      )}
+
+      {/* Modals */}
+      <DrawingModal
+        isOpen={showDrawing}
+        onClose={() => setShowDrawing(false)}
+        onSave={() => {
+          fetchImages()
+          setShowDrawing(false)
+        }}
+        questionId={questionId}
+        imageType={imageType as 'question' | 'answer'}
+      />
+      {batchId && (
+        <PDFCropModal
+          isOpen={showCropper}
+          onClose={() => setShowCropper(false)}
+          onSave={() => {
+            fetchImages()
+            setShowCropper(false)
+          }}
+          questionId={questionId}
+          batchId={batchId}
+          questionNumber={questionNumber ?? null}
+          imageType={imageType as 'question' | 'answer'}
+        />
       )}
     </div>
   )

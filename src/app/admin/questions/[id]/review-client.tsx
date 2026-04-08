@@ -485,7 +485,12 @@ export function ReviewClient({
           {/* Question images */}
           <section className="space-y-2">
             <Label>Question images</Label>
-            <QuestionImageUpload questionId={question.id} imageType="question" />
+            <QuestionImageUpload
+              questionId={question.id}
+              imageType="question"
+              batchId={question.batch_id ?? null}
+              questionNumber={question.parent_question_ref ? parseInt(question.parent_question_ref) : null}
+            />
           </section>
 
           {/* Legacy single image upload */}
@@ -665,7 +670,12 @@ export function ReviewClient({
               {/* Answer images */}
               <section className="space-y-2">
                 <Label>Answer images</Label>
-                <QuestionImageUpload questionId={question.id} imageType="answer" />
+                <QuestionImageUpload
+                  questionId={question.id}
+                  imageType="answer"
+                  batchId={question.batch_id ?? null}
+                  questionNumber={question.parent_question_ref ? parseInt(question.parent_question_ref) : null}
+                />
               </section>
 
               {/* AI confidence score */}

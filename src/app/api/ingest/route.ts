@@ -71,8 +71,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Fetch subtopic + topic for context (skipped for mixed) ──────────────
+    // ── Initialize Supabase client ───────────────────────────────────────────
     const supabase = createAdminClient()
+
+    // ── Store the original PDF to Supabase Storage ──────────────────────────
+    let pdfStoragePath: string | null = null
+    if (isPDF && batch_id) {
+      try {
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('pdfs')
+          .upload(`${batch_id}/${file.name}`, buffer, {
+            contentType: 'application/pdf',
+            upsert: false,
+          })
+
+        if (uploadErr) {
+          console.warn('[ingest] PDF storage upload warning:', uploadErr.message)
+        } else if (uploadData?.path) {
+          pdfStoragePath = uploadData.path
+        }
+      } catch (err) {
+        console.warn('[ingest] PDF storage exception:', err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    // ── Fetch subtopic + topic for context (skipped for mixed) ──────────────
 
     let subtopic: { ref: string; name: string; topic_id: string } | null = null
     let topic: { ref: string; name: string } | null = null
@@ -229,6 +252,21 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
         { error: 'No questions were successfully inserted. All may be duplicates or invalid.', details: errors },
         { status: 422 },
       )
+    }
+
+    // ── Update upload_batches with PDF path ──────────────────────────────────
+    if (batch_id && pdfStoragePath) {
+      try {
+        await supabase
+          .from('upload_batches')
+          .update({
+            source_pdf_path: pdfStoragePath,
+            source_file_name: file.name,
+          })
+          .eq('id', batch_id)
+      } catch (err) {
+        console.warn('[ingest] Failed to update upload_batches with PDF path:', err instanceof Error ? err.message : String(err))
+      }
     }
 
     // Merge subtopic_ref back for the UI (best-effort from AI or context)
