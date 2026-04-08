@@ -5,10 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { ImageIcon, Loader2, Trash2, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { PDFCropModal } from '@/components/PDFCropModal'
+import type { QuestionImage } from '@/types/database'
 
 const DrawingModal = dynamic(() => import('@/components/DrawingModal'), { ssr: false })
-import type { QuestionImage } from '@/types/database'
+const PDFCropModal = dynamic(() => import('@/components/PDFCropModal').then(m => m.PDFCropModal), { ssr: false })
 
 interface QuestionImageWithDisplay extends QuestionImage {
   display_url: string | null
