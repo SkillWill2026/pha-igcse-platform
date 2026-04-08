@@ -20,6 +20,7 @@ export default async function QuestionReviewPage({
   let allSubtopics: { id: string; ref: string; title: string; topic_id: string }[] = []
   let allTopics: { id: string; ref: string; name: string }[] = []
   let allSubSubtopics: { id: string; ref: string; title: string; subtopic_id: string }[] = []
+  let answerImages: string[] = []
 
   try {
     const supabase = createAdminClient()
@@ -75,12 +76,29 @@ export default async function QuestionReviewPage({
     // Fetch linked answer
     const { data: answerData } = await supabase
       .from('answers')
-      .select('id, question_id, content_text, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
+      .select('id, question_id, content, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
       .eq('question_id', params.id)
       .maybeSingle()
 
     if (answerData) {
       answer = answerData as AnswerRow
+
+      // Fetch answer images
+      const { data: answerImgRows } = await supabase
+        .from('question_images')
+        .select('id, storage_path, image_type, sort_order')
+        .eq('question_id', params.id)
+        .eq('image_type', 'answer')
+        .order('sort_order', { ascending: true })
+
+      answerImages = await Promise.all(
+        (answerImgRows ?? []).map(async img => {
+          const { data } = await supabase.storage
+            .from('question-images')
+            .createSignedUrl(img.storage_path, 3600)
+          return data?.signedUrl ?? ''
+        })
+      ).then(urls => urls.filter(Boolean))
     }
 
   } catch (err) {
@@ -115,6 +133,7 @@ export default async function QuestionReviewPage({
       <ReviewClient
         question={question!}
         answer={answer}
+        answerImages={answerImages}
         allBoards={allBoards}
         allSubtopics={allSubtopics}
         allTopics={allTopics}

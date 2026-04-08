@@ -14,6 +14,8 @@ export default function DrawingModal({
   isOpen, onClose, onSave, questionId, imageType
 }: DrawingModalProps) {
   const [saving, setSaving] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
@@ -63,6 +65,39 @@ export default function DrawingModal({
     iframeRef.current?.contentWindow?.postMessage({ type: 'EXPORT_PNG' }, '*')
   }
 
+  const handleCopy = async () => {
+    if (!iframeRef.current?.contentWindow) return
+    setCopying(true)
+    setError(null)
+
+    const timeout = setTimeout(() => {
+      setCopying(false)
+      setError('Copy timed out')
+    }, 15000)
+
+    const handler = async (event: MessageEvent) => {
+      if (event.data?.type !== 'EXPORT_RESULT') return
+      clearTimeout(timeout)
+      window.removeEventListener('message', handler)
+      try {
+        const res = await fetch(event.data.dataUrl)
+        const blob = await res.blob()
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ])
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        setError('Copy failed — browser may not support clipboard images')
+      } finally {
+        setCopying(false)
+      }
+    }
+
+    window.addEventListener('message', handler)
+    iframeRef.current.contentWindow.postMessage({ type: 'EXPORT_PNG' }, '*')
+  }
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 100,
@@ -77,8 +112,11 @@ export default function DrawingModal({
         <span style={{ fontSize: '18px', fontWeight: 600 }}>✏️ Draw Diagram</span>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           {error && <span style={{ color: '#dc2626', fontSize: '13px' }}>{error}</span>}
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button variant="outline" onClick={onClose} disabled={saving || copying}>Cancel</Button>
+          <Button variant="outline" onClick={handleCopy} disabled={copying || saving}>
+            {copied ? '✅ Copied!' : copying ? 'Copying...' : '📋 Copy'}
+          </Button>
+          <Button onClick={handleSave} disabled={saving || copying}>
             {saving ? 'Saving...' : '💾 Save as Image'}
           </Button>
         </div>
