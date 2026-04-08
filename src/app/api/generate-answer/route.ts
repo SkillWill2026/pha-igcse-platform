@@ -118,7 +118,7 @@ Question: ${question.content_text}`
       const updateRes = await supabase
         .from('answers')
         .update({
-          content_text: String(aiAnswer.final_answer ?? ''),
+          content: String(aiAnswer.final_answer ?? ''),
           step_by_step: aiAnswer.step_by_step.map(String),
           mark_scheme: String(aiAnswer.mark_scheme ?? ''),
           confidence_score: Math.min(1, Math.max(0, Number(aiAnswer.confidence_score) || 0)),
@@ -127,7 +127,7 @@ Question: ${question.content_text}`
           updated_at: new Date().toISOString(),
         })
         .eq('id', existing.id)
-        .select('id, content_text, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
+        .select('id, content, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
         .single()
 
       dbErr = updateRes.error
@@ -138,14 +138,14 @@ Question: ${question.content_text}`
         .from('answers')
         .insert({
           question_id,
-          content_text: String(aiAnswer.final_answer ?? ''),
+          content: String(aiAnswer.final_answer ?? ''),
           step_by_step: aiAnswer.step_by_step.map(String),
           mark_scheme: String(aiAnswer.mark_scheme ?? ''),
           confidence_score: Math.min(1, Math.max(0, Number(aiAnswer.confidence_score) || 0)),
           status: question.status,
           ai_generated: true,
         })
-        .select('id, content_text, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
+        .select('id, content, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
         .single()
 
       dbErr = insertRes.error

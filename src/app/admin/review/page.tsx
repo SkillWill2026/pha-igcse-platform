@@ -20,7 +20,7 @@ export default async function ReviewPage() {
     // Fetch all draft questions ordered by subtopic, with answers
     const { data: questions, error: qErr } = await supabase
       .from('questions')
-      .select('id, serial_number, content_text, difficulty, question_type, marks, status, exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, parent_question_ref, part_label, ai_extracted, source_question_id, created_at, updated_at, batch_id, answers(id, content_text, confidence_score, serial_number, status)')
+      .select('id, serial_number, content_text, difficulty, question_type, marks, status, exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, parent_question_ref, part_label, ai_extracted, source_question_id, created_at, updated_at, batch_id, answers(id, content, confidence_score, serial_number, status)')
       .eq('status', 'draft')
       .order('subtopic_id')
 

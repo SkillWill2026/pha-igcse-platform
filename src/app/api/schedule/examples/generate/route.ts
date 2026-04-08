@@ -60,11 +60,11 @@ export async function POST(request: NextRequest) {
     const questionIds = (questionsRaw ?? []).map((q) => q.id)
 
     // Fetch answers for those questions separately
-    let answersRaw: { question_id: string; content_text: string; step_by_step: string[]; mark_scheme: string; status: string }[] = []
+    let answersRaw: { question_id: string; content: string; step_by_step: string[]; mark_scheme: string; status: string }[] = []
     if (questionIds.length > 0) {
       const { data: aData } = await supabase
         .from('answers')
-        .select('question_id, content_text, step_by_step, mark_scheme, status')
+        .select('question_id, content, step_by_step, mark_scheme, status')
         .in('question_id', questionIds)
       answersRaw = (aData ?? []) as typeof answersRaw
     }
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         question:     q.content_text,
         marks:        q.marks,
         type:         q.question_type,
-        answer:       ans?.content_text ?? '',
+        answer:       ans?.content ?? '',
         steps:        (ans?.step_by_step ?? []).join('\n'),
         mark_scheme:  ans?.mark_scheme ?? '',
       }
@@ -159,18 +159,18 @@ ${JSON.stringify(qContext, null, 2)}`
         // Prepend explanation to the approved answer's content_text
         const { data: ans } = await supabase
           .from('answers')
-          .select('id, content_text')
+          .select('id, content')
           .eq('question_id', ex.question_id)
           .eq('status', 'approved')
           .single()
 
         if (ans) {
           const newText = ex.explanation
-            ? `${ex.explanation}\n\n---\n\n${ans.content_text}`
-            : ans.content_text
+            ? `${ex.explanation}\n\n---\n\n${ans.content}`
+            : ans.content
           await supabase
             .from('answers')
-            .update({ content_text: newText })
+            .update({ content: newText })
             .eq('id', ans.id)
         }
       }
@@ -179,16 +179,16 @@ ${JSON.stringify(qContext, null, 2)}`
     // Return updated examples list (flat fetch, no embedded join)
     const { data: exampleQs } = await supabase
       .from('questions')
-      .select('id, content_text')
+      .select('id, content')
       .eq('subtopic_id', subtopic_id)
       .eq('is_example', true)
 
     const exampleIds = (exampleQs ?? []).map((q) => q.id)
-    let exampleAnswers: { question_id: string; id: string; content_text: string; step_by_step: string[]; status: string }[] = []
+    let exampleAnswers: { question_id: string; id: string; content: string; step_by_step: string[]; status: string }[] = []
     if (exampleIds.length > 0) {
       const { data: eaData } = await supabase
         .from('answers')
-        .select('question_id, id, content_text, step_by_step, status')
+        .select('question_id, id, content, step_by_step, status')
         .in('question_id', exampleIds)
       exampleAnswers = (eaData ?? []) as typeof exampleAnswers
     }

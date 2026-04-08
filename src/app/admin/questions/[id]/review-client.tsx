@@ -67,7 +67,7 @@ export function ReviewClient({
 
   // ── Answer state ───────────────────────────────────────────────────────────
   const [answer,        setAnswer]        = useState<AnswerRow | null>(initialAnswer)
-  const [answerContent, setAnswerContent] = useState(initialAnswer?.content_text ?? '')
+  const [answerContent, setAnswerContent] = useState(initialAnswer?.content ?? '')
   const [isSavingAnswer, setIsSavingAnswer] = useState(false)
 
   const relevantSubSubtopics = useMemo(() => {
@@ -295,7 +295,7 @@ export function ReviewClient({
       const res = await fetch(`/api/answers/${answer.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content_text: answerContent }),
+        body: JSON.stringify({ content: answerContent }),
       })
       if (!res.ok) {
         const d = await res.json() as { error?: string }
@@ -321,7 +321,7 @@ export function ReviewClient({
       if (!genRes.ok) throw new Error(genData.error ?? 'Answer generation failed')
       if (genData.answer) {
         setAnswer(genData.answer)
-        setAnswerContent(genData.answer.content_text ?? '')
+        setAnswerContent(genData.answer.content ?? '')
       }
       toast.success('Answer generated')
     } catch (err) {

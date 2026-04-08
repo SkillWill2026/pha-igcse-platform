@@ -19,7 +19,7 @@ export function AnswerReviewClient({ answer }: { answer: AnswerWithQuestion }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const q = answer.questions as any
 
-  const [contentText, setContentText] = useState(answer.content_text)
+  const [contentText, setContentText] = useState(answer.content)
   const [markScheme,  setMarkScheme]  = useState(answer.mark_scheme)
   const [status,      setStatus]      = useState(answer.status)
 
@@ -42,7 +42,7 @@ export function AnswerReviewClient({ answer }: { answer: AnswerWithQuestion }) {
   async function handleSaveDraft() {
     setIsSaving(true)
     try {
-      await patchAnswer({ content_text: contentText, mark_scheme: markScheme })
+      await patchAnswer({ content: contentText, mark_scheme: markScheme })
       toast.success('Answer saved as draft')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Save failed')

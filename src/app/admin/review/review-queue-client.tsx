@@ -358,7 +358,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             <div className="space-y-4">
               <div className="text-sm font-semibold">Answer</div>
               <div className="prose prose-sm max-w-none leading-relaxed">
-                <ReactMarkdown>{currentQuestion.answer.content_text ?? ''}</ReactMarkdown>
+                <ReactMarkdown>{currentQuestion.answer.content ?? ''}</ReactMarkdown>
               </div>
 
               {/* Answer images */}

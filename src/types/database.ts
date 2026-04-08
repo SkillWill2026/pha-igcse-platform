@@ -61,7 +61,7 @@ export type QuestionImage = {
 export interface AnswerRow {
   id: string
   question_id: string
-  content_text: string
+  content: string
   step_by_step: string[]
   mark_scheme: string
   confidence_score: number | null

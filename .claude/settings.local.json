@@ -54,7 +54,11 @@
       "Bash(find /c/Users/jayou/Desktop/pha-igcse-platform -name *syllabus* -o -name *0580*)",
       "Bash(grep -n \"step_by_step\\\\|Answer\\\\|answer\" src/app/admin/questions/[id]/review-client.tsx)",
       "Bash(grep -n \"answerContent\\\\|<section\\\\|Right panel\" src/app/admin/questions/[id]/review-client.tsx)",
-      "Bash(grep -n \"answerContent\\\\|content_text\" src/app/admin/questions/[id]/review-client.tsx)"
+      "Bash(grep -n \"answerContent\\\\|content_text\" src/app/admin/questions/[id]/review-client.tsx)",
+      "Bash(grep -A 20 \"create table.*answers\" supabase/migrations/*.sql)",
+      "Bash(grep -n \"answer\\\\.\" src/app/admin/questions/[id]/review-client.tsx)",
+      "Bash(grep -n \"answer\\\\.content\\\\|content_text\" src/app/admin/questions/[id]/review-client.tsx)",
+      "Bash(grep -n \"answer\\\\.content_text\\\\|content_text\" src/app/admin/answers/[id]/review-client.tsx)"
     ]
   }
 }
