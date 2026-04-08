@@ -1,11 +1,13 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { ImageIcon, Loader2, Trash2, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { DrawingModal } from '@/components/DrawingModal'
 import { PDFCropModal } from '@/components/PDFCropModal'
+
+const DrawingModal = dynamic(() => import('@/components/DrawingModal'), { ssr: false })
 import type { QuestionImage } from '@/types/database'
 
 interface QuestionImageWithDisplay extends QuestionImage {
