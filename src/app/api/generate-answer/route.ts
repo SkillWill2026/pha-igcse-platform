@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     // ── Retry logic for 529 overloaded_error ──────────────────────────────────
     let aiResponse: any = null
     const maxAttempts = 3
-    const retryDelays = [0, 1500, 3000]
+    const retryDelays = [0, 500, 1000]
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
@@ -80,30 +80,24 @@ export async function POST(request: NextRequest) {
           messages: [
             {
               role: 'user',
-              content: `<instructions>
-You are an IGCSE Maths tutor. Your response MUST contain exactly two sections in this order with no exceptions:
+              content: `Solve this IGCSE Maths question. Topic: ${subtopicName || 'Mathematics'}, Marks: ${question.marks ?? 'N/A'}
 
-SECTION 1 - Start your response with this exact line:
-**Working:**
-Then show numbered steps (Step 1:, Step 2:, etc.)
-Show every calculation even for simple questions.
-
-SECTION 2 - End your response with this exact line:
-**Answer:**
-Then state the final answer with units on the next line.
-
-DO NOT skip the Working section even for 1-mark questions.
-DO NOT give just the final answer.
-</instructions>
-
-Topic: ${subtopicName || 'Mathematics'}
-Sub-topic: ${subSubtopicName || ''}
-Marks: ${question.marks ?? 'N/A'}
+If the question refers to a diagram or image that is not provided, make reasonable assumptions and solve based on typical IGCSE question patterns for this topic. Always provide Working and Answer sections.
 
 Question:
 ${question.content_text}
 
-Return only valid JSON with no markdown fences.`,
+Return as JSON with this structure:
+{
+  "step_by_step": ["Step 1: ...", "Step 2: ...", ...],
+  "final_answer": "...",
+  "mark_scheme": "...",
+  "confidence_score": 0.0 to 1.0
+}`,
+            },
+            {
+              role: 'assistant',
+              content: '**Working:**\nStep 1:',
             },
           ],
         })
