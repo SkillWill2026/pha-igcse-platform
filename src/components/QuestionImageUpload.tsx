@@ -54,8 +54,9 @@ export function QuestionImageUpload({ questionId, imageType, onUploadComplete, b
   }, [questionId, imageType])
 
   useEffect(() => {
-    if (!initialImages) fetchImages()
-  }, [fetchImages, initialImages])
+    // Always fetch fresh data from API, regardless of initialImages
+    fetchImages()
+  }, [fetchImages])
 
   const handleFiles = useCallback(async (files: File[]) => {
     if (files.length === 0) return

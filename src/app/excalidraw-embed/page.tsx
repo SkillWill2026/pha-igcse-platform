@@ -11,32 +11,32 @@ export default function ExcalidrawEmbedPage() {
   const apiRef = useRef<any>(null)
 
   useEffect(() => {
-    // Inject Excalidraw CSS — isolated layout strips root CSS imports
-    const styleId = 'excalidraw-icon-fix'
-    if (document.getElementById(styleId)) return
-    const style = document.createElement('style')
-    style.id = styleId
-    style.textContent = `
-      .excalidraw .ToolIcon__icon {
-        width: 2rem !important;
-        height: 2rem !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-      }
-      .excalidraw .ToolIcon__icon svg {
-        width: 1.25rem !important;
-        height: 1.25rem !important;
-        max-width: 1.25rem !important;
-        max-height: 1.25rem !important;
-      }
-      .excalidraw .App-toolbar {
-        height: auto !important;
-        max-height: none !important;
-      }
-    `
-    document.head.appendChild(style)
-    return () => document.getElementById(styleId)?.remove()
+    const applyIconFix = () => {
+      // Force inline style overrides on all ToolIcon elements
+      document.querySelectorAll('.ToolIcon__icon').forEach(el => {
+        (el as HTMLElement).style.cssText +=
+          'width:2rem!important;height:2rem!important;display:flex!important;align-items:center!important;justify-content:center!important;'
+        el.querySelectorAll('svg').forEach(svg => {
+          (svg as SVGElement).style.cssText +=
+            'width:1.25rem!important;height:1.25rem!important;max-width:1.25rem!important;max-height:1.25rem!important;'
+        })
+      })
+    }
+
+    // Apply immediately and after delays to catch Excalidraw's late render
+    applyIconFix()
+    const t1 = setTimeout(applyIconFix, 500)
+    const t2 = setTimeout(applyIconFix, 1500)
+    const t3 = setTimeout(applyIconFix, 3000)
+
+    // MutationObserver to apply whenever new ToolIcon elements are added
+    const observer = new MutationObserver(() => applyIconFix())
+    observer.observe(document.body, { childList: true, subtree: true })
+
+    return () => {
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(t3)
+      observer.disconnect()
+    }
   }, [])
 
   useEffect(() => {

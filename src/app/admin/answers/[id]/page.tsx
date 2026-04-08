@@ -67,6 +67,30 @@ export default async function AnswerReviewPage({
     notFound()
   }
 
+  // Fetch answer images
+  let answerImageUrls: string[] = []
+  if (answer) {
+    try {
+      const supabase = createAdminClient()
+      const { data: answerImages } = await supabase
+        .from('question_images')
+        .select('id, storage_path, image_type')
+        .eq('question_id', answer.question_id)
+        .eq('image_type', 'answer')
+
+      answerImageUrls = await Promise.all(
+        (answerImages ?? []).map(async (img) => {
+          const { data } = await supabase.storage
+            .from('question-images')
+            .createSignedUrl(img.storage_path, 3600)
+          return data?.signedUrl ?? ''
+        })
+      ).then(urls => urls.filter(Boolean))
+    } catch (err) {
+      console.error('[AnswerReviewPage] failed to fetch answer images:', err)
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const q = answer.questions as any
 
@@ -88,6 +112,27 @@ export default async function AnswerReviewPage({
       </div>
 
       <AnswerReviewClient answer={answer} />
+
+      {answerImageUrls.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Answer Images</h2>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {answerImageUrls.map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt={`Answer diagram ${i + 1}`}
+                style={{
+                  maxHeight: '200px',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb',
+                  objectFit: 'contain'
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
