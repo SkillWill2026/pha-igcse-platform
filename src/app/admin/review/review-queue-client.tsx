@@ -23,9 +23,15 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [stats, setStats] = useState({ approved: 0, rejected: 0 })
   const [actionLoading, setActionLoading] = useState(false)
+  const [generatingAnswer, setGeneratingAnswer] = useState(false)
+  const [currentQuestion, setCurrentQuestion] = useState(drafts[currentIdx] ?? null)
 
-  const currentQuestion = drafts[currentIdx] ?? null
   const remaining = drafts.length - currentIdx - 1
+
+  // Update currentQuestion when index changes
+  useEffect(() => {
+    setCurrentQuestion(drafts[currentIdx] ?? null)
+  }, [currentIdx, drafts])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -114,6 +120,33 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
   }
 
+  async function handleGenerateAnswer() {
+    if (!currentQuestion || generatingAnswer) return
+    setGeneratingAnswer(true)
+    try {
+      const res = await fetch('/api/generate-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question_id: currentQuestion.id }),
+      })
+
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        throw new Error(d.error ?? 'Answer generation failed')
+      }
+
+      const { answer } = await res.json() as { answer: AnswerRow }
+      // Update current question with the new answer
+      setCurrentQuestion((q) => q ? { ...q, answer } : null)
+      toast.success('Answer generated successfully')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Generation failed'
+      toast.error(msg)
+    } finally {
+      setGeneratingAnswer(false)
+    }
+  }
+
   function handleNext() {
     if (currentIdx < drafts.length - 1) {
       setCurrentIdx(currentIdx + 1)
@@ -184,10 +217,19 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       <div className="flex gap-6 items-start min-h-screen">
         {/* Left panel - Question */}
         <div className="flex-[3] space-y-4">
-          <div>
+          <div className="flex items-center gap-2">
             <span className={`inline-flex items-center rounded px-2 py-0.5 font-mono text-xs font-semibold ${serialBadgeColor(currentQuestion.status)}`}>
               {displayQuestionSerial(currentQuestion.serial_number, currentQuestion.status)}
             </span>
+            <a
+              href={`/admin/questions/${currentQuestion.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-muted transition-colors"
+              title="Open in new tab"
+            >
+              ✏ Edit
+            </a>
           </div>
 
           {/* Breadcrumb */}
@@ -242,9 +284,25 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
               )}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <p className="mb-2">No answer yet</p>
-              <p className="text-xs">Will be generated on approval</p>
+            <div className="text-center py-12 space-y-4">
+              <div className="text-muted-foreground">
+                <p className="mb-2">No answer yet</p>
+                <p className="text-xs">Generate one now or approve to generate later</p>
+              </div>
+              <button
+                onClick={handleGenerateAnswer}
+                disabled={generatingAnswer}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {generatingAnswer ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  '✨ Generate Answer'
+                )}
+              </button>
             </div>
           )}
         </div>
