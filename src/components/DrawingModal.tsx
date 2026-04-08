@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Loader2, X } from 'lucide-react'
 
@@ -39,13 +39,13 @@ export function DrawingModal({
   questionId,
   imageType,
 }: Props) {
-  const excalidrawAPI = useRef<ExcalidrawImperativeAPI | null>(null)
+  const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null)
   const [saving, setSaving] = useState(false)
 
   if (!isOpen) return null
 
   async function handleSave() {
-    if (!excalidrawAPI.current) {
+    if (!excalidrawAPI) {
       alert('Canvas not ready yet, please try again')
       return
     }
@@ -56,13 +56,13 @@ export function DrawingModal({
       const { exportToBlob } = await import('@excalidraw/excalidraw')
 
       const blob = await exportToBlob({
-        elements: excalidrawAPI.current.getSceneElements(),
+        elements: excalidrawAPI.getSceneElements(),
         appState: {
-          ...excalidrawAPI.current.getAppState(),
+          ...excalidrawAPI.getAppState(),
           exportBackground: true,
           exportWithDarkMode: false,
         },
-        files: excalidrawAPI.current.getFiles(),
+        files: excalidrawAPI.getFiles(),
         mimeType: 'image/png',
       })
 
@@ -111,11 +111,12 @@ export function DrawingModal({
         {/* Excalidraw canvas */}
         <div className="flex-1 overflow-hidden">
           <ExcalidrawComponent
+            excalidrawAPI={(api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api)}
             onChange={() => {}}
             onPointerUpdate={() => {}}
             onScrollChange={() => {}}
-            ref={excalidrawAPI}
             gridModeEnabled={true}
+            initialData={{ appState: { gridSize: 20 } }}
           />
         </div>
 
