@@ -60,7 +60,9 @@
       "Bash(grep -n \"answer\\\\.content\\\\|content_text\" src/app/admin/questions/[id]/review-client.tsx)",
       "Bash(grep -n \"answer\\\\.content_text\\\\|content_text\" src/app/admin/answers/[id]/review-client.tsx)",
       "Bash(grep -n \"ReactMarkdown\\\\|answer\" src/app/admin/questions/[id]/review-client.tsx)",
-      "Bash(grep -n \"<ReactMarkdown\" src/app/admin/questions/[id]/review-client.tsx)"
+      "Bash(grep -n \"<ReactMarkdown\" src/app/admin/questions/[id]/review-client.tsx)",
+      "Bash(npm ls:*)",
+      "Bash(grep -v \"^--$\")"
     ]
   }
 }
