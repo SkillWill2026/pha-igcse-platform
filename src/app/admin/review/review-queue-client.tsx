@@ -359,12 +359,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
               <div className="text-sm">
                 <MathRenderer text={currentQuestion.answer.content_text ?? ''} />
               </div>
-
-              {currentQuestion.answer.confidence_score !== null && (
-                <div className="text-xs text-muted-foreground">
-                  AI Confidence: <span className="font-semibold">{currentQuestion.answer.confidence_score}%</span>
-                </div>
-              )}
             </div>
           ) : (
             <div className="text-center py-12 space-y-4">
