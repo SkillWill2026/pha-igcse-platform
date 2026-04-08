@@ -66,17 +66,44 @@ export async function POST(request: NextRequest) {
       `Type: ${question.question_type}  |  Marks: ${question.marks}  |  Difficulty: ${question.difficulty}/5`,
     ].filter(Boolean).join('\n')
 
-    const aiResponse = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `${context}\n\nQuestion:\n${question.content_text}\n\nReturn only valid JSON — no markdown fences.`,
-        },
-      ],
-    })
+    // ── Retry logic for 529 overloaded_error ──────────────────────────────────
+    let aiResponse: any = null
+    const maxAttempts = 3
+    const retryDelays = [0, 1500, 3000]
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        aiResponse = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 4096,
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: `${context}\n\nQuestion:\n${question.content_text}\n\nReturn only valid JSON — no markdown fences.`,
+            },
+          ],
+        })
+        break
+      } catch (err: any) {
+        const isOverloaded = err?.status === 529 || err?.error?.type === 'overloaded_error'
+        const isLastAttempt = attempt === maxAttempts - 1
+
+        if (isOverloaded && !isLastAttempt) {
+          console.warn(`[generate-answer] API overloaded on attempt ${attempt + 1}, retrying in ${retryDelays[attempt + 1]}ms`)
+          await new Promise(r => setTimeout(r, retryDelays[attempt + 1]))
+        } else {
+          throw err
+        }
+      }
+    }
+
+    if (!aiResponse) {
+      return NextResponse.json(
+        { error: 'AI is busy right now — please try again in a few seconds.' },
+        { status: 503 },
+      )
+    }
 
     const raw =
       aiResponse.content[0].type === 'text' ? aiResponse.content[0].text.trim() : ''
@@ -95,10 +122,40 @@ export async function POST(request: NextRequest) {
     }
     console.log('[generate-answer] parsed OK — steps:', aiAnswer.step_by_step.length)
 
-    const { data: saved, error: dbErr } = await supabase
+    // ── Check-then-branch: update existing or insert new ──────────────────────
+    const { data: existing } = await supabase
       .from('answers')
-      .upsert(
-        {
+      .select('id')
+      .eq('question_id', question_id)
+      .maybeSingle()
+
+    let dbErr: any = null
+    let saved: any = null
+
+    if (existing?.id) {
+      // Update existing answer
+      const updateRes = await supabase
+        .from('answers')
+        .update({
+          content_text: String(aiAnswer.final_answer ?? ''),
+          step_by_step: aiAnswer.step_by_step.map(String),
+          mark_scheme: String(aiAnswer.mark_scheme ?? ''),
+          confidence_score: Math.min(1, Math.max(0, Number(aiAnswer.confidence_score) || 0)),
+          status: 'draft' as const,
+          ai_generated: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select('id, content_text, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
+        .single()
+
+      dbErr = updateRes.error
+      saved = updateRes.data
+    } else {
+      // Insert new answer
+      const insertRes = await supabase
+        .from('answers')
+        .insert({
           question_id,
           content_text: String(aiAnswer.final_answer ?? ''),
           step_by_step: aiAnswer.step_by_step.map(String),
@@ -106,20 +163,23 @@ export async function POST(request: NextRequest) {
           confidence_score: Math.min(1, Math.max(0, Number(aiAnswer.confidence_score) || 0)),
           status: 'draft' as const,
           ai_generated: true,
-        },
-        { onConflict: 'question_id' },
-      )
-      .select()
-      .single()
+        })
+        .select('id, content_text, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
+        .single()
+
+      dbErr = insertRes.error
+      saved = insertRes.data
+    }
 
     console.log('[generate-answer] upsert result — id:', saved?.id ?? null, 'dbErr:', dbErr?.message ?? 'none')
     if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
-    if (!saved) return NextResponse.json({ error: 'Upsert returned no data' }, { status: 500 })
+    if (!saved) return NextResponse.json({ error: 'Save returned no data' }, { status: 500 })
 
     revalidatePath('/admin/answers', 'layout')
     return NextResponse.json({ answer: saved })
   } catch (err) {
     console.error('[POST /api/generate-answer]', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    const errMsg = err instanceof Error ? err.message : 'Internal server error'
+    return NextResponse.json({ error: errMsg }, { status: 500 })
   }
 }

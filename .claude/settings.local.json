@@ -48,7 +48,10 @@
       "Bash(ls /c/Users/jayou/Desktop/pha-igcse-platform/src/app/api/schedule/ppt/[id]/)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(grep -n \"filteredSubSubtopics\\\\|subSubtopic\\\\|SelectContent\\\\|SelectItem\\\\|sort_order\\\\|sort\\(\" /c/Users/jayou/Desktop/pha-igcse-platform/src/app/admin/questions/[id]/review-client.tsx)",
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/jayou/Desktop/pha-igcse-platform -name *syllabus* -o -name *0580*)"
     ]
   }
 }
