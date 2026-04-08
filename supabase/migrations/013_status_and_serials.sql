@@ -32,20 +32,23 @@ create trigger trg_answer_serial
   for each row execute function public.set_answer_serial();
 
 -- 4. Backfill existing question serial numbers from PHA-XXXXX to Q-XXXX format
--- Reset sequence first
 create sequence if not exists public.question_serial_seq_new start 1;
 
-with ordered as (
-  select id, row_number() over (order by serial_number) as rn
-  from public.questions
-  where serial_number is not null
-)
-update public.questions q
-  set serial_number = 'Q-' || lpad(ordered.rn::text, 4, '0')
-  from ordered
-  where q.id = ordered.id;
+do $$
+declare
+  q record;
+  counter integer := 1;
+begin
+  for q in (select id from public.questions where serial_number is not null order by created_at)
+  loop
+    update public.questions
+      set serial_number = 'Q-' || lpad(counter::text, 4, '0')
+      where id = q.id;
+    counter := counter + 1;
+  end loop;
+end;
+$$;
 
--- Update trigger to use new format
 create or replace function public.set_question_serial()
 returns trigger language plpgsql as $$
 begin
