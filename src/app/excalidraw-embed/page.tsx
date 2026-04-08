@@ -11,31 +11,48 @@ export default function ExcalidrawEmbedPage() {
   const apiRef = useRef<any>(null)
 
   useEffect(() => {
-    const applyIconFix = () => {
-      // Force inline style overrides on all ToolIcon elements
+    // Load Excalidraw's CSS from public folder
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = '/excalidraw.css'
+    document.head.appendChild(link)
+
+    const applyFixes = () => {
+      // Fix ToolIcon elements
       document.querySelectorAll('.ToolIcon__icon').forEach(el => {
-        (el as HTMLElement).style.cssText +=
-          'width:2rem!important;height:2rem!important;display:flex!important;align-items:center!important;justify-content:center!important;'
-        el.querySelectorAll('svg').forEach(svg => {
-          (svg as SVGElement).style.cssText +=
-            'width:1.25rem!important;height:1.25rem!important;max-width:1.25rem!important;max-height:1.25rem!important;'
+        const e = el as HTMLElement
+        e.style.cssText += 'width:2rem!important;height:2rem!important;display:flex!important;align-items:center!important;justify-content:center!important;flex-shrink:0!important;'
+        e.querySelectorAll('svg').forEach(svg => {
+          const s = svg as SVGElement
+          s.style.cssText += 'width:1.25rem!important;height:1.25rem!important;max-width:1.25rem!important;max-height:1.25rem!important;'
         })
+      })
+      // Fix toolbar container width
+      document.querySelectorAll('.App-toolbar').forEach(el => {
+        const e = el as HTMLElement
+        e.style.cssText += 'width:auto!important;height:auto!important;min-width:0!important;'
+      })
+      // Fix layer-ui wrapper
+      document.querySelectorAll('.layer-ui__wrapper').forEach(el => {
+        const e = el as HTMLElement
+        e.style.cssText += 'width:100%!important;height:100%!important;'
       })
     }
 
     // Apply immediately and after delays to catch Excalidraw's late render
-    applyIconFix()
-    const t1 = setTimeout(applyIconFix, 500)
-    const t2 = setTimeout(applyIconFix, 1500)
-    const t3 = setTimeout(applyIconFix, 3000)
+    applyFixes()
+    const t1 = setTimeout(applyFixes, 500)
+    const t2 = setTimeout(applyFixes, 1500)
+    const t3 = setTimeout(applyFixes, 3000)
 
-    // MutationObserver to apply whenever new ToolIcon elements are added
-    const observer = new MutationObserver(() => applyIconFix())
+    // MutationObserver to apply whenever new elements are added
+    const observer = new MutationObserver(() => applyFixes())
     observer.observe(document.body, { childList: true, subtree: true })
 
     return () => {
       clearTimeout(t1); clearTimeout(t2); clearTimeout(t3)
       observer.disconnect()
+      link.remove()
     }
   }, [])
 
