@@ -93,13 +93,13 @@ export function DrawingModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
       <div
         className="relative flex flex-col bg-white rounded-xl shadow-2xl"
-        style={{ width: '95vw', height: '90vh', minWidth: '900px' }}
+        style={{ width: '95vw', height: '90vh', minWidth: '900px', overflow: 'hidden' }}
       >
         {/* Header */}
-        <div className="border-b p-4 flex items-center justify-between">
+        <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
           <h2 className="text-lg font-semibold">✏️ Draw Diagram</h2>
           <button
             onClick={onClose}
@@ -112,7 +112,7 @@ export function DrawingModal({
         </div>
 
         {/* Excalidraw canvas */}
-        <div className="flex-1 relative" style={{ minHeight: '400px', overflow: 'visible' }}>
+        <div className="relative" style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           <ExcalidrawComponent
             excalidrawAPI={(api: ExcalidrawImperativeAPI) => setExcalidrawAPI(api)}
             onChange={() => {}}
@@ -120,11 +120,12 @@ export function DrawingModal({
             onScrollChange={() => {}}
             gridModeEnabled={true}
             initialData={{ appState: { gridSize: 20 } }}
+            style={{ width: '100%', height: '100%' }}
           />
         </div>
 
         {/* Footer */}
-        <div className="border-t p-4 flex items-center justify-end gap-3">
+        <div className="flex items-center justify-end gap-3 p-4 border-t flex-shrink-0">
           <Button
             variant="outline"
             onClick={onClose}
