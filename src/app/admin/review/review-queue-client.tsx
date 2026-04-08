@@ -17,6 +17,13 @@ import type { QuestionWithRelations, AnswerRow } from '@/types/database'
 const DrawingModal = dynamic(() => import('@/components/DrawingModal'), { ssr: false })
 const PDFCropModal = dynamic(() => import('@/components/PDFCropModal'), { ssr: false })
 
+interface SubSubtopic {
+  id: string
+  ref: string
+  name: string
+  e_only: boolean
+}
+
 interface DraftQuestion extends QuestionWithRelations {
   answer: AnswerRow | null
 }
@@ -39,6 +46,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [showDrawing, setShowDrawing] = useState(false)
   const [showCropper, setShowCropper] = useState(false)
   const [drawingTarget, setDrawingTarget] = useState<'question' | 'answer'>('answer')
+  const [subSubtopics, setSubSubtopics] = useState<SubSubtopic[]>([])
+  const [selectedSubSubtopic, setSelectedSubSubtopic] = useState<string | null>(null)
+  const [loadingSubSubtopics, setLoadingSubSubtopics] = useState(false)
 
   const remaining = drafts.length - currentIdx - 1
 
@@ -56,7 +66,28 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setCurrentQuestion(drafts[currentIdx] ?? null)
     setEditing(false)
     setEditedText('')
+    setSelectedSubSubtopic(null)
   }, [currentIdx, drafts])
+
+  // Fetch sub-subtopics when subtopic changes
+  useEffect(() => {
+    if (!currentQuestion?.subtopic_id) {
+      setSubSubtopics([])
+      return
+    }
+
+    setLoadingSubSubtopics(true)
+    fetch(`/api/sub-subtopics?subtopic_id=${currentQuestion.subtopic_id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setSubSubtopics(data)
+        if (currentQuestion.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
+          setSelectedSubSubtopic(currentQuestion.sub_subtopic_id)
+        }
+      })
+      .catch((err) => console.error('Failed to fetch sub-subtopics:', err))
+      .finally(() => setLoadingSubSubtopics(false))
+  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -211,6 +242,30 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditing(true)
   }
 
+  async function handleSelectSubSubtopic(subSubtopicId: string) {
+    if (!currentQuestion) return
+
+    try {
+      const res = await fetch(`/api/questions/${currentQuestion.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sub_subtopic_id: subSubtopicId }),
+      })
+
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        throw new Error(d.error ?? 'Failed to update sub-subtopic')
+      }
+
+      setSelectedSubSubtopic(subSubtopicId)
+      setCurrentQuestion((q) => q ? { ...q, sub_subtopic_id: subSubtopicId } : (q as any))
+      toast.success('Sub-subtopic updated')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Update failed'
+      toast.error(msg)
+    }
+  }
+
   function handleNext() {
     if (currentIdx < drafts.length - 1) {
       setCurrentIdx(currentIdx + 1)
@@ -304,6 +359,27 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             {currentQuestion.subtopics?.ref && currentQuestion.subtopics.name && ' – '}
             {currentQuestion.subtopics?.name}
           </div>
+
+          {/* Sub-subtopic selector */}
+          {subSubtopics.length > 0 && (
+            <div className="flex items-center gap-3 py-2">
+              <label className="text-sm font-medium text-muted-foreground">Sub-subtopic:</label>
+              <select
+                value={selectedSubSubtopic || ''}
+                onChange={(e) => handleSelectSubSubtopic(e.target.value)}
+                disabled={loadingSubSubtopics}
+                className="px-2 py-1 text-sm rounded-md border bg-white hover:bg-gray-50 disabled:opacity-50"
+              >
+                <option value="">Select a sub-subtopic...</option>
+                {subSubtopics.map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.ref} – {sub.name}
+                    {sub.e_only ? ' [E-only]' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Question content */}
           <section className="space-y-3">
