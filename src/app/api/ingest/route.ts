@@ -197,22 +197,53 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
       ai_extracted: true,
     }))
 
-    const { data: saved, error: dbError } = await supabase
-      .from('questions')
-      .insert(rows)
-      .select()
+    // Insert with graceful duplicate handling — skip duplicates instead of failing
+    const saved: any[] = []
+    const errors: string[] = []
 
-    if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 })
+    for (const row of rows) {
+      try {
+        const { data, error } = await supabase
+          .from('questions')
+          .insert(row)
+          .select('*')
+          .single()
+
+        if (error) {
+          // Log but continue — don't block the entire batch
+          console.warn(`[ingest] insert failed for question:`, error.message)
+          if (error.code !== '23505') {
+            // 23505 = unique violation, expected for duplicates
+            errors.push(`Question skipped: ${error.message}`)
+          }
+        } else if (data) {
+          saved.push(data)
+        }
+      } catch (err) {
+        console.warn(`[ingest] exception inserting question:`, err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    if (saved.length === 0 && rows.length > 0) {
+      return NextResponse.json(
+        { error: 'No questions were successfully inserted. All may be duplicates or invalid.', details: errors },
+        { status: 422 },
+      )
     }
 
     // Merge subtopic_ref back for the UI (best-effort from AI or context)
-    const questions = (saved ?? []).map((q, i) => ({
+    const questions = saved.map((q) => ({
       ...q,
-      subtopic_ref: allQuestions[i]?.subtopic_ref ?? subtopic?.ref ?? '',
+      subtopic_ref: subtopic?.ref ?? '',
     }))
 
-    return NextResponse.json({ questions, count: questions.length })
+    return NextResponse.json({
+      questions,
+      count: questions.length,
+      total: rows.length,
+      skipped: rows.length - saved.length,
+      ...(errors.length > 0 && { warnings: errors }),
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     const stack = err instanceof Error ? err.stack : undefined
