@@ -84,7 +84,7 @@ export default function DrawingModal({
         </div>
       </div>
 
-      {/* Excalidraw in isolated iframe */}
+      {/* Excalidraw in isolated iframe - clean document for correct positioning */}
       <iframe
         ref={iframeRef}
         src="/excalidraw-embed"
