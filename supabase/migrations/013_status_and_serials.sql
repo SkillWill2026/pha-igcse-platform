@@ -35,10 +35,15 @@ create trigger trg_answer_serial
 -- Reset sequence first
 create sequence if not exists public.question_serial_seq_new start 1;
 
-update public.questions
-  set serial_number = 'Q-' || lpad(nextval('public.question_serial_seq_new')::text, 4, '0')
+with ordered as (
+  select id, row_number() over (order by serial_number) as rn
+  from public.questions
   where serial_number is not null
-  order by serial_number;
+)
+update public.questions q
+  set serial_number = 'Q-' || lpad(ordered.rn::text, 4, '0')
+  from ordered
+  where q.id = ordered.id;
 
 -- Update trigger to use new format
 create or replace function public.set_question_serial()
