@@ -1,12 +1,21 @@
--- 1. Update questions status enum to include rejected and deleted
-alter type question_status add value if not exists 'rejected';
-alter type question_status add value if not exists 'deleted';
+-- 013_status_and_serials.sql
+-- Adds rejected/deleted status support, answer serials, and backfills question serials to Q-XXXX format
 
--- 2. Update answers status enum to include rejected and deleted
-alter type answer_status add value if not exists 'rejected';
-alter type answer_status add value if not exists 'deleted';
+-- 1. Add check constraints to allow rejected and deleted status values
+-- (status columns are text, not enum — just ensure the values are valid)
+alter table public.questions
+  drop constraint if exists questions_status_check;
+alter table public.questions
+  add constraint questions_status_check
+  check (status in ('draft', 'approved', 'rejected', 'deleted'));
 
--- 3. Add serial_number to answers table
+alter table public.answers
+  drop constraint if exists answers_status_check;
+alter table public.answers
+  add constraint answers_status_check
+  check (status in ('draft', 'approved', 'rejected', 'deleted'));
+
+-- 2. Add serial_number to answers table
 create sequence if not exists public.answer_serial_seq start 1;
 
 alter table public.answers
@@ -31,7 +40,7 @@ create trigger trg_answer_serial
   before insert on public.answers
   for each row execute function public.set_answer_serial();
 
--- 4. Backfill existing question serial numbers from PHA-XXXXX to Q-XXXX format
+-- 3. Backfill existing question serial numbers to Q-XXXX format
 create sequence if not exists public.question_serial_seq_new start 1;
 
 do $$
@@ -49,6 +58,7 @@ begin
 end;
 $$;
 
+-- 4. Update question serial trigger to use Q- format
 create or replace function public.set_question_serial()
 returns trigger language plpgsql as $$
 begin
