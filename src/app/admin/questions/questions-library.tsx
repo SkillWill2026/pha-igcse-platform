@@ -34,6 +34,7 @@ import { TypeBadge } from '@/components/admin/type-badge'
 import { StatusBadge } from '@/components/admin/status-badge'
 import { DifficultyStars } from '@/components/admin/difficulty-stars'
 import { DeleteDialog } from '@/components/admin/delete-dialog'
+import { displayQuestionSerial, serialBadgeColor } from '@/lib/serial'
 import type { QuestionWithRelations, UploadBatch } from '@/types/database'
 
 const ALL = '__all__'
@@ -99,8 +100,12 @@ export function QuestionsLibrary({ boards }: Props) {
   const [questions,  setQuestions]  = useState<QuestionWithRelations[]>([])
   const [loading,    setLoading]    = useState(true)
 
+  // ── Selection state ────────────────────────────────────────────────────────
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
+  const [batchLoading, setBatchLoading] = useState(false)
+
   // ── Filter state ───────────────────────────────────────────────────────────
-  const [selectorKey,      setSelectorKey]      = useState(0)          // remount to reset SyllabusSelector
+  const [selectorKey,      setSelectorKey]      = useState(0)
   const [topicFilter,      setTopicFilter]      = useState<string | null>(null)
   const [subtopicFilter,   setSubtopicFilter]   = useState<string | null>(null)
   const [subSubtopicFilter,setSubSubtopicFilter]= useState<string | null>(null)
@@ -135,6 +140,7 @@ export function QuestionsLibrary({ boards }: Props) {
       }
       const data = await res.json()
       setQuestions(Array.isArray(data) ? data as QuestionWithRelations[] : [])
+      setSelectedIds(new Set())
     } catch (err) {
       console.error('[QuestionsLibrary] unexpected:', err)
     } finally {
@@ -146,7 +152,6 @@ export function QuestionsLibrary({ boards }: Props) {
     fetchQuestions()
   }, [fetchQuestions])
 
-  // Fetch recent batches for the filter dropdown
   useEffect(() => {
     fetch('/api/upload-batch')
       .then((r) => r.json())
@@ -213,7 +218,7 @@ export function QuestionsLibrary({ boards }: Props) {
     return result
   }, [questions])
 
-  // ── Client-side filters (board / type / status / difficulty) ──────────────
+  // ── Client-side filters ────────────────────────────────────────────────────
   const filteredGroups = useMemo(() => {
     return groups.filter((g) => {
       const q = g.original
@@ -247,8 +252,56 @@ export function QuestionsLibrary({ boards }: Props) {
   const clearFilters = () => {
     setBoardId(ALL)
     setTopicFilter(null); setSubtopicFilter(null); setSubSubtopicFilter(null)
-    setSelectorKey((k) => k + 1)  // force SyllabusSelector to re-mount and reset
+    setSelectorKey((k) => k + 1)
     setQtype(ALL); setStatus(ALL); setDiffMin(ALL); setDiffMax(ALL); setBatchFilter(ALL)
+  }
+
+  // ── Selection helpers ──────────────────────────────────────────────────────
+  const visibleIds = filteredGroups.map((g) => g.id)
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
+  const someSelected = visibleIds.some((id) => selectedIds.has(id))
+
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(visibleIds))
+    }
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // ── Batch actions ──────────────────────────────────────────────────────────
+  async function handleBatchStatus(newStatus: 'rejected' | 'deleted') {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    setBatchLoading(true)
+    try {
+      const res = await fetch('/api/questions/batch-status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question_ids: ids, status: newStatus }),
+      })
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        toast.error(d.error ?? 'Action failed')
+        return
+      }
+      const d = await res.json() as { updated: number }
+      toast.success(`${d.updated} question${d.updated !== 1 ? 's' : ''} ${newStatus === 'rejected' ? 'rejected' : 'deleted'}`)
+      await fetchQuestions()
+    } catch {
+      toast.error('Action failed')
+    } finally {
+      setBatchLoading(false)
+    }
   }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
@@ -294,7 +347,7 @@ export function QuestionsLibrary({ boards }: Props) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20">
       {/* ── Auto-assign button ─────────────────────────────────────────── */}
       {unassignedCount > 0 && (
         <div className="flex justify-end">
@@ -331,7 +384,6 @@ export function QuestionsLibrary({ boards }: Props) {
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
       <div className="rounded-lg border bg-card p-4 space-y-3">
         <div className="flex flex-wrap gap-4 items-start">
-          {/* Three-level syllabus selector (drives server-side filtering) */}
           <div className="w-72">
             <SyllabusSelector
               key={selectorKey}
@@ -341,7 +393,6 @@ export function QuestionsLibrary({ boards }: Props) {
             />
           </div>
 
-          {/* Client-side filters */}
           <div className="flex flex-wrap gap-2 items-center flex-1 pt-5">
             <FilterSelect
               placeholder="All Boards"
@@ -416,6 +467,16 @@ export function QuestionsLibrary({ boards }: Props) {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/50">
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-input accent-primary"
+                  checked={allSelected}
+                  ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected }}
+                  onChange={toggleAll}
+                  aria-label="Select all visible questions"
+                />
+              </TableHead>
               <TableHead className="w-28">Serial</TableHead>
               <TableHead className="w-36">Subtopic</TableHead>
               <TableHead className="w-40">Boards</TableHead>
@@ -430,14 +491,14 @@ export function QuestionsLibrary({ boards }: Props) {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                <TableCell colSpan={10} className="text-center text-muted-foreground py-12">
                   <Loader2 className="h-5 w-5 animate-spin inline-block mr-2" />
                   Loading questions…
                 </TableCell>
               </TableRow>
             ) : filteredGroups.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                <TableCell colSpan={10} className="text-center text-muted-foreground py-12">
                   {questions.length === 0
                     ? 'No questions yet — upload a paper to get started.'
                     : `No questions match the current filters. (${questions.length} loaded)`}
@@ -446,11 +507,21 @@ export function QuestionsLibrary({ boards }: Props) {
             ) : (
               filteredGroups.map((g) => {
                 const q = g.original
+                const isSelected = selectedIds.has(g.id)
                 return (
-                  <TableRow key={g.id} className="hover:bg-muted/30">
+                  <TableRow key={g.id} className={cn('hover:bg-muted/30', isSelected && 'bg-primary/5')}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-input accent-primary"
+                        checked={isSelected}
+                        onChange={() => toggleOne(g.id)}
+                        aria-label={`Select question ${q.serial_number ?? g.id}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-0.5">
-                        <SerialPill serial={q.serial_number ?? null} />
+                        <SerialPill serial={q.serial_number ?? null} status={q.status} />
                         {q.parent_question_ref && (
                           <span className="font-mono text-[11px] text-muted-foreground">
                             Q{q.parent_question_ref}{q.part_label ? `(${q.part_label})` : ''}
@@ -533,6 +604,46 @@ export function QuestionsLibrary({ boards }: Props) {
           </TableBody>
         </Table>
       </div>
+
+      {/* ── Floating batch action bar ───────────────────────────────────── */}
+      {selectedIds.size > 0 && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 border-t bg-white px-6 py-3 shadow-lg"
+          style={{ padding: '12px 24px' }}
+        >
+          <span className="text-sm font-medium text-muted-foreground flex-1">
+            {selectedIds.size} question{selectedIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={batchLoading}
+            onClick={() => handleBatchStatus('rejected')}
+            className="border-amber-300 text-amber-700 hover:bg-amber-50"
+          >
+            {batchLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Reject
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={batchLoading}
+            onClick={() => handleBatchStatus('deleted')}
+            className="border-red-300 text-red-700 hover:bg-red-50"
+          >
+            {batchLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Delete
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={batchLoading}
+            onClick={() => setSelectedIds(new Set())}
+          >
+            <X className="h-3.5 w-3.5 mr-1" /> Clear
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -571,14 +682,15 @@ function FilterSelect({
   )
 }
 
-function SerialPill({ serial }: { serial: string | null }) {
+function SerialPill({ serial, status }: { serial: string | null; status: string }) {
   const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const display = displayQuestionSerial(serial, status)
   if (!serial) return <span className="font-mono text-xs text-muted-foreground/40">—</span>
 
   function handleClick() {
-    navigator.clipboard.writeText(serial!).then(() => {
+    navigator.clipboard.writeText(display).then(() => {
       setCopied(true)
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => setCopied(false), 1500)
@@ -589,9 +701,12 @@ function SerialPill({ serial }: { serial: string | null }) {
     <button
       onClick={handleClick}
       title={copied ? 'Copied!' : 'Click to copy'}
-      className="inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+      className={cn(
+        'inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] hover:opacity-80 transition-colors',
+        serialBadgeColor(status),
+      )}
     >
-      {copied ? 'Copied!' : serial}
+      {copied ? 'Copied!' : display}
     </button>
   )
 }

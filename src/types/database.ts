@@ -1,6 +1,6 @@
-export type QuestionStatus = 'draft' | 'approved' | 'rejected'
+export type QuestionStatus = 'draft' | 'approved' | 'rejected' | 'deleted'
 export type QuestionType = 'mcq' | 'short_answer' | 'structured' | 'extended'
-export type AnswerStatus = 'draft' | 'approved' | 'rejected'
+export type AnswerStatus = 'draft' | 'approved' | 'rejected' | 'deleted'
 
 export interface QuestionRow {
   id: string
@@ -29,6 +29,8 @@ export interface QuestionWithRelations extends QuestionRow {
   topics: { id: string; ref: string; name: string } | null
   subtopics: { id: string; ref: string; name: string } | null
   sub_subtopics: { ext_num: number; outcome: string; tier: string } | null
+  answer_serial: string | null
+  answer_status: string | null
 }
 
 export type UploadBatch = {
@@ -65,6 +67,7 @@ export interface AnswerRow {
   confidence_score: number | null
   status: AnswerStatus
   ai_generated: boolean
+  serial_number: string | null
   created_at: string
   updated_at: string
 }

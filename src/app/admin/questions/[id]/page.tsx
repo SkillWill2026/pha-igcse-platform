@@ -3,7 +3,7 @@ import { unstable_noStore as noStore } from 'next/cache'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { createAdminClient } from '@/lib/supabase'
-import type { QuestionWithRelations } from '@/types/database'
+import type { QuestionWithRelations, AnswerRow } from '@/types/database'
 import { ReviewClient } from './review-client'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +15,7 @@ export default async function QuestionReviewPage({
 }) {
   noStore()
   let question: QuestionWithRelations | null = null
+  let answer: AnswerRow | null = null
   let allBoards: { id: string; name: string }[] = []
   let allSubtopics: { id: string; ref: string; title: string; topic_id: string }[] = []
   let allTopics: { id: string; ref: string; name: string }[] = []
@@ -26,9 +27,9 @@ export default async function QuestionReviewPage({
       supabase
         .from('questions')
         .select(
-          'id, content_text, difficulty, question_type, marks, status,' +
+          'id, serial_number, parent_question_ref, part_label, content_text, difficulty, question_type, marks, status,' +
           'ai_extracted, created_at, updated_at,' +
-          'exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, source_question_id',
+          'exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, source_question_id, batch_id',
         )
         .eq('id', params.id)
         .single(),
@@ -64,10 +65,23 @@ export default async function QuestionReviewPage({
 
     question = {
       ...qRes.data,
-      exam_boards: boardMap.get(qRes.data.exam_board_id)    ?? null,
-      topics:      topicMap.get(qRes.data.topic_id)          ?? null,
-      subtopics:   subtopicMap.get(qRes.data.subtopic_id)    ?? null,
+      exam_boards:   boardMap.get(qRes.data.exam_board_id)    ?? null,
+      topics:        topicMap.get(qRes.data.topic_id)          ?? null,
+      subtopics:     subtopicMap.get(qRes.data.subtopic_id)    ?? null,
+      answer_serial: null,
+      answer_status: null,
     } as unknown as QuestionWithRelations
+
+    // Fetch linked answer
+    const { data: answerData } = await supabase
+      .from('answers')
+      .select('id, question_id, content_text, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
+      .eq('question_id', params.id)
+      .maybeSingle()
+
+    if (answerData) {
+      answer = answerData as AnswerRow
+    }
 
   } catch (err) {
     console.error('[QuestionReviewPage] unexpected error:', err)
@@ -75,7 +89,7 @@ export default async function QuestionReviewPage({
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-7xl space-y-6">
       <div className="flex items-center gap-3">
         <Link
           href="/admin/questions"
@@ -90,15 +104,22 @@ export default async function QuestionReviewPage({
           <div>
             <h1 className="text-xl font-bold">Review Question</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {question.subtopics?.ref} – {question.subtopics?.name}
+              {question!.subtopics?.ref} – {question!.subtopics?.name}
               {' · '}
-              {question.exam_boards?.name}
+              {question!.exam_boards?.name}
             </p>
           </div>
         </div>
       </div>
 
-      <ReviewClient question={question} allBoards={allBoards} allSubtopics={allSubtopics} allTopics={allTopics} allSubSubtopics={allSubSubtopics} />
+      <ReviewClient
+        question={question!}
+        answer={answer}
+        allBoards={allBoards}
+        allSubtopics={allSubtopics}
+        allTopics={allTopics}
+        allSubSubtopics={allSubSubtopics}
+      />
     </div>
   )
 }
