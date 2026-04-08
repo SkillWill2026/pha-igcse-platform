@@ -247,15 +247,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
   return (
     <div className="space-y-4 pb-32">
-      {/* DEBUG: Test button to verify rendering works */}
-      <div className="fixed top-4 right-4 z-50">
-        <Button
-          onClick={() => setShowDrawing(true)}
-          className="bg-purple-600 hover:bg-purple-700"
-        >
-          TEST DRAW
-        </Button>
-      </div>
       {/* Top bar */}
       <div className="flex items-center justify-between border-b pb-4">
         <div className="space-y-1">
