@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
 import { ArrowLeft, ArrowRight, Check, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MathRenderer } from '@/components/admin/math-renderer'
@@ -356,9 +357,20 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           {currentQuestion.answer ? (
             <div className="space-y-4">
               <div className="text-sm font-semibold">Answer</div>
-              <div className="text-sm">
-                <MathRenderer text={currentQuestion.answer.content_text ?? ''} />
+              <div className="prose prose-sm max-w-none leading-relaxed">
+                <ReactMarkdown>{currentQuestion.answer.content_text ?? ''}</ReactMarkdown>
               </div>
+
+              {/* Answer images */}
+              {currentQuestion && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-semibold mb-3">Answer Images</h4>
+                  <QuestionImageUpload
+                    questionId={currentQuestion.id}
+                    imageType="answer"
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-12 space-y-4">

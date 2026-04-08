@@ -59,19 +59,40 @@ export async function POST(request: NextRequest) {
 
     const anthropic = createAnthropicClient()
 
-    const systemPrompt =
-      'You are an expert IGCSE Mathematics tutor. Generate a complete worked solution with this EXACT structure:\n\n**Working:**\n[Show every step clearly numbered, e.g. Step 1: ... Step 2: ... Step 3: ...]\n\n**Answer:**\n[State the final answer clearly, with units if applicable]\n\nReturn valid JSON with: step_by_step (array of strings, each a step), final_answer (string), mark_scheme (string), confidence_score (0.0 to 1.0).'
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const subtopicName = subtopic ? (subtopic as any).title ?? '' : ''
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sstOutcome = sst ? (sst as any).outcome ?? '' : ''
+    const subSubtopicName = sst ? (sst as any).name ?? '' : ''
 
-    const context = [
-      `Topic: ${topic?.name ?? 'Mathematics'}`,
-      `Sub-topic: ${subtopicName}`,
-      `Marks: ${question.marks ?? 'N/A'}`,
-    ].filter(Boolean).join('\n')
+    const systemPrompt = `You are an expert IGCSE Mathematics tutor.
+You MUST format your response EXACTLY like this with no exceptions:
+
+**Working:**
+Step 1: [first step with full calculation shown]
+Step 2: [second step with full calculation shown]
+Step 3: [continue until solution is complete]
+
+**Answer:**
+[final answer stated clearly with units]
+
+Rules you must follow:
+- ALWAYS begin with "**Working:**" on its own line
+- ALWAYS number every step starting from Step 1
+- ALWAYS end with "**Answer:**" on its own line
+- Show ALL arithmetic even if trivial
+- Minimum steps = number of marks awarded
+- Never give just a final answer without working
+
+Topic: ${subtopicName || 'Mathematics'}
+Sub-topic: ${subSubtopicName || ''}
+Marks: ${question.marks ?? 'N/A'}
+
+Question:
+${question.content_text}
+
+Return valid JSON with: step_by_step (array of strings, each a step), final_answer (string), mark_scheme (string), confidence_score (0.0 to 1.0).`
+
+    const context = `Topic: ${topic?.name ?? 'Mathematics'}\nSub-topic: ${subtopicName}\nMarks: ${question.marks ?? 'N/A'}`
 
     // ── Retry logic for 529 overloaded_error ──────────────────────────────────
     let aiResponse: any = null

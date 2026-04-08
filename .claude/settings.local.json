@@ -51,7 +51,10 @@
       "Bash(git push:*)",
       "Bash(grep -n \"filteredSubSubtopics\\\\|subSubtopic\\\\|SelectContent\\\\|SelectItem\\\\|sort_order\\\\|sort\\(\" /c/Users/jayou/Desktop/pha-igcse-platform/src/app/admin/questions/[id]/review-client.tsx)",
       "Bash(xargs grep:*)",
-      "Bash(find /c/Users/jayou/Desktop/pha-igcse-platform -name *syllabus* -o -name *0580*)"
+      "Bash(find /c/Users/jayou/Desktop/pha-igcse-platform -name *syllabus* -o -name *0580*)",
+      "Bash(grep -n \"step_by_step\\\\|Answer\\\\|answer\" src/app/admin/questions/[id]/review-client.tsx)",
+      "Bash(grep -n \"answerContent\\\\|<section\\\\|Right panel\" src/app/admin/questions/[id]/review-client.tsx)",
+      "Bash(grep -n \"answerContent\\\\|content_text\" src/app/admin/questions/[id]/review-client.tsx)"
     ]
   }
 }
