@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // ── Fetch subtopic + topic for context (skipped for mixed) ──────────────
 
-    let subtopic: { ref: string; name: string; topic_id: string } | null = null
+    let subtopic: { ref: string; title: string; topic_id: string } | null = null
     let topic: { ref: string; name: string } | null = null
 
     if (!isMixed) {
@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         .select('ref, title, topic_id')
         .eq('id', subtopic_id)
         .single()
-      subtopic = s
+      subtopic = s as any
 
       if (subtopic) {
         const { data: t } = await supabase

@@ -126,7 +126,7 @@ export function PDFCropModal({
       const context = canvas.getContext('2d')
       if (!context) throw new Error('Could not get canvas context')
 
-      await page.render({ canvasContext: context, viewport }).promise
+      await page.render({ canvasContext: context, viewport, canvas }).promise
 
       // Calculate crop bounds (convert from overlay space to canvas space)
       if (!overlayRef.current) throw new Error('Overlay ref missing')

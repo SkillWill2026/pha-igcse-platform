@@ -5,7 +5,8 @@ import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Loader2, X } from 'lucide-react'
 import { exportToBlob } from '@excalidraw/excalidraw'
-import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ExcalidrawImperativeAPI = any
 
 const Excalidraw = dynamic(
   () => import('@excalidraw/excalidraw').then(m => m.Excalidraw),
@@ -108,9 +109,6 @@ export function DrawingModal({
             onPointerUpdate={() => {}}
             onScrollChange={() => {}}
             ref={excalidrawAPI}
-            UIOptions={{
-              canvasMenu: { defaultItems: [] },
-            }}
             gridModeEnabled={true}
           />
         </div>

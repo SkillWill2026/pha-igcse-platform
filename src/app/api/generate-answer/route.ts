@@ -82,7 +82,7 @@ Use LaTeX notation for ALL mathematical expressions:
 - Examples: $8000 \times (0.75)^3$, $\frac{360° - 48°}{360°} \times \pi r^2$
 Always use LaTeX for fractions, powers, roots, and Greek letters.
 
-Topic: ${question.subtopics?.name ?? 'Mathematics'}, Marks: ${question.marks ?? 'N/A'}
+Topic: ${topic?.name ?? 'Mathematics'}, Marks: ${question.marks ?? 'N/A'}
 Question: ${question.content_text}`
           }
         ]
