@@ -15,7 +15,6 @@ type QueueAnswer = {
   question_id: string
   questions: {
     id: string
-    serial: string
     content: string
     topics: { name: string; ref: string } | null
     subtopics: { title: string } | null
@@ -230,7 +229,6 @@ export function AnswerQueueClient({ initialAnswers, initialError }: Props) {
           <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-4">
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Question</span>
-              <span className="text-xs font-mono text-gray-400">{selected.questions?.serial}</span>
               {selected.questions?.topics?.ref && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                   {selected.questions.topics.ref}
