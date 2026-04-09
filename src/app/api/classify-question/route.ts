@@ -77,9 +77,20 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
 
     let classification: { subtopic_id?: string; sub_subtopic_id?: string | null }
     try {
-      classification = JSON.parse(responseText)
+      // Strip markdown code fences if Claude wrapped the JSON
+      const cleaned = responseText
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/gi, '')
+        .trim()
+      // Extract JSON object if there's surrounding text
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+      const jsonStr = jsonMatch ? jsonMatch[0] : cleaned
+      classification = JSON.parse(jsonStr)
     } catch {
-      return NextResponse.json({ error: 'Classification parsing failed', raw: responseText }, { status: 500 })
+      return NextResponse.json({
+        error: 'Classification parsing failed',
+        raw: responseText
+      }, { status: 500 })
     }
 
     if (!classification.subtopic_id) {
