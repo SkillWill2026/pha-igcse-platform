@@ -1,172 +1,208 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { revalidatePath } from 'next/cache'
-import { createAnthropicClient } from '@/lib/anthropic'
+import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase'
+import { NextResponse } from 'next/server'
+import { embedTexts } from '@/lib/voyage'
 
-export const runtime = 'nodejs'
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+})
 
-interface AIAnswer {
-  step_by_step: string[]
-  final_answer: string
-  mark_scheme: string
-  confidence_score: number
-}
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const { question_id } = await request.json() as { question_id?: string }
-
+    const { question_id } = await request.json()
     if (!question_id) {
       return NextResponse.json({ error: 'question_id is required' }, { status: 400 })
     }
 
     const supabase = createAdminClient()
 
-    // Fetch question flat — no PostgREST join syntax to avoid FK constraint failures
-    const { data: question, error: qErr } = await supabase
+    // 1. Fetch the question
+    const { data: question, error: questionError } = await supabase
       .from('questions')
-      .select('id, content_text, difficulty, question_type, marks, status, topic_id, subtopic_id, sub_subtopic_id, exam_board_id')
+      .select(`
+        id,
+        content_text,
+        marks,
+        difficulty,
+        topic_id,
+        subtopic_id,
+        topics ( name, ref ),
+        subtopics ( title )
+      `)
       .eq('id', question_id)
       .single()
 
-    if (qErr || !question) {
-      console.error('[generate-answer] question not found — id:', question_id, 'err:', qErr?.message)
+    if (questionError || !question) {
       return NextResponse.json({ error: 'Question not found' }, { status: 404 })
     }
 
-    // Fetch related rows separately
-    const [topicRes, subtopicRes, sstRes, boardRes] = await Promise.all([
-      question.topic_id
-        ? supabase.from('topics').select('ref, name').eq('id', question.topic_id).single()
-        : Promise.resolve({ data: null }),
-      question.subtopic_id
-        ? supabase.from('subtopics').select('ref, title').eq('id', question.subtopic_id).single()
-        : Promise.resolve({ data: null }),
-      question.sub_subtopic_id
-        ? supabase.from('sub_subtopics').select('outcome').eq('id', question.sub_subtopic_id).single()
-        : Promise.resolve({ data: null }),
-      question.exam_board_id
-        ? supabase.from('exam_boards').select('name').eq('id', question.exam_board_id).single()
-        : Promise.resolve({ data: null }),
-    ])
+    // 2. RAG: embed the question and search the databank
+    let ragContext = ''
+    let ragSources: string[] = []
+    let bestSimilarity = 0
 
-    const topic    = topicRes.data
-    const subtopic = subtopicRes.data
-    const sst      = sstRes.data
-    const board    = boardRes.data
-
-    console.log('[generate-answer] question loaded:', question_id)
-
-    const anthropic = createAnthropicClient()
-
-    let generatedContent = ''
     try {
-      const message = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: `You are an IGCSE Maths tutor.
-START your response with exactly these two lines:
-**Working:**
-Step 1:
-Then continue with numbered steps showing full working.
-End with:
-**Answer:**
-[final answer with units]
+      const [queryEmbedding] = await embedTexts([question.content_text])
 
-Use LaTeX notation for ALL mathematical expressions:
-- Inline math: $expression$ (e.g. $x^2$, $\frac{a}{b}$, $\sqrt{x}$)
-- Display math: $$expression$$ for standalone equations
-- Examples: $8000 \times (0.75)^3$, $\frac{360° - 48°}{360°} \times \pi r^2$
-Always use LaTeX for fractions, powers, roots, and Greek letters.
-
-Topic: ${topic?.name ?? 'Mathematics'}, Marks: ${question.marks ?? 'N/A'}
-Question: ${question.content_text}`
-          }
-        ]
-      })
-      generatedContent = message.content[0].type === 'text' ? message.content[0].text : ''
-    } catch (err: any) {
-      console.error('[generate-answer] Anthropic error:', err)
-      return NextResponse.json(
-        { error: 'Generation failed — please try again.' },
-        { status: 503 }
+      const { data: chunks, error: searchError } = await supabase.rpc(
+        'search_databank_chunks',
+        {
+          query_embedding: queryEmbedding,
+          match_count: 5,
+          similarity_threshold: 0.3,
+        }
       )
+
+      if (!searchError && chunks && chunks.length > 0) {
+        bestSimilarity = chunks[0].similarity
+
+        ragContext = chunks
+          .map((c: {
+            content: string
+            document_title: string
+            doc_type: string
+            page_number: number | null
+            similarity: number
+          }) => {
+            const source = `[${c.document_title}${c.page_number ? `, p.${c.page_number}` : ''}]`
+            return `${source}\n${c.content}`
+          })
+          .join('\n\n---\n\n')
+
+        ragSources = chunks
+          .filter((c: { similarity: number }) => c.similarity > 0.4)
+          .map((c: {
+            document_title: string
+            doc_type: string
+            page_number: number | null
+          }) => `${c.document_title}${c.page_number ? `, p.${c.page_number}` : ''}`)
+          .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
+      }
+    } catch (ragError) {
+      console.warn('[generate-answer] RAG search failed, falling back to base generation:', ragError)
     }
 
-    const raw = generatedContent.trim()
-    console.log('[generate-answer] AI raw response (first 200):', raw.slice(0, 200))
+    // 3. Build the prompt
+    const topicName = (question.topics as { name: string; ref: string } | null)?.name ?? 'Mathematics'
+    const topicRef = (question.topics as { name: string; ref: string } | null)?.ref ?? ''
+    const subtopicTitle = (question.subtopics as { title: string } | null)?.title ?? ''
+    const hasRAG = ragContext.length > 0
 
-    // Use full markdown response as answer content
-    const aiAnswer: AIAnswer = {
-      step_by_step: [],
-      final_answer: raw,
-      mark_scheme: '',
-      confidence_score: 0.75
+    const systemPrompt = `You are an expert Cambridge IGCSE Mathematics tutor (syllabus 0580).
+Your job is to write a complete, step-by-step model answer for exam questions.
+
+FORMATTING RULES:
+- Use **Working:** for method steps and **Answer:** for the final answer
+- Use LaTeX for all mathematics: inline $x^2$ and display $$\\frac{a}{b}$$
+- Be precise — every mark should be earnable from your answer
+- Match the mark allocation exactly (${question.marks ?? 1} mark${(question.marks ?? 1) !== 1 ? 's' : ''})
+${hasRAG ? `
+SOURCE MATERIAL:
+You have been provided with relevant excerpts from Cambridge IGCSE textbooks and mark schemes below.
+Use this material to inform your answer. Cite your sources at the end using the format:
+*Source: [document name, page]*
+` : ''}
+IMPORTANT: Never fabricate mark scheme steps. If unsure, show the most rigorous mathematical method.`
+
+    const userPrompt = hasRAG
+      ? `Topic: ${topicRef} ${topicName}${subtopicTitle ? ` — ${subtopicTitle}` : ''}
+Marks: ${question.marks ?? 1}
+
+QUESTION:
+${question.content_text}
+
+RELEVANT SOURCE MATERIAL FROM DATABANK:
+${ragContext}
+
+Using the source material above where relevant, write a complete model answer for this question.`
+      : `Topic: ${topicRef} ${topicName}${subtopicTitle ? ` — ${subtopicTitle}` : ''}
+Marks: ${question.marks ?? 1}
+
+QUESTION:
+${question.content_text}
+
+Write a complete model answer for this question.`
+
+    // 4. Call Claude
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    })
+
+    const answerContent = message.content[0].type === 'text'
+      ? message.content[0].text
+      : ''
+
+    // 5. Calculate confidence score
+    let confidenceScore: number
+    if (hasRAG && bestSimilarity > 0.7) {
+      confidenceScore = 0.92
+    } else if (hasRAG && bestSimilarity > 0.5) {
+      confidenceScore = 0.82
+    } else if (hasRAG && bestSimilarity > 0.3) {
+      confidenceScore = 0.72
+    } else {
+      confidenceScore = 0.55
     }
 
-    // ── Check-then-branch: update existing or insert new ──────────────────────
-    console.log('[generate-answer] Checking for existing answer for question:', question_id)
-    const { data: existing } = await supabase
+    // Append source citation to answer content if RAG sources found
+    let finalContent = answerContent
+    if (ragSources.length > 0) {
+      finalContent += `\n\n---\n*Sources: ${ragSources.join('; ')}*`
+    }
+
+    // 6. Upsert the answer
+    const { data: existingAnswer } = await supabase
       .from('answers')
       .select('id')
       .eq('question_id', question_id)
       .maybeSingle()
-    console.log('[generate-answer] Found existing:', existing)
 
-    let dbErr: any = null
-    let saved: any = null
-
-    if (existing?.id) {
-      // Update existing answer
-      const updateRes = await supabase
+    let answer
+    if (existingAnswer) {
+      const { data, error } = await supabase
         .from('answers')
         .update({
-          content: String(aiAnswer.final_answer ?? ''),
-          step_by_step: aiAnswer.step_by_step.map(String),
-          mark_scheme: String(aiAnswer.mark_scheme ?? ''),
-          confidence_score: Math.min(1, Math.max(0, Number(aiAnswer.confidence_score) || 0)),
-          status: question.status,
-          ai_generated: true,
+          content: finalContent,
+          confidence_score: confidenceScore,
+          status: 'draft',
           updated_at: new Date().toISOString(),
         })
-        .eq('id', existing.id)
-        .select('id, content, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
+        .eq('id', existingAnswer.id)
+        .select()
         .single()
-
-      dbErr = updateRes.error
-      saved = updateRes.data
+      if (error) throw error
+      answer = data
     } else {
-      // Insert new answer
-      const insertRes = await supabase
+      const { data, error } = await supabase
         .from('answers')
         .insert({
           question_id,
-          content: String(aiAnswer.final_answer ?? ''),
-          step_by_step: aiAnswer.step_by_step.map(String),
-          mark_scheme: String(aiAnswer.mark_scheme ?? ''),
-          confidence_score: Math.min(1, Math.max(0, Number(aiAnswer.confidence_score) || 0)),
-          status: question.status,
+          content: finalContent,
+          confidence_score: confidenceScore,
+          status: 'draft',
           ai_generated: true,
         })
-        .select('id, content, step_by_step, mark_scheme, confidence_score, status, ai_generated, serial_number, created_at, updated_at')
+        .select()
         .single()
-
-      dbErr = insertRes.error
-      saved = insertRes.data
+      if (error) throw error
+      answer = data
     }
 
-    console.log('[generate-answer] upsert result — id:', saved?.id ?? null, 'dbErr:', dbErr?.message ?? 'none')
-    if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
-    if (!saved) return NextResponse.json({ error: 'Save returned no data' }, { status: 500 })
+    return NextResponse.json({
+      answer,
+      rag_used: hasRAG,
+      rag_sources: ragSources,
+      similarity: bestSimilarity,
+    })
 
-    revalidatePath('/admin/answers', 'layout')
-    return NextResponse.json({ answer: saved })
-  } catch (err) {
-    console.error('[POST /api/generate-answer]', err)
-    const errMsg = err instanceof Error ? err.message : 'Internal server error'
-    return NextResponse.json({ error: errMsg }, { status: 500 })
+  } catch (error) {
+    console.error('[generate-answer] Error:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to generate answer' },
+      { status: 500 }
+    )
   }
 }
