@@ -53,11 +53,18 @@ export async function GET() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const startDate = new Date(target.start_date)
+    startDate.setHours(0, 0, 0, 0)
     const endDate = new Date(target.end_date)
+    endDate.setHours(0, 0, 0, 0)
 
     const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    // Days elapsed since start (0 if not started yet)
     const daysElapsed = Math.max(0, Math.ceil((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
-    const daysRemaining = Math.max(1, Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
+
+    // Days remaining until end (counted from today or start, whichever is later)
+    const effectiveStart = today < startDate ? startDate : today
+    const daysRemaining = Math.max(1, Math.ceil((endDate.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)))
 
     const remaining = Math.max(0, target.total_target - approvedCount)
     const dynamicDaily = Math.ceil(remaining / daysRemaining)
