@@ -1,6 +1,12 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseClient = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 type DatabankDoc = {
   id: string
@@ -82,13 +88,13 @@ export function DatabankDocumentsClient({ initialDocuments, initialTopics, initi
 
       const { signedUrl, filePath } = urlData
 
-      // Step 2: upload directly to Supabase Storage (bypasses Vercel limit)
-      const uploadRes = await fetch(signedUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/pdf' },
-        body: file,
-      })
-      if (!uploadRes.ok) throw new Error('Direct upload to storage failed')
+      // Step 2: upload directly to Supabase Storage using JS client
+      const { error: storageError } = await supabaseClient.storage
+        .from('databank')
+        .uploadToSignedUrl(filePath, urlData.token, file, {
+          contentType: 'application/pdf',
+        })
+      if (storageError) throw new Error(`Storage upload failed: ${storageError.message}`)
 
       // Step 3: create DB record
       const docRes = await fetch('/api/databank/documents', {
