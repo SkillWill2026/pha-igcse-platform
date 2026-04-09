@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
 
     // Chunk-based extraction: process up to 3 chunks of 3 000 chars each.
     // If a chunk fails to parse it is skipped — resilient to garbled PDFs.
-    const CHUNK_SIZE = 5000
+    const CHUNK_SIZE = 3000
     const sourceText = text.slice(0, 15_000)
     const chunks: string[] = []
     for (let i = 0; i < sourceText.length; i += CHUNK_SIZE) {
@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
       try {
         const response = await anthropic.messages.create({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 2000,
+          max_tokens: 4096,
           messages: [{
             role: 'user',
             content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${chunk}`,
