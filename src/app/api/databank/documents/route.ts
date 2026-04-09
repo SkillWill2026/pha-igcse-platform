@@ -32,39 +32,22 @@ export async function GET() {
 export async function POST(request: Request) {
   const supabase = createAdminClient()
 
-  const formData = await request.formData()
-  const file = formData.get('file') as File
-  const title = formData.get('title') as string
-  const docType = formData.get('doc_type') as string
-  const topicId = formData.get('topic_id') as string | null
+  const body = await request.json()
+  const { title, doc_type, topic_id, file_path, file_name, file_size } = body
 
-  if (!file || !title || !docType) {
+  if (!title || !doc_type || !file_path || !file_name) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-  }
-
-  const fileBuffer = await file.arrayBuffer()
-  const filePath = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('databank')
-    .upload(filePath, fileBuffer, {
-      contentType: 'application/pdf',
-      upsert: false,
-    })
-
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 })
   }
 
   const { data: doc, error: dbError } = await supabase
     .from('databank_documents')
     .insert({
       title,
-      doc_type: docType,
-      topic_id: topicId || null,
-      file_path: filePath,
-      file_name: file.name,
-      file_size: file.size,
+      doc_type,
+      topic_id: topic_id || null,
+      file_path,
+      file_name,
+      file_size: file_size || null,
       processing_status: 'pending',
     })
     .select()

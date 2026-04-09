@@ -71,21 +71,42 @@ export function DatabankDocumentsClient({ initialDocuments, initialTopics, initi
     setUploading(true)
 
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('title', title)
-      formData.append('doc_type', docType)
-      if (topicId) formData.append('topic_id', topicId)
-
-      const res = await fetch('/api/databank/documents', {
+      // Step 1: get signed upload URL
+      const urlRes = await fetch('/api/databank/upload-url', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name }),
       })
-      const data = await res.json()
+      const urlData = await urlRes.json()
+      if (!urlRes.ok) throw new Error(urlData.error || 'Failed to get upload URL')
 
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
+      const { signedUrl, filePath } = urlData
 
-      const newDoc: DatabankDoc = data.document
+      // Step 2: upload directly to Supabase Storage (bypasses Vercel limit)
+      const uploadRes = await fetch(signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/pdf' },
+        body: file,
+      })
+      if (!uploadRes.ok) throw new Error('Direct upload to storage failed')
+
+      // Step 3: create DB record
+      const docRes = await fetch('/api/databank/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          doc_type: docType,
+          topic_id: topicId || null,
+          file_path: filePath,
+          file_name: file.name,
+          file_size: file.size,
+        }),
+      })
+      const docData = await docRes.json()
+      if (!docRes.ok) throw new Error(docData.error || 'Failed to create document record')
+
+      const newDoc: DatabankDoc = docData.document
       setDocuments(prev => [newDoc, ...prev])
       setTitle('')
       setDocType('past_paper')
@@ -96,6 +117,7 @@ export function DatabankDocumentsClient({ initialDocuments, initialTopics, initi
       setUploading(false)
       setProcessingId(newDoc.id)
 
+      // Step 4: trigger processing
       const processRes = await fetch(`/api/databank/process/${newDoc.id}`, { method: 'POST' })
       const processData = await processRes.json()
 
