@@ -19,22 +19,26 @@ export async function POST(request: Request) {
     // 1. Fetch the question
     const { data: question, error: questionError } = await supabase
       .from('questions')
-      .select(`
-        id,
-        content_text,
-        marks,
-        difficulty,
-        topic_id,
-        subtopic_id,
-        topics ( name, ref ),
-        subtopics ( title )
-      `)
+      .select('id, content_text, marks, difficulty, topic_id, subtopic_id')
       .eq('id', question_id)
       .single()
 
     if (questionError || !question) {
       return NextResponse.json({ error: 'Question not found' }, { status: 404 })
     }
+
+    // Fetch topic and subtopic separately
+    const [topicRes, subtopicRes] = await Promise.all([
+      question.topic_id
+        ? supabase.from('topics').select('name, ref').eq('id', question.topic_id).single()
+        : Promise.resolve({ data: null }),
+      question.subtopic_id
+        ? supabase.from('subtopics').select('title').eq('id', question.subtopic_id).single()
+        : Promise.resolve({ data: null }),
+    ])
+
+    const topic = topicRes.data
+    const subtopic = subtopicRes.data
 
     // 2. RAG: embed the question and search the databank
     let ragContext = ''
@@ -83,9 +87,9 @@ export async function POST(request: Request) {
     }
 
     // 3. Build the prompt
-    const topicName = (question.topics as { name: string; ref: string } | null)?.name ?? 'Mathematics'
-    const topicRef = (question.topics as { name: string; ref: string } | null)?.ref ?? ''
-    const subtopicTitle = (question.subtopics as { title: string } | null)?.title ?? ''
+    const topicName = topic?.name ?? 'Mathematics'
+    const topicRef = topic?.ref ?? ''
+    const subtopicTitle = subtopic?.title ?? ''
     const hasRAG = ragContext.length > 0
 
     const systemPrompt = `You are an expert Cambridge IGCSE Mathematics tutor (syllabus 0580).
