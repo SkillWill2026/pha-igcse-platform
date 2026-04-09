@@ -13,34 +13,53 @@ export default async function AnswerQueuePage() {
   try {
     const supabase = createAdminClient()
 
-    const { data, error: fetchError } = await supabase
-      .from('answers')
-      .select(`
-        id,
-        serial,
-        content,
-        confidence_score,
-        status,
-        created_at,
-        question_id,
-        questions (
+    const [answersRes, topicsRes, subtopicsRes] = await Promise.all([
+      supabase
+        .from('answers')
+        .select(`
           id,
           serial,
           content,
+          confidence_score,
           status,
-          topics ( name, ref ),
-          subtopics ( title )
-        )
-      `)
-      .in('status', ['approved', 'draft'])
-      .or('confidence_score.lt.0.7,confidence_score.is.null')
-      .order('confidence_score', { ascending: true, nullsFirst: true })
-      .limit(200)
+          created_at,
+          question_id,
+          questions (
+            id,
+            serial,
+            content,
+            status,
+            topic_id,
+            subtopic_id
+          )
+        `)
+        .in('status', ['approved', 'draft'])
+        .or('confidence_score.lt.0.7,confidence_score.is.null')
+        .order('confidence_score', { ascending: true, nullsFirst: true })
+        .limit(200),
+      supabase.from('topics').select('id, name, ref'),
+      supabase.from('subtopics').select('id, title'),
+    ])
 
-    if (fetchError) {
-      error = fetchError.message
+    if (answersRes.error) {
+      error = answersRes.error.message
     } else {
-      answers = data ?? []
+      const topicMap = Object.fromEntries(
+        (topicsRes.data ?? []).map(t => [t.id, t])
+      )
+      const subtopicMap = Object.fromEntries(
+        (subtopicsRes.data ?? []).map(s => [s.id, s])
+      )
+      answers = (answersRes.data ?? []).map(a => ({
+        ...a,
+        questions: a.questions
+          ? {
+              ...a.questions,
+              topics: topicMap[(a.questions as any).topic_id] ?? null,
+              subtopics: subtopicMap[(a.questions as any).subtopic_id] ?? null,
+            }
+          : null,
+      }))
     }
   } catch (e) {
     error = e instanceof Error ? e.message : 'Unknown error'
