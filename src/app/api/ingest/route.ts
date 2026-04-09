@@ -237,9 +237,9 @@ export async function POST(request: NextRequest) {
             content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${chunk}`,
           }],
         })
-        const raw = response.content[0].type === 'text' ? response.content[0].text : ''
+        const responseText = response.content[0].type === 'text' ? response.content[0].text : ''
 
-        const cleanedResponse = raw
+        const cleanedResponse = responseText
           .replace(/```json\s*/gi, '')
           .replace(/```\s*/gi, '')
           .trim()
@@ -247,17 +247,24 @@ export async function POST(request: NextRequest) {
         const jsonMatch = cleanedResponse.match(/\[[\s\S]*\]/)
         const jsonStr = jsonMatch ? jsonMatch[0] : cleanedResponse
 
-        let questions: AIQuestion[] = []
+        let questions: Array<{
+          content: string
+          part_label?: string | null
+          parent_question_ref?: string | null
+          question_type?: string
+          marks?: number
+          difficulty?: number
+        }> = []
+
         try {
-          const parsedJson = JSON.parse(jsonStr)
-          questions = Array.isArray(parsedJson) ? parsedJson : []
+          const parsed = JSON.parse(jsonStr)
+          questions = Array.isArray(parsed) ? parsed : []
         } catch (parseErr) {
-          console.warn('[ingest] JSON parse failed:', parseErr)
-          console.warn('[ingest] Raw was:', raw.slice(0, 200))
+          console.warn('[ingest] JSON parse failed, raw:', responseText.slice(0, 300))
           questions = []
         }
 
-        allQuestions.push(...questions)
+        allQuestions.push(...(questions as AIQuestion[]))
       } catch {
         continue
       }
