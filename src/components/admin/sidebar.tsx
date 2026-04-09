@@ -17,7 +17,7 @@ const NAV_LINKS: NavLink[] = [
   { href: '/admin/upload',    label: 'Upload',            icon: Upload,         adminOnly: false },
   { href: '/admin/review',        label: 'Review Queue',      icon: CheckCircle2,   adminOnly: false },
   { href: '/admin/answer-queue',       label: 'Answer Queue',      icon: AlertTriangle,  adminOnly: true  },
-  { href: '/admin/databank/documents', label: 'Databank',          icon: Database,       adminOnly: true  },
+  { href: '/admin/databank/dashboard', label: 'Databank',          icon: Database,       adminOnly: true  },
   { href: '/admin/questions',          label: 'Questions Library', icon: BookOpen,       adminOnly: false },
   { href: '/admin/answers',   label: 'Answers Library',   icon: FileText,       adminOnly: false },
   { href: '/admin/schedule',  label: 'Schedule',          icon: CalendarDays,   adminOnly: false },
@@ -136,6 +136,34 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                         {counts.deleted}
                       </span>
                     )}
+                  </Link>
+                </div>
+              )}
+
+              {/* Databank sub-links */}
+              {href === '/admin/databank/dashboard' && (
+                <div className="ml-7 mt-0.5 space-y-0.5">
+                  <Link
+                    href="/admin/databank/dashboard"
+                    className={cn(
+                      'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                      pathname === '/admin/databank/dashboard'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    )}
+                  >
+                    <span>Dashboard</span>
+                  </Link>
+                  <Link
+                    href="/admin/databank/documents"
+                    className={cn(
+                      'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                      pathname.startsWith('/admin/databank/documents')
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    )}
+                  >
+                    <span>Documents</span>
                   </Link>
                 </div>
               )}
