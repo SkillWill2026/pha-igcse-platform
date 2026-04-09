@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
 import { embedTexts, chunkText } from '@/lib/voyage'
+import { extractTextWithOCR, isImageBasedPdf } from '@/lib/ocr'
 
 export const maxDuration = 300
 
@@ -36,9 +37,15 @@ export async function POST(
 
     const pdfParse = (await import('pdf-parse')).default
     const parsed = await pdfParse(buffer)
-
     const pageCount = parsed.numpages
-    const fullText = parsed.text
+    let fullText = parsed.text
+    let usedOCR = false
+
+    if (isImageBasedPdf(fullText, pageCount)) {
+      console.log(`[databank] PDF "${doc.title}" is image-based, using Mistral OCR`)
+      fullText = await extractTextWithOCR(buffer)
+      usedOCR = true
+    }
 
     await supabase
       .from('databank_documents')
@@ -47,7 +54,13 @@ export async function POST(
 
     const chunks = chunkText(fullText, 2000, 200)
 
-    if (chunks.length === 0) throw new Error('No text could be extracted from PDF')
+    if (chunks.length === 0) {
+      throw new Error(
+        usedOCR
+          ? 'OCR could not extract text from this PDF. The file may be corrupted or protected.'
+          : 'No text could be extracted from PDF'
+      )
+    }
 
     await supabase
       .from('databank_chunks')
@@ -82,7 +95,12 @@ export async function POST(
       })
       .eq('id', id)
 
-    return NextResponse.json({ success: true, chunks: chunks.length, pages: pageCount })
+    return NextResponse.json({
+      success: true,
+      chunks: chunks.length,
+      pages: pageCount,
+      ocr_used: usedOCR,
+    })
 
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
