@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server'
 export async function GET() {
   const supabase = createAdminClient()
 
-  const [targetRes, topicTargetsRes, topicsRes, approvedRes, dailyRes] = await Promise.all([
+  const [targetRes, topicTargetsRes, topicsRes, approvedRes] = await Promise.all([
     supabase.from('production_targets').select('*').single(),
     supabase.from('production_topic_targets').select('topic_id, target'),
     supabase.from('topics').select('id, ref, name').order('ref'),
@@ -20,7 +20,6 @@ export async function GET() {
           .select('question_id')
           .eq('status', 'approved')
       ),
-    supabase.rpc('get_daily_production', {}),
   ])
 
   const target = targetRes.data
