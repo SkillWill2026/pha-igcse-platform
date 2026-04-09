@@ -9,7 +9,7 @@ export async function GET() {
       .from('answers')
       .select(`
         id,
-        serial,
+        serial_number,
         content,
         confidence_score,
         status,

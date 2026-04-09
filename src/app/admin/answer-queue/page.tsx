@@ -18,7 +18,7 @@ export default async function AnswerQueuePage() {
         .from('answers')
         .select(`
           id,
-          serial,
+          serial_number,
           content,
           confidence_score,
           status,

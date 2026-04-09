@@ -8,7 +8,7 @@ import 'katex/dist/katex.min.css'
 
 type QueueAnswer = {
   id: string
-  serial: string
+  serial_number: string
   content: string
   confidence_score: number | null
   status: string
@@ -204,7 +204,7 @@ export function AnswerQueueClient({ initialAnswers, initialError }: Props) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   {confidenceBadge(a.confidence_score)}
-                  <span className="text-xs text-gray-400 font-mono">{a.serial}</span>
+                  <span className="text-xs text-gray-400 font-mono">{a.serial_number}</span>
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {a.questions?.topics?.ref} · {a.questions?.subtopics?.title ?? '—'}
@@ -252,7 +252,7 @@ export function AnswerQueueClient({ initialAnswers, initialError }: Props) {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Answer</span>
-                <span className="text-xs font-mono text-gray-400">{selected.serial}</span>
+                <span className="text-xs font-mono text-gray-400">{selected.serial_number}</span>
                 {confidenceBadge(selected.confidence_score)}
               </div>
               <button
