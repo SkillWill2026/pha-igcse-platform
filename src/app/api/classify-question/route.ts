@@ -89,7 +89,6 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
       const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
       const jsonStr = jsonMatch ? jsonMatch[0] : cleaned
       classification = JSON.parse(jsonStr)
-      console.log('[classify] Claude returned:', JSON.stringify(classification))
     } catch {
       return NextResponse.json({
         error: 'Classification parsing failed',
@@ -114,9 +113,6 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
       )
       validSubSubtopicId = matchedSubSub?.id ?? null
     }
-    console.log('[classify] sub_subtopic_id from Claude:', classification.sub_subtopic_id)
-    console.log('[classify] validSubSubtopicId after validation:', validSubSubtopicId)
-    console.log('[classify] subSubtopics count:', subSubtopics.length)
 
     // Update the question
     const updates: Record<string, unknown> = {
