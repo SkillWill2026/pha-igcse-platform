@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabase
       .from('sub_subtopics')
-      .select('id, ext_num, core_num, outcome, e_only, tier, sort_order')
+      .select('id, ext_num, core_num, outcome, tier, sort_order')
       .eq('subtopic_id', subtopicId)
       .order('sort_order', { ascending: true })
 
