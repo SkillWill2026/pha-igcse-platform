@@ -9,7 +9,8 @@
       "Bash(ls -la .env*)",
       "Bash(git reset:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npm install:*)"
     ]
   }
 }
