@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       .from('sub_subtopics')
       .select('id, ext_num, core_num, outcome, e_only, sort_order, tier')
       .eq('subtopic_id', subtopicId)
-      .order('ref', { ascending: true })
+      .order('sort_order', { ascending: true })
 
     if (error) {
       console.error('Error fetching sub-subtopics:', error)
