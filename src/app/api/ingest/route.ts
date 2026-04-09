@@ -238,12 +238,7 @@ export async function POST(request: NextRequest) {
           }],
         })
         const rawContent = response.content[0]
-        console.log('[ingest] content block type:', rawContent?.type)
-        console.log('[ingest] content length:', rawContent?.type === 'text' ? rawContent.text?.length : 'N/A')
         const responseText = rawContent?.type === 'text' ? rawContent.text : ''
-        console.log('[ingest] responseText length:', responseText?.length ?? 0)
-        console.log('[ingest] firstBracket:', responseText?.indexOf('['))
-        console.log('[ingest] lastBracket:', responseText?.lastIndexOf(']'))
 
         // Extract JSON array from response - handles markdown fences and extra text
         let questions: Array<{
