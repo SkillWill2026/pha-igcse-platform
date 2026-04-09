@@ -240,8 +240,9 @@ export async function POST(request: NextRequest) {
         const responseText = response.content[0].type === 'text' ? response.content[0].text : ''
 
         const cleanedResponse = responseText
-          .replace(/```json\s*/gi, '')
-          .replace(/```\s*/gi, '')
+          .replace(/^```json\s*/m, '')
+          .replace(/^```\s*/m, '')
+          .replace(/```\s*$/m, '')
           .trim()
 
         const jsonMatch = cleanedResponse.match(/\[[\s\S]*\]/)
