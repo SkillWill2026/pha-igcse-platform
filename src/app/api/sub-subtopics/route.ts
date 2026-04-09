@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     // Fetch sub-subtopics for the given subtopic
     const { data, error } = await supabase
       .from('sub_subtopics')
-      .select('id, ref, name, e_only')
+      .select('id, ext_num, core_num, outcome, e_only, sort_order, tier')
       .eq('subtopic_id', subtopicId)
       .order('ref', { ascending: true })
 
