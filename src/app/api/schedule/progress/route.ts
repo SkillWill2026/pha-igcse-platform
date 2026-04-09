@@ -101,6 +101,11 @@ export async function GET() {
       on_track: variance >= 0,
       topic_breakdown: topicBreakdown,
       pct_complete: Math.round((approvedCount / target.total_target) * 100),
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+      }
     })
 
   } catch (err) {
