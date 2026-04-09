@@ -62,8 +62,11 @@ ${subtopicList}
 
 AVAILABLE SUB-SUBTOPICS FOR REFERENCE:
 ${subSubtopics
-  .map(s => `ID:${s.id} | subtopic:${s.subtopic_id} | ${s.outcome}`)
-  .slice(0, 100)
+  .filter(s => subtopics.find(st => st.id === s.subtopic_id))
+  .map(s => {
+    const parentSubtopic = subtopics.find(st => st.id === s.subtopic_id)
+    return `ID:${s.id} | subtopic_id:${s.subtopic_id} | ${parentSubtopic?.title ?? ''} → ${s.outcome}`
+  })
   .join('\n')}
 
 Which subtopic_id and sub_subtopic_id best matches this question?
@@ -101,14 +104,22 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
     const matchedSubtopic = subtopics.find(s => s.id === classification.subtopic_id)
     const newTopicId = matchedSubtopic?.topic_id ?? question.topic_id
 
+    // Verify sub_subtopic belongs to the matched subtopic
+    let validSubSubtopicId: string | null = null
+    if (classification.sub_subtopic_id) {
+      const matchedSubSub = subSubtopics.find(
+        s => s.id === classification.sub_subtopic_id &&
+             s.subtopic_id === classification.subtopic_id
+      )
+      validSubSubtopicId = matchedSubSub?.id ?? null
+    }
+
     // Update the question
     const updates: Record<string, unknown> = {
       subtopic_id: classification.subtopic_id,
       topic_id: newTopicId,
+      sub_subtopic_id: validSubSubtopicId,
       updated_at: new Date().toISOString(),
-    }
-    if (classification.sub_subtopic_id) {
-      updates.sub_subtopic_id = classification.sub_subtopic_id
     }
 
     const { data: updated, error: updateError } = await supabase
@@ -125,7 +136,7 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
     return NextResponse.json({
       success: true,
       subtopic_id: classification.subtopic_id,
-      sub_subtopic_id: classification.sub_subtopic_id ?? null,
+      sub_subtopic_id: validSubSubtopicId,
       topic_id: newTopicId,
       subtopic_title: matchedSubtopic?.title ?? null,
     })
