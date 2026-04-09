@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
