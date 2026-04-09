@@ -665,6 +665,16 @@ export function ReviewClient({
                   className="font-mono text-sm resize-y"
                   placeholder="Answer content…"
                 />
+                {answerContent && (
+                  <div className="rounded-lg border bg-muted/30 p-4">
+                    <p className="text-xs text-muted-foreground mb-2 font-medium">Preview</p>
+                    <div className="prose prose-sm dark:prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {answerContent}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
               </section>
 
               {/* Answer images */}
@@ -684,11 +694,13 @@ export function ReviewClient({
                   <span className="text-muted-foreground">AI Confidence:</span>
                   <span className={cn(
                     'font-semibold',
-                    answer.confidence_score >= 80 ? 'text-green-700'
-                      : answer.confidence_score >= 50 ? 'text-amber-700'
+                    answer.confidence_score >= 0.8 ? 'text-green-700'
+                      : answer.confidence_score >= 0.5 ? 'text-amber-700'
                       : 'text-red-700',
                   )}>
-                    {answer.confidence_score}%
+                    {answer.confidence_score
+                      ? `${Math.round(answer.confidence_score * 100)}%`
+                      : '—'}
                   </span>
                 </div>
               )}
