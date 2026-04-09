@@ -26,7 +26,8 @@ export default async function AnswerQueuePage() {
           question_id,
           questions (
             id,
-            content,
+            serial_number,
+            content_text,
             status,
             topic_id,
             subtopic_id

@@ -17,7 +17,8 @@ export async function GET() {
         question_id,
         questions (
           id,
-          content,
+          serial_number,
+          content_text,
           status,
           topic_id,
           subtopic_id

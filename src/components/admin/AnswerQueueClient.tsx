@@ -15,7 +15,9 @@ type QueueAnswer = {
   question_id: string
   questions: {
     id: string
-    content: string
+    serial_number: string
+    content_text: string
+    status: string
     topics: { name: string; ref: string } | null
     subtopics: { title: string } | null
   } | null
@@ -208,7 +210,7 @@ export function AnswerQueueClient({ initialAnswers, initialError }: Props) {
                   {a.questions?.topics?.ref} · {a.questions?.subtopics?.title ?? '—'}
                 </div>
                 <div className="text-xs text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">
-                  {a.questions?.content?.slice(0, 90)}…
+                  {a.questions?.content_text?.slice(0, 90)}…
                 </div>
               </div>
             </div>
@@ -240,7 +242,7 @@ export function AnswerQueueClient({ initialAnswers, initialError }: Props) {
             </div>
             <div className="prose prose-sm dark:prose-invert max-w-none">
               <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {selected.questions?.content ?? ''}
+                {selected.questions?.content_text ?? ''}
               </ReactMarkdown>
             </div>
           </div>
