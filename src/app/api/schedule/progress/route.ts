@@ -19,6 +19,14 @@ export async function GET() {
 
     const target = targetRes.data
 
+    return NextResponse.json({
+      debug: true,
+      raw_target: target,
+      fetched_at: new Date().toISOString()
+    }, {
+      headers: { 'Cache-Control': 'no-store' }
+    })
+
     // Get approved answers
     const { data: approvedAnswers, error: answersError } = await supabase
       .from('answers')
