@@ -145,6 +145,9 @@ export async function POST(request: NextRequest) {
       text = result.value
     }
 
+    console.log('[ingest] Text length:', text.length)
+    console.log('[ingest] Text preview:', text.slice(0, 500))
+
     if (!text.trim()) {
       return NextResponse.json(
         { error: 'Could not extract any text from the uploaded file' },
@@ -238,6 +241,7 @@ export async function POST(request: NextRequest) {
           }],
         })
         const raw = response.content[0].type === 'text' ? response.content[0].text : ''
+        console.log('[ingest] Claude raw response:', raw.slice(0, 500))
         const cleaned = raw
           .replace(/^```json\s*/i, '')
           .replace(/^```\s*/i, '')
@@ -245,6 +249,7 @@ export async function POST(request: NextRequest) {
           .trim()
         const parsed = JSON.parse(cleaned)
         if (Array.isArray(parsed)) {
+          console.log('[ingest] Questions extracted from chunk:', parsed.length)
           allQuestions.push(...(parsed as AIQuestion[]))
         }
       } catch {
