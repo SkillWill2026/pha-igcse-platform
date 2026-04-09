@@ -3,7 +3,7 @@ import { createAnthropicClient } from '@/lib/anthropic'
 import { createAdminClient } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
 const EXTRACTION_SYSTEM_PROMPT = `You are an expert Cambridge IGCSE Mathematics question extractor.
