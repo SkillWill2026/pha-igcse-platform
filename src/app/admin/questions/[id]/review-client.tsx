@@ -93,6 +93,7 @@ export function ReviewClient({
   const [imageJustUploaded, setImageJustUploaded] = useState(false)
   const [statusActionLoading, setStatusActionLoading] = useState(false)
   const [isGeneratingAnswer, setIsGeneratingAnswer] = useState(false)
+  const [isClassifying,      setIsClassifying]      = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -311,6 +312,36 @@ export function ReviewClient({
     }
   }
 
+  async function handleClassify() {
+    setIsClassifying(true)
+    try {
+      const res = await fetch('/api/classify-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question_id: question.id }),
+      })
+      const data = await res.json() as {
+        subtopic_id?: string
+        sub_subtopic_id?: string | null
+        subtopic_title?: string
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error ?? 'Classification failed')
+      if (data.subtopic_id) {
+        const matched = allSubtopics.find((s) => s.id === data.subtopic_id)
+        setSubtopicId(data.subtopic_id)
+        setSubSubtopicId(data.sub_subtopic_id ?? null)
+        toast.success(`Classified as: ${matched ? `${matched.ref} – ${matched.title}` : data.subtopic_title ?? data.subtopic_id}`)
+      } else {
+        toast.warning('No classification returned')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Classification failed')
+    } finally {
+      setIsClassifying(false)
+    }
+  }
+
   async function handleGenerateAnswer() {
     setIsGeneratingAnswer(true)
     try {
@@ -394,6 +425,18 @@ export function ReviewClient({
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClassify}
+              disabled={isClassifying}
+              className="h-8 gap-1.5 text-xs"
+            >
+              {isClassifying
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Sparkles className="h-3.5 w-3.5" />}
+              {isClassifying ? 'Classifying…' : 'Auto-classify'}
+            </Button>
           </div>
 
           {/* Sub-subtopic selector */}

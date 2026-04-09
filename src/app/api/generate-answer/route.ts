@@ -27,6 +27,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Question not found' }, { status: 404 })
     }
 
+    // Auto-classify subtopic + sub-subtopic
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/classify-question`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question_id }),
+      })
+      const { data: reclassified } = await supabase
+        .from('questions')
+        .select('id, content_text, marks, difficulty, topic_id, subtopic_id, sub_subtopic_id')
+        .eq('id', question_id)
+        .single()
+      if (reclassified) {
+        Object.assign(question, reclassified)
+      }
+    } catch (classifyErr) {
+      console.warn('[generate-answer] Auto-classification failed, continuing:', classifyErr)
+    }
+
     // Fetch topic and subtopic separately
     const [topicRes, subtopicRes] = await Promise.all([
       question.topic_id
