@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ProductionDashboard } from '@/components/admin/ProductionDashboard'
 import { TopicRow } from '@/components/schedule/TopicRow'
 import { TopicModal } from '@/components/schedule/TopicModal'
 import { SubtopicModal } from '@/components/schedule/SubtopicModal'
@@ -84,6 +85,7 @@ interface Props {
 }
 
 export function ScheduleClient({ initialTopics, isAdmin }: Props) {
+  const [activeTab, setActiveTab] = useState<'production' | 'curriculum'>('production')
   const [topics,      setTopics]      = useState<TopicWithSubtopics[]>(initialTopics)
 
   // Filters
@@ -298,6 +300,38 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* ── Tabs ── */}
+      <div className="flex border-b border-gray-200 dark:border-gray-800 mb-6">
+        <button
+          onClick={() => setActiveTab('production')}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'production'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+          }`}
+        >
+          Production
+        </button>
+        <button
+          onClick={() => setActiveTab('curriculum')}
+          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'curriculum'
+              ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+          }`}
+        >
+          Curriculum
+        </button>
+      </div>
+
+      {/* ── Production tab ── */}
+      {activeTab === 'production' && (
+        <ProductionDashboard isAdmin={isAdmin} />
+      )}
+
+      {/* ── Curriculum tab ── */}
+      {activeTab === 'curriculum' && (
+      <>
       {/* ── Header ── */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -471,6 +505,8 @@ export function ScheduleClient({ initialTopics, isAdmin }: Props) {
           ))
         )}
       </div>
+      </>
+      )}
 
       {/* ── Topic modal (add) ── */}
       <TopicModal
