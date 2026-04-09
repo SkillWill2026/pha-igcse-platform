@@ -122,9 +122,23 @@ export async function POST(request: NextRequest) {
     if (isPDF) {
       // pdf-parse is a CommonJS module (module.exports = fn), so .default may be undefined
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
-      const result = await pdfParse(buffer)
-      text = result.text
+      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string; numpages: number }>
+      const parsed = await pdfParse(buffer)
+      text = parsed.text
+      const pageCount = parsed.numpages
+
+      // If image-based PDF, use Mistral OCR fallback
+      const avgCharsPerPage = text.trim().length / Math.max(pageCount, 1)
+      if (avgCharsPerPage < 100) {
+        console.log('[ingest] Image-based PDF detected, using Mistral OCR')
+        try {
+          const { extractTextWithOCR } = await import('@/lib/ocr')
+          text = await extractTextWithOCR(buffer)
+          console.log('[ingest] OCR extracted', text.length, 'chars')
+        } catch (ocrErr) {
+          console.warn('[ingest] OCR failed:', ocrErr)
+        }
+      }
     } else {
       const mammoth = await import('mammoth')
       const result = await mammoth.extractRawText({ buffer })
