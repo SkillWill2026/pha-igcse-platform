@@ -6,6 +6,73 @@ export const runtime = 'nodejs'
 export const maxDuration = 60
 export const dynamic = 'force-dynamic'
 
+const EXTRACTION_SYSTEM_PROMPT = `You are an expert Cambridge IGCSE Mathematics question extractor.
+Your job is to extract individual questions from exam paper text and return them as a JSON array.
+
+CRITICAL EXTRACTION RULES — follow these exactly:
+
+RULE 1 — MULTI-PART QUESTIONS:
+When a question has lettered sub-parts like (a), (b), (c) or (i), (ii), (iii):
+- Create ONE separate question for EACH sub-part
+- The content of each question is ONLY the sub-part expression/text — NOT the parent instruction
+- Do NOT include the parent question number or instruction in the content
+- Set part_label to the letter/roman numeral e.g. "a", "b", "c"
+- Set parent_question_ref to the parent question number e.g. "1", "2"
+
+GOOD EXAMPLE — Input:
+"Question 1: Make y the subject of each formula
+(a) y + w = c
+(b) y − p = m
+(c) m + y = s"
+
+GOOD EXAMPLE — Output:
+[
+  {"content": "Make $y$ the subject: $y + w = c$", "part_label": "a", "parent_question_ref": "1", "question_type": "structured", "marks": 1, "difficulty": 1},
+  {"content": "Make $y$ the subject: $y - p = m$", "part_label": "b", "parent_question_ref": "1", "question_type": "structured", "marks": 1, "difficulty": 1},
+  {"content": "Make $y$ the subject: $m + y = s$", "part_label": "c", "parent_question_ref": "1", "question_type": "structured", "marks": 1, "difficulty": 1}
+]
+
+BAD EXAMPLE — Never do this:
+[{"content": "Make y the subject of each formula: (a) y+w=c (b) y-p=m (c) m+y=s"}]
+
+RULE 2 — IMAGE-TAGGED QUESTIONS (e.g. angles, geometry worksheets):
+When questions are identified by grid tags like A1, A2, A3, B1, B2, C1, C2 etc:
+- Create ONE separate question per tag
+- The content should be the tag + the instruction text
+- Add a note that the diagram must be added manually
+- Set parent_question_ref to the letter group e.g. "A", "B", "C"
+- Set part_label to the number e.g. "1", "2", "3"
+
+GOOD EXAMPLE — Input:
+"A1 Find the value of x
+A2 Find the values of x and y
+B1 Find the values of x and y"
+
+GOOD EXAMPLE — Output:
+[
+  {"content": "A1: Find the value of $x$. [Diagram required — add image manually]", "part_label": "1", "parent_question_ref": "A", "question_type": "structured", "marks": 2, "difficulty": 2},
+  {"content": "A2: Find the values of $x$ and $y$. [Diagram required — add image manually]", "part_label": "2", "parent_question_ref": "A", "question_type": "structured", "marks": 3, "difficulty": 2},
+  {"content": "B1: Find the values of $x$ and $y$. [Diagram required — add image manually]", "part_label": "1", "parent_question_ref": "B", "question_type": "structured", "marks": 3, "difficulty": 3}
+]
+
+RULE 3 — LaTeX FORMATTING:
+- Wrap all mathematical expressions in LaTeX: inline $x^2$ or display $$\\frac{a}{b}$$
+- Convert fractions: "a/b" → $\\frac{a}{b}$
+- Convert powers: "x^2" → $x^2$, "y^3" → $y^3$
+- Convert roots: "√y" → $\\sqrt{y}$
+- Convert Greek letters: "π" → $\\pi$
+
+RULE 4 — WHAT TO SKIP:
+- Skip page headers, footers, copyright notices, website URLs, QR code text
+- Skip answer sections and worked examples
+- Skip instructions that are not questions (e.g. "Click here", "Scan here")
+- Skip blank lines and decorative text
+
+RULE 5 — OUTPUT FORMAT:
+Return ONLY a valid JSON array. No markdown, no code fences, no explanation.
+Each object must have: content (string), part_label (string|null), parent_question_ref (string|null), question_type ("mcq"|"short_answer"|"structured"|"extended"), marks (integer 1-10), difficulty (integer 1-5)
+`
+
 const VALID_QUESTION_TYPES = ['mcq', 'short_answer', 'structured', 'extended'] as const
 type QuestionType = (typeof VALID_QUESTION_TYPES)[number]
 
@@ -127,36 +194,7 @@ export async function POST(request: NextRequest) {
     // ── Anthropic extraction ─────────────────────────────────────────────────
     const anthropic = createAnthropicClient()
 
-    const systemPrompt = `You are an expert Cambridge IGCSE Mathematics (0580) question extractor.
-
-EXTRACTION RULES:
-- Extract every question and sub-question from the document.
-- When a question has parts labelled (a), (b), (c), (i), (ii), (iii) etc., treat EACH PART as a completely separate, independent question.
-- For each part, the "content" field must contain: the full context needed to answer that part (include any shared stem or scenario from the parent question at the top), then the specific part question. Do NOT include the parent question number in the content.
-- Set "parent_question_ref" to the original question number from the paper (e.g. "3" for Question 3).
-- Set "part_label" to the part letter or number (e.g. "a", "b", "i", "ii"). Leave null if the question has no parts.
-- If a question has no parts, set both parent_question_ref and part_label to null.
-- Never merge multiple parts into a single question.
-- Include ALL parts — do not skip any.
-
-Return ONLY a valid JSON array where each element is one independent question with exactly these fields:
-{
-  "content": "full question text including any shared context",
-  "parent_question_ref": "3" or null,
-  "part_label": "a" or null,
-  "question_type": "mcq" | "short_answer" | "structured" | "extended",
-  "difficulty": 1-5,
-  "marks": number or null
-}
-
-difficulty scale:
-  1 = single-step recall
-  2 = routine multi-step
-  3 = moderate application / unfamiliar context
-  4 = challenging reasoning or proof
-  5 = extended problem solving / investigation
-
-Output ONLY the JSON array — no markdown fences, no explanation, no extra text.`
+    const systemPrompt = EXTRACTION_SYSTEM_PROMPT
 
     const contextLine = isMixed
       ? 'This paper contains mixed topics — extract all questions without assuming a specific subtopic.'
@@ -165,8 +203,8 @@ Output ONLY the JSON array — no markdown fences, no explanation, no extra text
 
     // Chunk-based extraction: process up to 3 chunks of 3 000 chars each.
     // If a chunk fails to parse it is skipped — resilient to garbled PDFs.
-    const CHUNK_SIZE = 3000
-    const sourceText = text.slice(0, 9_000)
+    const CHUNK_SIZE = 5000
+    const sourceText = text.slice(0, 15_000)
     const chunks: string[] = []
     for (let i = 0; i < sourceText.length; i += CHUNK_SIZE) {
       chunks.push(sourceText.slice(i, i + CHUNK_SIZE))
