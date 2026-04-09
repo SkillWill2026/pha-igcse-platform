@@ -239,15 +239,7 @@ export async function POST(request: NextRequest) {
         })
         const responseText = response.content[0].type === 'text' ? response.content[0].text : ''
 
-        const cleanedResponse = responseText
-          .replace(/^```json\s*/m, '')
-          .replace(/^```\s*/m, '')
-          .replace(/```\s*$/m, '')
-          .trim()
-
-        const jsonMatch = cleanedResponse.match(/\[[\s\S]*\]/)
-        const jsonStr = jsonMatch ? jsonMatch[0] : cleanedResponse
-
+        // Extract JSON array from response - handles markdown fences and extra text
         let questions: Array<{
           content: string
           part_label?: string | null
@@ -258,10 +250,17 @@ export async function POST(request: NextRequest) {
         }> = []
 
         try {
-          const parsed = JSON.parse(jsonStr)
-          questions = Array.isArray(parsed) ? parsed : []
+          // Find the first [ and last ] to extract the JSON array
+          const firstBracket = responseText.indexOf('[')
+          const lastBracket = responseText.lastIndexOf(']')
+
+          if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+            const jsonStr = responseText.slice(firstBracket, lastBracket + 1)
+            const parsed = JSON.parse(jsonStr)
+            questions = Array.isArray(parsed) ? parsed : []
+          }
         } catch (parseErr) {
-          console.warn('[ingest] JSON parse failed, raw:', responseText.slice(0, 300))
+          console.warn('[ingest] JSON parse failed:', String(parseErr).slice(0, 100))
           questions = []
         }
 
