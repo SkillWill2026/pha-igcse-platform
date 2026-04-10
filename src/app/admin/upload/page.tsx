@@ -3,15 +3,28 @@ import { UploadClient } from './upload-client'
 
 export const dynamic = 'force-dynamic'
 
-export default async function UploadPage() {
+interface PageProps {
+  searchParams: { subject?: string }
+}
+
+export default async function UploadPage({ searchParams }: PageProps) {
+  const subjectCode = searchParams.subject ?? '0580'
+
   let boards: { id: string; name: string }[] = []
+  let subjectId: string | null = null
+  let subjectName = 'Mathematics'
 
   try {
     const supabase = createAdminClient()
-    const { data } = await supabase.from('exam_boards').select('id, name').order('name')
-    boards = data ?? []
+    const [boardsRes, subjectRes] = await Promise.all([
+      supabase.from('exam_boards').select('id, name').order('name'),
+      supabase.from('subjects').select('id, name').eq('code', subjectCode).single(),
+    ])
+    boards = boardsRes.data ?? []
+    subjectId = subjectRes.data?.id ?? null
+    subjectName = subjectRes.data?.name ?? 'Mathematics'
   } catch {
-    // Env vars not set yet — page renders with empty dropdowns
+    // Env vars not set yet
   }
 
   return (
@@ -20,7 +33,7 @@ export default async function UploadPage() {
       <p className="text-sm text-muted-foreground mb-8">
         Upload a PDF or DOCX past-paper and the AI will extract all questions automatically.
       </p>
-      <UploadClient boards={boards} />
+      <UploadClient boards={boards} subjectId={subjectId} subjectName={subjectName} />
     </div>
   )
 }

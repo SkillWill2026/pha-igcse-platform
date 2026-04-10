@@ -9,30 +9,62 @@ interface DraftQuestion extends QuestionWithRelations {
   answer: AnswerRow | null
 }
 
-export default async function ReviewPage() {
+interface PageProps {
+  searchParams: { subject?: string }
+}
+
+export default async function ReviewPage({ searchParams }: PageProps) {
   noStore()
+  const subjectCode = searchParams.subject ?? '0580'
+
   let drafts: DraftQuestion[] = []
   let error: string | null = null
 
   try {
     const supabase = createAdminClient()
 
-    // Fetch all draft questions ordered by subtopic, with answers and images
+    // Resolve subject code → topic IDs for filtering
+    const subjectRes = await supabase
+      .from('subjects')
+      .select('id')
+      .eq('code', subjectCode)
+      .single()
+
+    const subjectId = subjectRes.data?.id ?? null
+
+    let topicIds: string[] = []
+    if (subjectId) {
+      const { data: topicsData } = await supabase
+        .from('topics')
+        .select('id')
+        .eq('subject_id', subjectId)
+      topicIds = (topicsData ?? []).map((t) => t.id)
+    }
+
+    // If subject has no topics yet, return empty
+    if (topicIds.length === 0) {
+      return <ReviewQueueClient drafts={[]} initialError={null} />
+    }
+
+    // Fetch draft questions filtered by subject's topics
     const { data: questions, error: qErr } = await supabase
       .from('questions')
       .select(`
-        id, serial_number, content_text, difficulty, question_type, marks, status, exam_board_id, topic_id, subtopic_id, sub_subtopic_id, image_url, parent_question_ref, part_label, ai_extracted, source_question_id, created_at, updated_at, batch_id,
+        id, serial_number, content_text, difficulty, question_type, marks,
+        status, exam_board_id, topic_id, subtopic_id, sub_subtopic_id,
+        image_url, parent_question_ref, part_label, ai_extracted,
+        source_question_id, created_at, updated_at, batch_id,
         answers(id, content, confidence_score, serial_number, status),
         question_images!question_id(id, storage_path, public_url, image_type, sort_order)
       `)
       .eq('status', 'draft')
+      .in('topic_id', topicIds)
       .order('subtopic_id')
 
     if (qErr) {
       console.error('[ReviewPage] questions fetch error:', qErr.message)
       error = `Failed to fetch questions: ${qErr.message}`
     } else if (questions && questions.length > 0) {
-      // Fetch all reference data in parallel
       const questionIds = questions.map((q) => q.id)
       const [boardRes, topicRes, subtopicRes, sstRes, answerRes] = await Promise.all([
         supabase.from('exam_boards').select('id, name'),
@@ -56,9 +88,9 @@ export default async function ReviewPage() {
         sub_subtopics: sstMap.get(q.sub_subtopic_id) ?? null,
         answer_serial: null,
         answer_status: null,
-        // Use answer from nested select first, fallback to answerMap for backward compat
-        answer: Array.isArray(q.answers) && q.answers.length > 0 ? q.answers[0] : answerMap.get(q.id) ?? null,
-        // question_images already included in q from select
+        answer: Array.isArray(q.answers) && q.answers.length > 0
+          ? q.answers[0]
+          : answerMap.get(q.id) ?? null,
       })) as DraftQuestion[]
     }
   } catch (err) {
