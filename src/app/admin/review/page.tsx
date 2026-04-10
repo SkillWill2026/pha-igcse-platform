@@ -41,12 +41,40 @@ export default async function ReviewPage({ searchParams }: PageProps) {
       topicIds = (topicsData ?? []).map((t) => t.id)
     }
 
-    // If subject has no topics yet, return empty
+    // If subject has no topics yet, still show unclassified questions
     if (topicIds.length === 0) {
-      return <ReviewQueueClient key={subjectCode} drafts={[]} initialError={null} />
+      const { data: unclassified } = await supabase
+        .from('questions')
+        .select(`
+          id, serial_number, content_text, difficulty, question_type,
+          marks, status, exam_board_id, topic_id, subtopic_id,
+          sub_subtopic_id, image_url, parent_question_ref, part_label,
+          ai_extracted, source_question_id, created_at, updated_at,
+          batch_id,
+          answers(id, content, confidence_score, serial_number, status),
+          question_images!question_id(id, storage_path, public_url, image_type, sort_order)
+        `)
+        .eq('status', 'draft')
+        .is('topic_id', null)
+        .order('created_at', { ascending: false })
+
+      const pendingDrafts = (unclassified ?? []).map((q) => ({
+        ...q,
+        exam_boards: null,
+        topics: null,
+        subtopics: null,
+        sub_subtopics: null,
+        answer_serial: null,
+        answer_status: null,
+        answer: Array.isArray(q.answers) && q.answers.length > 0
+          ? q.answers[0]
+          : null,
+      })) as DraftQuestion[]
+
+      return <ReviewQueueClient key={subjectCode} drafts={pendingDrafts} initialError={null} />
     }
 
-    // Fetch draft questions filtered by subject's topics
+    // Fetch draft questions filtered by subject's topics, including unclassified (null topic_id)
     const { data: questions, error: qErr } = await supabase
       .from('questions')
       .select(`
@@ -58,7 +86,7 @@ export default async function ReviewPage({ searchParams }: PageProps) {
         question_images!question_id(id, storage_path, public_url, image_type, sort_order)
       `)
       .eq('status', 'draft')
-      .in('topic_id', topicIds)
+      .or(`topic_id.in.(${topicIds.join(',')}),topic_id.is.null`)
       .order('subtopic_id')
 
     if (qErr) {
