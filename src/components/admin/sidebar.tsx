@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Database, FileText, Loader2, LogOut, Upload, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +11,13 @@ interface NavLink {
   label:     string
   icon:      React.ElementType
   adminOnly: boolean
+}
+
+type Subject = {
+  id: string
+  name: string
+  code: string
+  color: string
 }
 
 const NAV_LINKS: NavLink[] = [
@@ -32,8 +39,11 @@ interface SidebarProps {
 export function Sidebar({ role, fullName }: SidebarProps) {
   const pathname    = usePathname()
   const router      = useRouter()
+  const searchParams = useSearchParams()
+  const activeSubject = searchParams.get('subject') ?? '0580'
   const [signingOut, setSigningOut] = useState(false)
   const [counts, setCounts] = useState<{ rejected: number; deleted: number; draft: number } | null>(null)
+  const [subjects, setSubjects] = useState<Subject[]>([])
 
   const visibleLinks = NAV_LINKS.filter((l) => !l.adminOnly || role === 'admin')
 
@@ -45,6 +55,19 @@ export function Sidebar({ role, fullName }: SidebarProps) {
       .then(([qCounts, draftCount]) => setCounts({ ...qCounts, ...draftCount }))
       .catch(() => {})
   }, [pathname])
+
+  useEffect(() => {
+    fetch('/api/subjects')
+      .then(r => r.json())
+      .then(d => setSubjects(d.subjects ?? []))
+      .catch(() => {})
+  }, [])
+
+  const switchSubject = (code: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('subject', code)
+    router.push(`${pathname}?${params.toString()}`)
+  }
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -72,6 +95,26 @@ export function Sidebar({ role, fullName }: SidebarProps) {
           <p className="text-xs text-muted-foreground mt-0.5 capitalize">{role}</p>
         </div>
       </div>
+
+      {subjects.length > 1 && (
+        <div className="px-3 mb-3">
+          <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+            {subjects.map(s => (
+              <button
+                key={s.code}
+                onClick={() => switchSubject(s.code)}
+                className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
+                  activeSubject === s.code
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                {s.code}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <nav className="flex-1 px-3 space-y-0.5">
         {visibleLinks.map(({ href, label, icon: Icon }) => {
