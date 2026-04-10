@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowRight, Loader2, Trash2, Wand2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -89,13 +89,15 @@ interface QuestionGroup {
 
 interface Props {
   boards: { id: string; name: string }[]
-  subjectId?: string | null
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function QuestionsLibrary({ boards, subjectId }: Props) {
+export function QuestionsLibrary({ boards }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const subjectCode = searchParams.get('subject') ?? '0580'
+  const [subjectId, setSubjectId] = useState<string | null>(null)
 
   // ── Questions state (fetched client-side) ──────────────────────────────────
   const [questions,  setQuestions]  = useState<QuestionWithRelations[]>([])
@@ -160,6 +162,16 @@ export function QuestionsLibrary({ boards, subjectId }: Props) {
       .then((d) => setBatches(Array.isArray(d) ? d as UploadBatch[] : []))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    fetch('/api/subjects')
+      .then(r => r.json())
+      .then((d: { subjects?: { id: string; code: string }[] }) => {
+        const match = (d.subjects ?? []).find(s => s.code === subjectCode)
+        setSubjectId(match?.id ?? null)
+      })
+      .catch(() => {})
+  }, [subjectCode])
 
   // ── Build groups ───────────────────────────────────────────────────────────
   const groups = useMemo<QuestionGroup[]>(() => {
@@ -388,7 +400,7 @@ export function QuestionsLibrary({ boards, subjectId }: Props) {
         <div className="flex flex-wrap gap-4 items-start">
           <div className="w-72">
             <SyllabusSelector
-              key={`${selectorKey}-${subjectId}`}
+              key={`${selectorKey}-${subjectCode}`}
               onTopicChange={setTopicFilter}
               onSubtopicChange={setSubtopicFilter}
               onSubSubtopicChange={setSubSubtopicFilter}
