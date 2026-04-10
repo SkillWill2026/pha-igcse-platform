@@ -26,6 +26,7 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Default security headers for all routes
         source: '/(.*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
@@ -44,6 +45,28 @@ const nextConfig = {
               "worker-src 'self' blob:",
               "frame-ancestors 'self'",
               "frame-src 'self'",
+            ].join('; '),
+          },
+        ],
+      },
+      {
+        // Override for excalidraw embed — must be allowed in iframe
+        source: '/excalidraw-embed(.*)',
+        headers: [
+          // Remove DENY — allow same-origin iframing
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' blob:",
+              "worker-src 'self' blob:",
+              "frame-ancestors 'self'",
             ].join('; '),
           },
         ],
