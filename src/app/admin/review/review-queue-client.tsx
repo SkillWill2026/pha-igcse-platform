@@ -49,7 +49,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [subSubtopics, setSubSubtopics] = useState<SubSubtopic[]>([])
   const [selectedSubSubtopic, setSelectedSubSubtopic] = useState<string | null>(null)
   const [loadingSubSubtopics, setLoadingSubSubtopics] = useState(false)
-  const [classifying, setClassifying] = useState(false)
   const [bgAnswers, setBgAnswers] = useState<Map<string, AnswerRow>>(new Map())
 
   const remaining = drafts.length - currentIdx - 1
@@ -315,35 +314,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
   }
 
-  async function handleAutoClassify() {
-    if (!currentQuestion || classifying) return
-    setClassifying(true)
-    try {
-      const res = await fetch('/api/classify-question', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question_id: currentQuestion.id }),
-      })
-      if (!res.ok) {
-        const d = await res.json() as { error?: string }
-        throw new Error(d.error ?? 'Classification failed')
-      }
-      const data = await res.json() as { sub_subtopic_id?: string }
-      if (data.sub_subtopic_id) {
-        setSelectedSubSubtopic(data.sub_subtopic_id)
-        setCurrentQuestion((q) => q ? { ...q, sub_subtopic_id: data.sub_subtopic_id } : q as any)
-        toast.success('Sub-subtopic auto-classified')
-      } else {
-        toast.info('Could not auto-classify this question')
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Classification failed'
-      toast.error(msg)
-    } finally {
-      setClassifying(false)
-    }
-  }
-
   function handleNext() {
     if (currentIdx < drafts.length - 1) {
       setCurrentIdx(currentIdx + 1)
@@ -458,20 +428,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
               </select>
             </div>
           )}
-
-          <div className="flex items-center gap-2 py-1">
-            <button
-              onClick={handleAutoClassify}
-              disabled={classifying}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
-            >
-              {classifying ? (
-                <><Loader2 className="h-3 w-3 animate-spin" /> Classifying...</>
-              ) : (
-                '✨ Auto Classify Sub-subtopic'
-              )}
-            </button>
-          </div>
 
           {/* Question content */}
           <section className="space-y-3">
