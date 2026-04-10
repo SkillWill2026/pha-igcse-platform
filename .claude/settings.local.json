@@ -19,7 +19,9 @@
       "Bash(sed -n '1,50p' src/app/api/ingest/route.ts)",
       "Bash(sed -n '150,300p' src/app/api/ingest/route.ts)",
       "Bash(cat src/app/api/schedule/topics/[id]/route.ts)",
-      "Bash(cat src/app/api/schedule/subtopics/[id]/route.ts)"
+      "Bash(cat src/app/api/schedule/subtopics/[id]/route.ts)",
+      "Bash(npm audit:*)",
+      "Bash(npx @sentry/wizard@latest -i nextjs --saas)"
     ]
   }
 }
