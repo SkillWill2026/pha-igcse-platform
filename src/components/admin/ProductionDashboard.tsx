@@ -10,6 +10,18 @@ type TopicBreakdown = {
   approved: number
 }
 
+type TutorBreakdown = {
+  id: string
+  name: string
+  topic_count: number
+  topic_refs: string[]
+  total_target: number
+  approved: number
+  pct: number
+  daily_target: number
+  status: string
+}
+
 type ProgressData = {
   total_target: number
   approved_count: number
@@ -41,6 +53,8 @@ export function ProductionDashboard({ isAdmin }: Props) {
   const [editingTopics, setEditingTopics] = useState(false)
   const [topicEdits, setTopicEdits] = useState<Record<string, number>>({})
   const [saving, setSaving] = useState(false)
+  const [tutors, setTutors] = useState<TutorBreakdown[]>([])
+  const [tutorsLoading, setTutorsLoading] = useState(true)
 
   const fetchProgress = useCallback(async () => {
     try {
@@ -61,7 +75,14 @@ export function ProductionDashboard({ isAdmin }: Props) {
     }
   }, [])
 
-  useEffect(() => { fetchProgress() }, [fetchProgress])
+  useEffect(() => {
+    fetchProgress()
+    // Fetch tutor breakdown (admin only)
+    fetch('/api/schedule/tutors')
+      .then(r => r.json())
+      .then(d => { setTutors(d.tutors ?? []); setTutorsLoading(false) })
+      .catch(() => setTutorsLoading(false))
+  }, [fetchProgress])
 
   const saveTotal = async () => {
     setSaving(true)
@@ -336,6 +357,84 @@ export function ProductionDashboard({ isAdmin }: Props) {
           </div>
         )}
       </div>
+
+      {/* By tutor breakdown — admin only */}
+      {isAdmin && (
+        <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">By tutor</div>
+          {tutorsLoading ? (
+            <div className="text-xs text-gray-400">Loading tutor data…</div>
+          ) : tutors.length === 0 ? (
+            <div className="text-xs text-gray-400">No tutors found. Create tutor accounts in Users.</div>
+          ) : (
+            <div className="space-y-4">
+              {tutors.map(tutor => {
+                const statusColor = {
+                  'unassigned': 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+                  'not-started': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+                  'complete': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                  'on-track': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                  'behind': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                }[tutor.status] ?? 'bg-gray-100 text-gray-500'
+                const statusLabel = {
+                  'unassigned': 'Unassigned',
+                  'not-started': 'Not started',
+                  'complete': 'Complete',
+                  'on-track': 'On track',
+                  'behind': 'Behind',
+                }[tutor.status] ?? tutor.status
+                const barColor = tutor.status === 'complete' ? 'bg-green-500'
+                  : tutor.status === 'on-track' ? 'bg-blue-500'
+                  : tutor.status === 'behind' ? 'bg-amber-500'
+                  : 'bg-gray-300'
+
+                return (
+                  <div key={tutor.id} className="rounded-lg border border-gray-100 dark:border-gray-800 p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
+                          {tutor.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{tutor.name}</div>
+                          <div className="text-xs text-gray-400">
+                            {tutor.topic_count === 0
+                              ? 'No topics assigned'
+                              : `${tutor.topic_count} topics · ${tutor.topic_refs.join(', ')}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        {tutor.total_target > 0 && (
+                          <div className="text-right">
+                            <div className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                              {tutor.daily_target}/day needed
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {tutor.approved.toLocaleString()} / {tutor.total_target.toLocaleString()}
+                            </div>
+                          </div>
+                        )}
+                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${statusColor}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                    </div>
+                    {tutor.total_target > 0 && (
+                      <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                          style={{ width: `${Math.min(100, tutor.pct)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* PPT progress */}
       <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
