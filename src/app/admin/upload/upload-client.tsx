@@ -77,7 +77,7 @@ function FileStatusBadge({ item }: { item: QueuedFile }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function UploadClient({ boards }: { boards: ExamBoard[] }) {
+export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamBoard[]; subjectId: string | null; subjectName: string }) {
   const [boardId,       setBoardId]       = useState('')
   const [topicId,       setTopicId]       = useState<string | null>(null)
   const [subtopicId,    setSubtopicId]    = useState<string | null>(null)
@@ -249,6 +249,7 @@ export function UploadClient({ boards }: { boards: ExamBoard[] }) {
               onSubtopicChange={setSubtopicId}
               onSubSubtopicChange={setSubSubtopicId}
               showTierBadge={false}
+              subjectId={subjectId}
             />
           </div>
         </div>

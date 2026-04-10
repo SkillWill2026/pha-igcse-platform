@@ -31,7 +31,7 @@ export default async function UploadPage({ searchParams }: PageProps) {
     <div>
       <h1 className="text-2xl font-bold mb-1">Upload Exam Paper</h1>
       <p className="text-sm text-muted-foreground mb-8">
-        Upload a PDF or DOCX past-paper and the AI will extract all questions automatically.
+        Upload a PDF or DOCX past-paper for <strong>{subjectName}</strong> and the AI will extract all questions automatically.
       </p>
       <UploadClient boards={boards} subjectId={subjectId} subjectName={subjectName} />
     </div>
