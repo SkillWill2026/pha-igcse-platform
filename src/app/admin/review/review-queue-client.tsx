@@ -11,6 +11,7 @@ import { ArrowLeft, ArrowRight, Check, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MathRenderer } from '@/components/admin/math-renderer'
 import { QuestionImageUpload } from '@/components/QuestionImageUpload'
+import { SyllabusSelector } from '@/components/SyllabusSelector'
 import { displayQuestionSerial, serialBadgeColor } from '@/lib/serial'
 import type { QuestionWithRelations, AnswerRow } from '@/types/database'
 
@@ -50,6 +51,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [selectedSubSubtopic, setSelectedSubSubtopic] = useState<string | null>(null)
   const [loadingSubSubtopics, setLoadingSubSubtopics] = useState(false)
   const [bgAnswers, setBgAnswers] = useState<Map<string, AnswerRow>>(new Map())
+  const [editTopicId, setEditTopicId] = useState<string | null>(null)
+  const [editSubtopicId, setEditSubtopicId] = useState<string | null>(null)
+  const [editSubSubtopicId, setEditSubSubtopicId] = useState<string | null>(null)
 
   const remaining = drafts.length - currentIdx - 1
 
@@ -77,6 +81,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditing(false)
     setEditedText('')
     setSelectedSubSubtopic(null)
+    setEditTopicId(null)
+    setEditSubtopicId(null)
+    setEditSubSubtopicId(null)
   }, [currentIdx, drafts, bgAnswers])
 
   // Fetch sub-subtopics when subtopic changes
@@ -255,10 +262,17 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     if (!currentQuestion || editSaving || !editedText.trim()) return
     setEditSaving(true)
     try {
+      const updates: Record<string, unknown> = {
+        content: editedText.trim(),
+      }
+      if (editTopicId) updates.topic_id = editTopicId
+      if (editSubtopicId) updates.subtopic_id = editSubtopicId
+      if (editSubSubtopicId) updates.sub_subtopic_id = editSubSubtopicId
+
       const res = await fetch(`/api/questions/${currentQuestion.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editedText.trim() }),
+        body: JSON.stringify(updates),
       })
 
       if (!res.ok) {
@@ -266,10 +280,23 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         throw new Error(d.error ?? 'Save failed')
       }
 
-      // Update current question with new content
-      setCurrentQuestion((q) => q ? { ...q, content_text: editedText.trim() } : (q as any))
+      // Update current question with new content and classification
+      setCurrentQuestion((q) =>
+        q
+          ? {
+              ...q,
+              content_text: editedText.trim(),
+              topic_id: editTopicId || q.topic_id,
+              subtopic_id: editSubtopicId || q.subtopic_id,
+              sub_subtopic_id: editSubSubtopicId || q.sub_subtopic_id,
+            }
+          : (q as any)
+      )
       setEditing(false)
       setEditedText('')
+      setEditTopicId(null)
+      setEditSubtopicId(null)
+      setEditSubSubtopicId(null)
       toast.success('Question updated')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Save failed'
@@ -434,6 +461,19 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             <h3 className="font-semibold">Question</h3>
             {editing ? (
               <div className="space-y-4">
+                <div className="border rounded-md p-3 bg-muted/20 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Classification (optional — leave blank to keep existing)
+                  </p>
+                  <SyllabusSelector
+                    onTopicChange={setEditTopicId}
+                    onSubtopicChange={setEditSubtopicId}
+                    onSubSubtopicChange={setEditSubSubtopicId}
+                    showTierBadge={false}
+                    subjectId={null}
+                  />
+                </div>
+
                 <textarea
                   value={editedText}
                   onChange={(e) => setEditedText(e.target.value)}
