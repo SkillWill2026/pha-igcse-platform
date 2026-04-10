@@ -5,6 +5,11 @@ import { createAdminClient } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const isValidUUID = (v: unknown): v is string =>
+  typeof v === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+
 // ── GET — recent batches for the filter dropdown ──────────────────────────────
 export async function GET() {
   try {
@@ -37,9 +42,9 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from('upload_batches')
       .insert({
-        topic_id:        body.topic_id        ?? null,
-        subtopic_id:     body.subtopic_id     ?? null,
-        sub_subtopic_id: body.sub_subtopic_id ?? null,
+        topic_id:        isValidUUID(body.topic_id) ? body.topic_id : null,
+        subtopic_id:     isValidUUID(body.subtopic_id) ? body.subtopic_id : null,
+        sub_subtopic_id: isValidUUID(body.sub_subtopic_id) ? body.sub_subtopic_id : null,
         total_files:     body.total_files,
         status:          'processing',
       })
