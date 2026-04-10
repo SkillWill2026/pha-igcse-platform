@@ -3,6 +3,7 @@ import 'katex/dist/katex.min.css'
 import { createServerClient } from '@/lib/supabase-server'
 import { createAdminClient } from '@/lib/supabase'
 import { Sidebar } from '@/components/admin/sidebar'
+import { AdminGuard } from '@/components/admin/AdminGuard'
 import { StatsBar } from '@/components/admin/stats-bar'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -25,6 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-screen">
+      <AdminGuard role={role} />
       <Sidebar role={role} fullName={profile?.full_name ?? ''} />
       <div className="flex flex-1 flex-col min-h-screen">
         <StatsBar />

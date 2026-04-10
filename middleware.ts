@@ -4,8 +4,6 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
 
-  // Inline Supabase client — cannot import from lib/supabase*.ts here because
-  // middleware runs in the Edge runtime (no Node.js modules like path/dotenv).
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -25,9 +23,7 @@ export async function middleware(request: NextRequest) {
     },
   )
 
-  // Validates the session JWT with Supabase — also refreshes token if needed.
   const { data: { user } } = await supabase.auth.getUser()
-
   const { pathname } = request.nextUrl
 
   // Unauthenticated users cannot access /admin/*
@@ -37,11 +33,30 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Authenticated users are bounced away from /login
-  if (user && pathname === '/login') {
-    const url = request.nextUrl.clone()
-    url.pathname = '/admin/questions'
-    return NextResponse.redirect(url)
+  if (user) {
+    // Fetch role — uses anon key + user session (RLS: user can read own profile)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    const role = profile?.role ?? 'tutor'
+
+    // Tutor-blocked pages
+    const tutorBlocked = ['/admin/users', '/admin/databank', '/admin/answer-queue']
+    if (role === 'tutor' && tutorBlocked.some(p => pathname.startsWith(p))) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/dashboard'
+      return NextResponse.redirect(url)
+    }
+
+    // Bounce authenticated users away from /login
+    if (pathname === '/login') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/dashboard'
+      return NextResponse.redirect(url)
+    }
   }
 
   return response
@@ -49,7 +64,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match everything except Next.js internals and static assets
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

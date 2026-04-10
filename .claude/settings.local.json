@@ -11,7 +11,15 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(npm install:*)",
-      "Bash(vercel --version)"
+      "Bash(vercel --version)",
+      "Bash(npm run:*)",
+      "Bash(xargs grep:*)",
+      "Bash(node --env-file=.env.local test-subsubtopics.mjs)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(sed -n '1,50p' src/app/api/ingest/route.ts)",
+      "Bash(sed -n '150,300p' src/app/api/ingest/route.ts)",
+      "Bash(cat src/app/api/schedule/topics/[id]/route.ts)",
+      "Bash(cat src/app/api/schedule/subtopics/[id]/route.ts)"
     ]
   }
 }
