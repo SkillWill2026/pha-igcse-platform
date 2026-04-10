@@ -318,6 +318,13 @@ export async function POST(request: NextRequest) {
           }
         } else if (data) {
           saved.push(data)
+
+          // Fire-and-forget sub-subtopic classification
+          fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/classify-question`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question_id: data.id }),
+          }).catch(err => console.warn('[upload] classify failed (non-fatal):', err))
         }
       } catch (err) {
         console.warn(`[ingest] exception inserting question:`, err instanceof Error ? err.message : String(err))
