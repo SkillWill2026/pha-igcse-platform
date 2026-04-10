@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   const subSubtopicId = searchParams.get('sub_subtopic_id')
   const batchId       = searchParams.get('batch_id')
   const statusParam   = searchParams.get('status')
+  const subjectId     = searchParams.get('subject_id')
 
   try {
     const supabase = createAdminClient()
@@ -31,6 +32,18 @@ export async function GET(request: NextRequest) {
     } else {
       // Default: only active questions
       query = query.in('status', ['draft', 'approved'])
+    }
+
+    // If subject_id given but no topic_id, scope questions to that subject's topics
+    if (subjectId && (!topicId || topicId === '')) {
+      const { data: subjectTopics } = await supabase
+        .from('topics')
+        .select('id')
+        .eq('subject_id', subjectId)
+      const subjectTopicIds = (subjectTopics ?? []).map((t: { id: string }) => t.id)
+      if (subjectTopicIds.length > 0) {
+        query = query.in('topic_id', subjectTopicIds)
+      }
     }
 
     if (topicId       && topicId       !== '') query = query.eq('topic_id',        topicId)

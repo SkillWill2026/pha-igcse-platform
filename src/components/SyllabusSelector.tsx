@@ -49,6 +49,7 @@ interface Props {
   onSubtopicChange?: (id: string | null) => void
   onTopicChange?: (id: string | null) => void
   showTierBadge?: boolean
+  subjectId?: string | null
 }
 
 export function SyllabusSelector({
@@ -56,6 +57,7 @@ export function SyllabusSelector({
   onSubtopicChange,
   onTopicChange,
   showTierBadge = true,
+  subjectId,
 }: Props) {
   const [topics, setTopics]             = useState<Topic[]>([])
   const [subtopics, setSubtopics]       = useState<Subtopic[]>([])
@@ -66,11 +68,12 @@ export function SyllabusSelector({
   const [subSubtopicId, setSubSubtopicId] = useState('')
 
   useEffect(() => {
-    fetch('/api/topics')
+    const url = subjectId ? `/api/topics?subject_id=${subjectId}` : '/api/topics'
+    fetch(url)
       .then((r) => r.json())
       .then(setTopics)
       .catch(() => {})
-  }, [])
+  }, [subjectId])
 
   function handleTopicChange(id: string) {
     setTopicId(id)

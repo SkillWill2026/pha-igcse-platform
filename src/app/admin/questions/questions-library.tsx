@@ -89,11 +89,12 @@ interface QuestionGroup {
 
 interface Props {
   boards: { id: string; name: string }[]
+  subjectId?: string | null
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function QuestionsLibrary({ boards }: Props) {
+export function QuestionsLibrary({ boards, subjectId }: Props) {
   const router = useRouter()
 
   // ── Questions state (fetched client-side) ──────────────────────────────────
@@ -130,6 +131,7 @@ export function QuestionsLibrary({ boards }: Props) {
       if (subtopicFilter    && subtopicFilter    !== '') params.set('subtopic_id',     subtopicFilter)
       if (subSubtopicFilter && subSubtopicFilter !== '') params.set('sub_subtopic_id', subSubtopicFilter)
       if (batchFilter       && batchFilter       !== ALL) params.set('batch_id',        batchFilter)
+      if (subjectId && (!topicFilter || topicFilter === '')) params.set('subject_id', subjectId)
 
       const url = '/api/questions' + (params.size > 0 ? '?' + params.toString() : '')
       const res = await fetch(url)
@@ -146,7 +148,7 @@ export function QuestionsLibrary({ boards }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [topicFilter, subtopicFilter, subSubtopicFilter, batchFilter])
+  }, [topicFilter, subtopicFilter, subSubtopicFilter, batchFilter, subjectId])
 
   useEffect(() => {
     fetchQuestions()
@@ -386,10 +388,11 @@ export function QuestionsLibrary({ boards }: Props) {
         <div className="flex flex-wrap gap-4 items-start">
           <div className="w-72">
             <SyllabusSelector
-              key={selectorKey}
+              key={`${selectorKey}-${subjectId}`}
               onTopicChange={setTopicFilter}
               onSubtopicChange={setSubtopicFilter}
               onSubSubtopicChange={setSubSubtopicFilter}
+              subjectId={subjectId}
             />
           </div>
 
