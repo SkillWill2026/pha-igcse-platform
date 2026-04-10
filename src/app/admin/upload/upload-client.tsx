@@ -116,7 +116,7 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
 
   // ── Upload ──────────────────────────────────────────────────────────────────
   const queued = queue.filter((f) => f.status === 'queued')
-  const canStart = queued.length > 0 && !!boardId && !!subtopicId && !isUploading
+  const canStart = queued.length > 0 && !!boardId && !isUploading
 
   async function handleStartUpload() {
     if (!canStart) return
@@ -131,7 +131,7 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic_id:        topicId,
-          subtopic_id:     subtopicId,
+          subtopic_id:     subtopicId || 'mixed',
           sub_subtopic_id: subSubtopicId,
           total_files:     queued.length,
         }),
@@ -155,7 +155,7 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
         const fd = new FormData()
         fd.append('file',          item.file)
         fd.append('exam_board_id', boardId)
-        fd.append('subtopic_id',   subtopicId!)
+        fd.append('subtopic_id',   subtopicId || 'mixed')
         if (subSubtopicId) fd.append('sub_subtopic_id', subSubtopicId)
         if (batchId)       fd.append('batch_id',        batchId)
 
@@ -215,7 +215,7 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
         <div>
           <h2 className="text-sm font-semibold">Syllabus Tagging</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            These tags apply to all files in the batch.
+            Optional — leave blank to let AI classify each question automatically.
           </p>
         </div>
 
@@ -251,6 +251,9 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
               showTierBadge={false}
               subjectId={subjectId}
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Leave blank for mixed papers — AI will classify each question individually.
+            </p>
           </div>
         </div>
       </div>
