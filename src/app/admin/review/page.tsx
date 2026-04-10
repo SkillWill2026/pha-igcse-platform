@@ -43,7 +43,7 @@ export default async function ReviewPage({ searchParams }: PageProps) {
 
     // If subject has no topics yet, return empty
     if (topicIds.length === 0) {
-      return <ReviewQueueClient drafts={[]} initialError={null} />
+      return <ReviewQueueClient key={subjectCode} drafts={[]} initialError={null} />
     }
 
     // Fetch draft questions filtered by subject's topics
@@ -99,5 +99,5 @@ export default async function ReviewPage({ searchParams }: PageProps) {
     error = `Unexpected error: ${msg}`
   }
 
-  return <ReviewQueueClient drafts={drafts} initialError={error} />
+  return <ReviewQueueClient key={subjectCode} drafts={drafts} initialError={error} />
 }
