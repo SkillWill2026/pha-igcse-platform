@@ -6,6 +6,8 @@ import { createAdminClient } from '@/lib/supabase'
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
+  console.log('[DEBUG] SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 40))
+  console.log('[DEBUG] HAS_SERVICE_KEY:', !!process.env.SUPABASE_SERVICE_ROLE_KEY)
   const { searchParams } = request.nextUrl
   const topicId       = searchParams.get('topic_id')
   const subtopicId    = searchParams.get('subtopic_id')
