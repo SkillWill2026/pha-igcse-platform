@@ -223,6 +223,23 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                 </div>
               )}
 
+              {/* Users sub-links */}
+              {href === '/admin/users' && (
+                <div className="ml-7 mt-0.5 space-y-0.5">
+                  <Link
+                    href="/admin/users/assignments"
+                    className={cn(
+                      'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                      pathname.startsWith('/admin/users/assignments')
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                        : `text-muted-foreground hover:bg-accent hover:text-accent-foreground ${navTextColor}`,
+                    )}
+                  >
+                    <span>Assignments</span>
+                  </Link>
+                </div>
+              )}
+
               {/* Databank sub-links */}
               {href === '/admin/databank/dashboard' && (
                 <div className="ml-7 mt-0.5 space-y-0.5">
