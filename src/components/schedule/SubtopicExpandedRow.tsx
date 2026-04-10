@@ -232,7 +232,7 @@ function SubSubtopicsSection({ subtopic, isAdmin, onUpdate }: SubSubtopicsSectio
                 <TableHead className="text-xs h-8 py-1 w-14">Core#</TableHead>
                 <TableHead className="text-xs h-8 py-1">Learning Outcome</TableHead>
                 <TableHead className="text-xs h-8 py-1 w-20">Tier</TableHead>
-                {isAdmin && <TableHead className="text-xs h-8 py-1 w-16" />}
+                <TableHead className="text-xs h-8 py-1 w-16" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -252,8 +252,7 @@ function SubSubtopicsSection({ subtopic, isAdmin, onUpdate }: SubSubtopicsSectio
                       {s.tier === 'extended' ? 'E' : 'C+E'}
                     </span>
                   </TableCell>
-                  {isAdmin && (
-                    <TableCell className="py-1.5">
+                  <TableCell className="py-1.5">
                       <div className="flex items-center gap-1 justify-end">
                         <Button
                           size="icon" variant="ghost" className="h-6 w-6"
@@ -275,7 +274,6 @@ function SubSubtopicsSection({ subtopic, isAdmin, onUpdate }: SubSubtopicsSectio
                         </Button>
                       </div>
                     </TableCell>
-                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -283,15 +281,13 @@ function SubSubtopicsSection({ subtopic, isAdmin, onUpdate }: SubSubtopicsSectio
         </div>
       )}
 
-      {isAdmin && (
-        <Button
-          size="sm" variant="outline" className="gap-1.5 text-xs"
-          onClick={() => { setEditTarget(null); setModalOpen(true) }}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Add Learning Objective
-        </Button>
-      )}
+      <Button
+        size="sm" variant="outline" className="gap-1.5 text-xs"
+        onClick={() => { setEditTarget(null); setModalOpen(true) }}
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add Learning Objective
+      </Button>
 
       <SubSubtopicModal
         open={modalOpen}
