@@ -20,6 +20,7 @@ interface ProgressData {
   done_week: number
   done_month: number
   total_approved: number
+  days_left: number
   topic_breakdown: TopicBreakdown[]
 }
 
@@ -160,7 +161,7 @@ export default function TutorDashboard({ fullName, role }: Props) {
                     />
                   </div>
                   <div className="flex justify-between mt-0.5">
-                    <span className="text-xs text-gray-400">{pct}% of target</span>
+                    <span className="text-xs text-gray-400">{pct}% · {t.daily_target}/day needed</span>
                     <span className="text-xs text-gray-400">+{t.done_today} today</span>
                   </div>
                 </div>
@@ -203,6 +204,7 @@ export default function TutorDashboard({ fullName, role }: Props) {
 
       <p className="text-xs text-gray-400 text-center">
         Last updated: {lastRefresh.toLocaleTimeString()} · Auto-refreshes every 60s
+        {data && ` · ${data.days_left} days left`}
       </p>
     </div>
   )
