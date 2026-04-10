@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { PPTSection }      from '@/components/schedule/PPTSection'
@@ -63,6 +63,13 @@ interface SubSubtopicModalProps {
 function SubSubtopicModal({ open, editing, onClose, onSave }: SubSubtopicModalProps) {
   const [form, setForm] = useState<ModalForm>(editing ? subSubtopicToForm(editing) : EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+
+  // Sync form whenever the modal opens or the editing target changes
+  useEffect(() => {
+    if (open) {
+      setForm(editing ? subSubtopicToForm(editing) : EMPTY_FORM)
+    }
+  }, [open, editing])
 
   function handleOpenChange(isOpen: boolean) {
     if (isOpen) setForm(editing ? subSubtopicToForm(editing) : EMPTY_FORM)
