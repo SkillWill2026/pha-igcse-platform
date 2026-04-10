@@ -41,9 +41,11 @@ export async function GET(request: NextRequest) {
         .select('id')
         .eq('subject_id', subjectId)
       const subjectTopicIds = (subjectTopics ?? []).map((t: { id: string }) => t.id)
-      if (subjectTopicIds.length > 0) {
-        query = query.in('topic_id', subjectTopicIds)
+      if (subjectTopicIds.length === 0) {
+        // Subject exists but has no topics yet — return empty result immediately
+        return NextResponse.json([])
       }
+      query = query.in('topic_id', subjectTopicIds)
     }
 
     if (topicId       && topicId       !== '') query = query.eq('topic_id',        topicId)
