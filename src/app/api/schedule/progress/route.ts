@@ -8,7 +8,7 @@ export async function GET() {
     const supabase = createAdminClient()
 
     const [targetRes, topicTargetsRes, topicsRes] = await Promise.all([
-      supabase.from('production_targets').select('*').single(),
+      supabase.from('production_targets').select('*').order('updated_at', { ascending: false }).limit(1).single(),
       supabase.from('production_topic_targets').select('topic_id, target'),
       supabase.from('topics').select('id, ref, name').order('ref'),
     ])
