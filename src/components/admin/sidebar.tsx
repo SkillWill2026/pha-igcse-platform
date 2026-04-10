@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Database, FileText, Loader2, LogOut, Upload, Users } from 'lucide-react'
+import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Database, FileText, LayoutDashboard, Loader2, LogOut, Upload, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavLink {
@@ -11,6 +11,7 @@ interface NavLink {
   label:     string
   icon:      React.ElementType
   adminOnly: boolean
+  tutorOnly?: boolean
 }
 
 type Subject = {
@@ -51,6 +52,7 @@ const SUBJECT_THEMES: Record<string, {
 }
 
 const NAV_LINKS: NavLink[] = [
+  { href: '/admin/dashboard', label: 'My Dashboard', icon: LayoutDashboard, adminOnly: false, tutorOnly: true },
   { href: '/admin/upload',    label: 'Upload',            icon: Upload,         adminOnly: false },
   { href: '/admin/review',        label: 'Review Queue',      icon: CheckCircle2,   adminOnly: false },
   { href: '/admin/answer-queue',       label: 'Answer Queue',      icon: AlertTriangle,  adminOnly: true  },
@@ -76,7 +78,11 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   const [counts, setCounts] = useState<{ rejected: number; deleted: number; draft: number } | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
 
-  const visibleLinks = NAV_LINKS.filter((l) => !l.adminOnly || role === 'admin')
+  const visibleLinks = NAV_LINKS.filter((l) => {
+    if (l.tutorOnly && role !== 'tutor') return false
+    if (l.adminOnly && role !== 'admin') return false
+    return true
+  })
 
   const navTextColor = theme.isDark
     ? 'text-white/80 hover:text-white hover:bg-white/10'
