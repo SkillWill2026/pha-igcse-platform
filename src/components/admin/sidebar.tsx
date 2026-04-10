@@ -20,6 +20,27 @@ type Subject = {
   color: string
 }
 
+const SUBJECT_THEMES: Record<string, { sidebar: string; border: string; activeBtn: string; activeBtnText: string }> = {
+  '0580': {
+    sidebar: '',
+    border: 'border-gray-200 dark:border-gray-700',
+    activeBtn: 'bg-blue-600',
+    activeBtnText: 'text-white',
+  },
+  '0610': {
+    sidebar: 'bg-green-900',
+    border: 'border-green-700',
+    activeBtn: 'bg-green-500',
+    activeBtnText: 'text-white',
+  },
+  '0620': {
+    sidebar: 'bg-blue-900',
+    border: 'border-blue-700',
+    activeBtn: 'bg-blue-400',
+    activeBtnText: 'text-white',
+  },
+}
+
 const NAV_LINKS: NavLink[] = [
   { href: '/admin/upload',    label: 'Upload',            icon: Upload,         adminOnly: false },
   { href: '/admin/review',        label: 'Review Queue',      icon: CheckCircle2,   adminOnly: false },
@@ -41,11 +62,16 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   const router      = useRouter()
   const searchParams = useSearchParams()
   const activeSubject = searchParams.get('subject') ?? '0580'
+  const theme = SUBJECT_THEMES[activeSubject] ?? SUBJECT_THEMES['0580']
   const [signingOut, setSigningOut] = useState(false)
   const [counts, setCounts] = useState<{ rejected: number; deleted: number; draft: number } | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
 
   const visibleLinks = NAV_LINKS.filter((l) => !l.adminOnly || role === 'admin')
+
+  const navTextColor = theme.sidebar
+    ? 'text-white/80 hover:text-white hover:bg-white/10'
+    : ''
 
   useEffect(() => {
     Promise.all([
@@ -80,33 +106,33 @@ export function Sidebar({ role, fullName }: SidebarProps) {
     }
   }
 
-  const questionsActive = pathname.startsWith('/admin/questions')
-
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r bg-muted/40 min-h-screen">
+    <aside className={`flex w-56 shrink-0 flex-col border-r ${theme.sidebar || 'bg-muted/40'} min-h-screen`}>
       <div className="px-5 py-6 space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        <p className={`text-xs font-semibold uppercase tracking-widest ${theme.sidebar ? 'text-white/50' : 'text-muted-foreground'}`}>
           PHA IGCSE
         </p>
         <div>
-          <p className="text-sm font-semibold leading-tight">
+          <p className={`text-sm font-semibold leading-tight ${theme.sidebar ? 'text-white' : ''}`}>
             {fullName || 'Unnamed User'}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5 capitalize">{role}</p>
+          <p className={`text-xs mt-0.5 capitalize ${theme.sidebar ? 'text-white/60' : 'text-muted-foreground'}`}>{role}</p>
         </div>
       </div>
 
       {subjects.length > 1 && (
         <div className="px-3 mb-3">
-          <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+          <div className={`flex rounded-lg overflow-hidden border ${theme.border}`}>
             {subjects.map(s => (
               <button
                 key={s.code}
                 onClick={() => switchSubject(s.code)}
                 className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
                   activeSubject === s.code
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    ? `${theme.activeBtn} ${theme.activeBtnText}`
+                    : theme.sidebar
+                      ? 'text-white/60 hover:bg-white/10'
+                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 {s.code}
@@ -131,7 +157,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                   'flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   active
                     ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                    : navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -154,7 +180,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                       'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                       pathname.startsWith('/admin/questions/rejected')
                         ? 'bg-amber-100 text-amber-800'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        : navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     )}
                   >
                     <span>Rejected</span>
@@ -170,7 +196,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                       'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                       pathname.startsWith('/admin/questions/deleted')
                         ? 'bg-red-100 text-red-800'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        : navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     )}
                   >
                     <span>Deleted</span>
@@ -192,7 +218,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                       'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                       pathname === '/admin/databank/dashboard'
                         ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        : navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     )}
                   >
                     <span>Dashboard</span>
@@ -203,7 +229,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                       'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                       pathname.startsWith('/admin/databank/documents')
                         ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                        : navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     )}
                   >
                     <span>Documents</span>
@@ -216,13 +242,13 @@ export function Sidebar({ role, fullName }: SidebarProps) {
       </nav>
 
       {/* Sign-out footer */}
-      <div className="border-t px-3 py-4 space-y-1">
+      <div className={`border-t px-3 py-4 space-y-1 ${theme.sidebar ? 'border-white/10' : ''}`}>
         <button
           onClick={handleSignOut}
           disabled={signingOut}
           className={cn(
             'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-            'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+            navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
           )}
         >
           {signingOut
