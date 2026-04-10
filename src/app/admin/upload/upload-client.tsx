@@ -12,7 +12,6 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
-import { SyllabusSelector } from '@/components/SyllabusSelector'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,9 +78,6 @@ function FileStatusBadge({ item }: { item: QueuedFile }) {
 
 export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamBoard[]; subjectId: string | null; subjectName: string }) {
   const [boardId,       setBoardId]       = useState('')
-  const [topicId,       setTopicId]       = useState<string | null>(null)
-  const [subtopicId,    setSubtopicId]    = useState<string | null>(null)
-  const [subSubtopicId, setSubSubtopicId] = useState<string | null>(null)
 
   const [queue,       setQueue]       = useState<QueuedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
@@ -130,9 +126,9 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topic_id:        topicId,
-          subtopic_id:     subtopicId || 'mixed',
-          sub_subtopic_id: subSubtopicId,
+          topic_id:        null,
+          subtopic_id:     'mixed',
+          sub_subtopic_id: null,
           total_files:     queued.length,
         }),
       })
@@ -155,8 +151,7 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
         const fd = new FormData()
         fd.append('file',          item.file)
         fd.append('exam_board_id', boardId)
-        fd.append('subtopic_id',   subtopicId || 'mixed')
-        if (subSubtopicId) fd.append('sub_subtopic_id', subSubtopicId)
+        fd.append('subtopic_id',   'mixed')
         if (batchId)       fd.append('batch_id',        batchId)
 
         const res  = await fetch('/api/ingest', { method: 'POST', body: fd })
@@ -215,46 +210,30 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
         <div>
           <h2 className="text-sm font-semibold">Syllabus Tagging</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Optional — leave blank to let AI classify each question automatically.
+            AI classifies each question individually by topic, subtopic and sub-subtopic automatically.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>Exam Board</Label>
-            <Select value={boardId} onValueChange={(v) => setBoardId(v ?? '')}>
-              <SelectTrigger>
-                {boardId
-                  ? <span>{boards.find((b) => b.id === boardId)?.name}</span>
-                  : <span className="text-muted-foreground">Select board…</span>}
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                {boards.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                    No boards found — run SQL migrations first
-                  </div>
-                ) : (
-                  boards.map((b) => (
-                    <SelectItem key={b.id} value={b.id} label={b.name}>{b.name}</SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Syllabus</Label>
-            <SyllabusSelector
-              onTopicChange={setTopicId}
-              onSubtopicChange={setSubtopicId}
-              onSubSubtopicChange={setSubSubtopicId}
-              showTierBadge={false}
-              subjectId={subjectId}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Leave blank for mixed papers — AI will classify each question individually.
-            </p>
-          </div>
+        <div className="space-y-1.5">
+          <Label>Exam Board</Label>
+          <Select value={boardId} onValueChange={(v) => setBoardId(v ?? '')}>
+            <SelectTrigger>
+              {boardId
+                ? <span>{boards.find((b) => b.id === boardId)?.name}</span>
+                : <span className="text-muted-foreground">Select board…</span>}
+            </SelectTrigger>
+            <SelectContent alignItemWithTrigger={false}>
+              {boards.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  No boards found — run SQL migrations first
+                </div>
+              ) : (
+                boards.map((b) => (
+                  <SelectItem key={b.id} value={b.id} label={b.name}>{b.name}</SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
