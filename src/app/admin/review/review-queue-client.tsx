@@ -50,6 +50,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [selectedSubSubtopic, setSelectedSubSubtopic] = useState<string | null>(null)
   const [loadingSubSubtopics, setLoadingSubSubtopics] = useState(false)
   const [classifying, setClassifying] = useState(false)
+  const [bgAnswers, setBgAnswers] = useState<Map<string, AnswerRow>>(new Map())
 
   const remaining = drafts.length - currentIdx - 1
 
@@ -62,13 +63,22 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     return currentQuestion?.question_images?.filter((img: any) => img.image_type === 'answer') ?? []
   }, [currentQuestion?.id, currentQuestion?.question_images])
 
+  const questionsWithoutAnswers = useMemo(() => {
+    return drafts.filter(d => !d.answer && !bgAnswers.has(d.id))
+  }, [drafts, bgAnswers])
+
   // Update currentQuestion when index changes
   useEffect(() => {
-    setCurrentQuestion(drafts[currentIdx] ?? null)
+    const base = drafts[currentIdx] ?? null
+    if (base && !base.answer && bgAnswers.has(base.id)) {
+      setCurrentQuestion({ ...base, answer: bgAnswers.get(base.id)! })
+    } else {
+      setCurrentQuestion(base)
+    }
     setEditing(false)
     setEditedText('')
     setSelectedSubSubtopic(null)
-  }, [currentIdx, drafts])
+  }, [currentIdx, drafts, bgAnswers])
 
   // Fetch sub-subtopics when subtopic changes
   useEffect(() => {
@@ -111,6 +121,44 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [currentIdx, actionLoading])
+
+  // Background answer generation
+  useEffect(() => {
+    const questionsToGenerate = drafts.filter(d => !d.answer)
+    if (questionsToGenerate.length === 0) return
+
+    let cancelled = false
+
+    const generateSequentially = async () => {
+      for (const q of questionsToGenerate) {
+        if (cancelled) break
+        // Skip if already generated in background
+        if (bgAnswers.has(q.id)) continue
+        try {
+          const res = await fetch('/api/generate-answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question_id: q.id }),
+          })
+          if (res.ok && !cancelled) {
+            const data = await res.json()
+            if (data.answer) {
+              setBgAnswers(prev => new Map(prev).set(q.id, data.answer))
+            }
+          }
+        } catch {
+          // Non-fatal — tutor can still generate manually
+        }
+        // 2 second delay between calls to avoid rate limits
+        if (!cancelled) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+      }
+    }
+
+    generateSequentially()
+    return () => { cancelled = true }
+  }, []) // Run once on mount only
 
   async function updateQuestionStatus(questionId: string, status: 'approved' | 'rejected', answerId?: string) {
     try {
@@ -538,6 +586,11 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                 <p className="mb-2">No answer yet</p>
                 <p className="text-xs">Generate one now or approve to generate later</p>
               </div>
+              {questionsWithoutAnswers?.length > 0 && (
+                <p className="text-xs text-blue-600 animate-pulse">
+                  ⚡ Generating answers in background...
+                </p>
+              )}
               <button
                 onClick={handleGenerateAnswer}
                 disabled={generatingAnswer}
