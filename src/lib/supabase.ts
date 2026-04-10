@@ -1,18 +1,24 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClientOptions } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+// Tell Next.js fetch() to never cache Supabase responses
+const fetchOptions: SupabaseClientOptions<'public'>['global'] = {
+  fetch: (url, options = {}) =>
+    fetch(url, { ...options, cache: 'no-store' }),
+}
+
 /** Browser / Server Component client (anon key) */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: fetchOptions,
+})
 
 /** Server-only admin client (service-role key) — never expose to the browser */
 export function createAdminClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
   return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: fetchOptions,
   })
 }
