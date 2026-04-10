@@ -18,14 +18,17 @@ export async function GET() {
     startOfWeek.setDate(now.getDate() - now.getDay()); startOfWeek.setHours(0, 0, 0, 0)
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
+    // Days remaining until end of production period (Jul 30, 2026)
+    const endDate = new Date('2026-07-30')
+    const daysLeft = Math.max(1, Math.ceil((endDate.getTime() - startOfDay.getTime()) / (1000 * 60 * 60 * 24)))
+
     // Get this tutor's assigned topics
     const { data: assignments } = await supabase
       .from('tutor_topic_assignments')
-      .select('topic_id, daily_target')
+      .select('topic_id')
       .eq('user_id', user.id)
 
     const topicIds = (assignments ?? []).map(a => a.topic_id)
-    const totalDailyTarget = (assignments ?? []).reduce((sum, a) => sum + (a.daily_target ?? 0), 0)
 
     // Guard against empty IN clause
     const topicFilter = topicIds.length > 0 ? topicIds : ['00000000-0000-0000-0000-000000000000']
@@ -47,7 +50,15 @@ export async function GET() {
     const topics = topicsRes.data ?? []
     const prodTargets = prodTargetsRes.data ?? []
 
-    // Per-topic breakdown — all parallel, no sequential loop
+    // Calculate total target from production_topic_targets for assigned topics
+    const totalTopicTarget = prodTargets.reduce((sum, p) => sum + (p.target ?? 0), 0)
+    const totalApproved = totalRes.count ?? 0
+    const remaining = Math.max(0, totalTopicTarget - totalApproved)
+
+    // Dynamic daily target = remaining questions ÷ days left (same formula as production dashboard)
+    const dynamicDailyTarget = Math.ceil(remaining / daysLeft)
+
+    // Per-topic breakdown — all parallel
     const topicBreakdown = await Promise.all(
       (assignments ?? []).map(async (assignment) => {
         const topic = topics.find(t => t.id === assignment.topic_id)
@@ -61,24 +72,31 @@ export async function GET() {
             .gte('created_at', startOfDay.toISOString()),
         ])
 
+        const topicApproved = approvedRes.count ?? 0
+        const topicTarget = prodTarget?.target ?? 0
+        const topicRemaining = Math.max(0, topicTarget - topicApproved)
+        const topicDailyTarget = Math.ceil(topicRemaining / daysLeft)
+
         return {
           topic_id: assignment.topic_id,
           topic_name: topic?.name ?? 'Unknown',
           topic_ref: topic?.ref ?? '',
-          daily_target: assignment.daily_target ?? 0,
-          total_target: prodTarget?.target ?? 0,
-          total_approved: approvedRes.count ?? 0,
+          daily_target: topicDailyTarget,
+          total_target: topicTarget,
+          total_approved: topicApproved,
           done_today: todayApprovedRes.count ?? 0,
         }
       })
     )
 
     return NextResponse.json({
-      daily_target: totalDailyTarget,
+      daily_target: dynamicDailyTarget,
       done_today: todayRes.count ?? 0,
       done_week: weekRes.count ?? 0,
       done_month: monthRes.count ?? 0,
-      total_approved: totalRes.count ?? 0,
+      total_approved: totalApproved,
+      total_target: totalTopicTarget,
+      days_left: daysLeft,
       topic_breakdown: topicBreakdown,
     })
   } catch (error) {
