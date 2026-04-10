@@ -20,24 +20,33 @@ type Subject = {
   color: string
 }
 
-const SUBJECT_THEMES: Record<string, { sidebar: string; border: string; activeBtn: string; activeBtnText: string }> = {
+const SUBJECT_THEMES: Record<string, {
+  sidebarStyle: React.CSSProperties
+  borderColor: string
+  activeBtnStyle: React.CSSProperties
+  inactiveBtnClass: string
+  isDark: boolean
+}> = {
   '0580': {
-    sidebar: '',
-    border: 'border-gray-200 dark:border-gray-700',
-    activeBtn: 'bg-blue-600',
-    activeBtnText: 'text-white',
+    sidebarStyle: {},
+    borderColor: '',
+    activeBtnStyle: { background: '#2563eb', color: 'white' },
+    inactiveBtnClass: 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800',
+    isDark: false,
   },
   '0610': {
-    sidebar: 'bg-green-900',
-    border: 'border-green-700',
-    activeBtn: 'bg-green-500',
-    activeBtnText: 'text-white',
+    sidebarStyle: { background: '#14532d' },
+    borderColor: '#166534',
+    activeBtnStyle: { background: '#22c55e', color: 'white' },
+    inactiveBtnClass: 'text-white/60 hover:bg-white/10',
+    isDark: true,
   },
   '0620': {
-    sidebar: 'bg-blue-900',
-    border: 'border-blue-700',
-    activeBtn: 'bg-blue-400',
-    activeBtnText: 'text-white',
+    sidebarStyle: { background: '#1e3a5f' },
+    borderColor: '#1e40af',
+    activeBtnStyle: { background: '#3b82f6', color: 'white' },
+    inactiveBtnClass: 'text-white/60 hover:bg-white/10',
+    isDark: true,
   },
 }
 
@@ -69,7 +78,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
 
   const visibleLinks = NAV_LINKS.filter((l) => !l.adminOnly || role === 'admin')
 
-  const navTextColor = theme.sidebar
+  const navTextColor = theme.isDark
     ? 'text-white/80 hover:text-white hover:bg-white/10'
     : ''
 
@@ -107,32 +116,37 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   }
 
   return (
-    <aside className={`flex w-56 shrink-0 flex-col border-r ${theme.sidebar || 'bg-muted/40'} min-h-screen`}>
+    <aside
+      className="flex w-56 shrink-0 flex-col border-r min-h-screen bg-muted/40"
+      style={theme.sidebarStyle}
+    >
       <div className="px-5 py-6 space-y-3">
-        <p className={`text-xs font-semibold uppercase tracking-widest ${theme.sidebar ? 'text-white/50' : 'text-muted-foreground'}`}>
+        <p className={`text-xs font-semibold uppercase tracking-widest ${theme.isDark ? 'text-white/50' : 'text-muted-foreground'}`}>
           PHA IGCSE
         </p>
         <div>
-          <p className={`text-sm font-semibold leading-tight ${theme.sidebar ? 'text-white' : ''}`}>
+          <p className={`text-sm font-semibold leading-tight ${theme.isDark ? 'text-white' : ''}`}>
             {fullName || 'Unnamed User'}
           </p>
-          <p className={`text-xs mt-0.5 capitalize ${theme.sidebar ? 'text-white/60' : 'text-muted-foreground'}`}>{role}</p>
+          <p className={`text-xs mt-0.5 capitalize ${theme.isDark ? 'text-white/60' : 'text-muted-foreground'}`}>{role}</p>
         </div>
       </div>
 
       {subjects.length > 1 && (
         <div className="px-3 mb-3">
-          <div className={`flex rounded-lg overflow-hidden border ${theme.border}`}>
+          <div
+            className="flex rounded-lg overflow-hidden border"
+            style={theme.borderColor ? { borderColor: theme.borderColor } : {}}
+          >
             {subjects.map(s => (
               <button
                 key={s.code}
                 onClick={() => switchSubject(s.code)}
+                style={activeSubject === s.code ? theme.activeBtnStyle : {}}
                 className={`flex-1 py-1.5 text-xs font-medium transition-colors ${
                   activeSubject === s.code
-                    ? `${theme.activeBtn} ${theme.activeBtnText}`
-                    : theme.sidebar
-                      ? 'text-white/60 hover:bg-white/10'
-                      : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    ? ''
+                    : theme.inactiveBtnClass
                 }`}
               >
                 {s.code}
@@ -242,7 +256,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
       </nav>
 
       {/* Sign-out footer */}
-      <div className={`border-t px-3 py-4 space-y-1 ${theme.sidebar ? 'border-white/10' : ''}`}>
+      <div className={`border-t px-3 py-4 space-y-1 ${theme.isDark ? 'border-white/10' : ''}`}>
         <button
           onClick={handleSignOut}
           disabled={signingOut}
