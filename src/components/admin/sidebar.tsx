@@ -77,6 +77,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   const [signingOut, setSigningOut] = useState(false)
   const [counts, setCounts] = useState<{ rejected: number; deleted: number; draft: number } | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   const visibleLinks = NAV_LINKS.filter((l) => {
     if (l.tutorOnly && role !== 'tutor') return false
@@ -92,21 +93,51 @@ export function Sidebar({ role, fullName }: SidebarProps) {
     const activeSubjectObj = subjects.find(s => s.code === activeSubject)
     const subjectId = activeSubjectObj?.id
 
+    if (!subjectId) {
+      setCounts(prev => prev ? { ...prev, draft: 0 } : null)
+      return
+    }
+
+    // Match the exact query logic from review queue page:
+    // status='draft' AND (topic_id in subject's topics OR topic_id is null)
     Promise.all([
       fetch('/api/questions/counts').then((r) => r.json()),
-      subjectId
-        ? fetch(`/api/questions?status=draft&subject_id=${subjectId}`).then((r) => r.json()).then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 }))
-        : Promise.resolve({ draft: 0 }),
+      fetch(`/api/topics?subject_id=${subjectId}`).then((r) => r.json())
+        .then((topics) => {
+          const topicIds = Array.isArray(topics) ? topics.map((t: any) => t.id) : []
+          if (topicIds.length === 0) {
+            // Subject has no topics yet, but still show unclassified (null topic_id) questions
+            return fetch('/api/questions?status=draft&topic_id=null').then(r => r.json())
+              .then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 }))
+          }
+          // Query for: status=draft AND (topic_id in subject's topics OR topic_id is null)
+          const topicFilter = topicIds.map((id: string) => `id.eq.${id}`).join(',')
+          return fetch(`/api/questions?status=draft&or=(topic_id.in.(${topicIds.join(',')}),topic_id.is.null)`)
+            .then(r => r.json())
+            .then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 }))
+        })
     ])
       .then(([qCounts, draftCount]) => setCounts({ ...qCounts, ...draftCount }))
       .catch(() => {})
-  }, [pathname, activeSubject, subjects])
+  }, [pathname, activeSubject, subjects, refreshTrigger])
 
   useEffect(() => {
     fetch('/api/subjects')
       .then(r => r.json())
       .then(d => setSubjects(d.subjects ?? []))
       .catch(() => {})
+  }, [])
+
+  // Listen for question approval/rejection events to refresh the count
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'reviewQueueRefresh') {
+        setRefreshTrigger(prev => prev + 1)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   const switchSubject = (code: string) => {

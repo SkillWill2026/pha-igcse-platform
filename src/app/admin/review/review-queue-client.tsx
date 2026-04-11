@@ -269,6 +269,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       if (ok) {
         setStats((s) => ({ ...s, approved: s.approved + 1 }))
         toast.success(`Approved ${currentQuestion.serial_number}`)
+        // Trigger sidebar count refresh
+        localStorage.setItem('reviewQueueRefresh', Date.now().toString())
         handleNext()
       }
     } finally {
@@ -284,6 +286,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       if (ok) {
         setStats((s) => ({ ...s, rejected: s.rejected + 1 }))
         toast.success(`Rejected ${currentQuestion.serial_number}`)
+        // Trigger sidebar count refresh
+        localStorage.setItem('reviewQueueRefresh', Date.now().toString())
         handleNext()
       }
     } finally {
