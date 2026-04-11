@@ -73,6 +73,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     return drafts.filter(d => !d.answer && !bgAnswers.has(d.id))
   }, [drafts, bgAnswers])
 
+  const canApprove = !!(editTopicId && editSubtopicId && editSubSubtopicId)
+
   // Update currentQuestion when index changes (reset all edit states)
   useEffect(() => {
     const base = drafts[currentIdx] ?? null
@@ -793,7 +795,13 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       </div>
 
       {/* Bottom action bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center gap-3 border-t bg-white p-4 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center justify-center border-t bg-white shadow-lg">
+        {!canApprove && (
+          <p className="text-xs text-red-500 text-center p-2 w-full">
+            Select Topic, Subtopic and Sub-subtopic to approve
+          </p>
+        )}
+        <div className="flex items-center justify-center gap-3 p-4">
         <Button
           variant="outline"
           size="lg"
@@ -819,9 +827,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           variant="default"
           size="lg"
           onClick={handleApprove}
-          disabled={actionLoading || !editTopicId || !editSubtopicId || !editSubSubtopicId}
-          className={`gap-2 bg-green-600 hover:bg-green-700 ${(!editTopicId || !editSubtopicId || !editSubSubtopicId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title={(!editTopicId || !editSubtopicId || !editSubSubtopicId) ? 'Classification required — select Topic, Subtopic, and Sub-subtopic to approve' : 'Approve'}
+          disabled={actionLoading || !canApprove}
+          className={`gap-2 ${canApprove ? 'bg-green-600 hover:bg-green-700 cursor-pointer' : 'bg-gray-300 cursor-not-allowed opacity-60'}`}
+          title={canApprove ? 'Approve' : 'Classification required — select Topic, Subtopic, and Sub-subtopic to approve'}
         >
           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           Approve
@@ -836,6 +844,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         >
           Next <ArrowRight className="h-4 w-4" />
         </Button>
+        </div>
       </div>
 
       {/* Modals */}

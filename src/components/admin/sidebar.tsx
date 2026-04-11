@@ -89,13 +89,18 @@ export function Sidebar({ role, fullName }: SidebarProps) {
     : ''
 
   useEffect(() => {
+    const activeSubjectObj = subjects.find(s => s.code === activeSubject)
+    const subjectId = activeSubjectObj?.id
+
     Promise.all([
       fetch('/api/questions/counts').then((r) => r.json()),
-      fetch(`/api/questions?status=draft&subject=${activeSubject}`).then((r) => r.json()).then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 })),
+      subjectId
+        ? fetch(`/api/questions?status=draft&subject_id=${subjectId}`).then((r) => r.json()).then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 }))
+        : Promise.resolve({ draft: 0 }),
     ])
       .then(([qCounts, draftCount]) => setCounts({ ...qCounts, ...draftCount }))
       .catch(() => {})
-  }, [pathname, activeSubject])
+  }, [pathname, activeSubject, subjects])
 
   useEffect(() => {
     fetch('/api/subjects')
