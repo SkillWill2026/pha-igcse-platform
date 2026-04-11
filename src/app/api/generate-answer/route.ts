@@ -121,12 +121,7 @@ FORMATTING RULES:
 - Use LaTeX for all mathematics: inline $x^2$ and display $$\\frac{a}{b}$$
 - Be precise — every mark should be earnable from your answer
 - Match the mark allocation exactly (${question.marks ?? 1} mark${(question.marks ?? 1) !== 1 ? 's' : ''})
-${hasRAG ? `
-SOURCE MATERIAL:
-You have been provided with relevant excerpts from Cambridge IGCSE textbooks and mark schemes below.
-Use this material to inform your answer. Cite your sources at the end using the format:
-*Source: [document name, page]*
-` : ''}
+
 IMPORTANT: Never fabricate mark scheme steps. If unsure, show the most rigorous mathematical method.`
 
     const userPrompt = hasRAG
@@ -172,11 +167,8 @@ Write a complete model answer for this question.`
       confidenceScore = 0.55
     }
 
-    // Append source citation to answer content if RAG sources found
-    let finalContent = answerContent
-    if (ragSources.length > 0) {
-      finalContent += `\n\n---\n*Sources: ${ragSources.join('; ')}*`
-    }
+    // Use answer content as-is, no source citations appended
+    const finalContent = answerContent
 
     // 6. Upsert the answer
     const { data: existingAnswer } = await supabase
