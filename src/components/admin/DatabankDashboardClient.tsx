@@ -75,6 +75,9 @@ function CoverageBar({ value, max }: { value: number; max: number }) {
 export function DatabankDashboardClient({ initialStats, initialRecentDocs, initialError }: Props) {
   const [stats, setStats] = useState<Stats | null>(initialStats as Stats | null)
   const recentDocs = initialRecentDocs as RecentDoc[]
+  const [pptApproved, setPptApproved] = useState(0)
+  const [pptDraft, setPptDraft]       = useState(0)
+  const [pptRequired, setPptRequired] = useState(0)
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -85,6 +88,23 @@ export function DatabankDashboardClient({ initialStats, initialRecentDocs, initi
       }
     }, 30000)
     return () => clearInterval(interval)
+  }, [])
+
+  // PPT stats
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/ppt?status=approved').then(r => r.json()),
+      fetch('/api/ppt').then(r => r.json()),
+      fetch('/api/schedule/topics').then(r => r.json()),
+    ]).then(([approvedData, allData, topicsData]) => {
+      const allDecks      = allData.decks ?? []
+      const approvedDecks = approvedData.decks ?? []
+      const allSubs       = (topicsData.topics ?? []).flatMap((t: { subtopics?: { ppt_required?: boolean }[] }) => t.subtopics ?? [])
+      const required      = allSubs.filter((s: { ppt_required?: boolean }) => s.ppt_required).length
+      setPptApproved(approvedDecks.length)
+      setPptDraft(allDecks.filter((d: { status: string }) => d.status === 'draft').length)
+      setPptRequired(required > 0 ? required : allSubs.length)
+    }).catch(() => {})
   }, [])
 
   if (initialError) return (
@@ -246,6 +266,39 @@ export function DatabankDashboardClient({ initialStats, initialRecentDocs, initi
           ))}
         </div>
       )}
+
+      {/* PPT Decks */}
+      <div className="rounded-lg border p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">PPT Presentations</h3>
+          <Link
+            href="/admin/ppt"
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Manage →
+          </Link>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2">
+              <div
+                className="h-2 rounded-full bg-blue-500 transition-all"
+                style={{ width: pptRequired > 0 ? `${Math.round((pptApproved / pptRequired) * 100)}%` : '0%' }}
+              />
+            </div>
+          </div>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {pptApproved} / {pptRequired} approved
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          {pptDraft > 0
+            ? <span className="text-amber-500">{pptDraft} draft{pptDraft !== 1 ? 's' : ''} pending review</span>
+            : <span>No drafts pending</span>}
+          <span>1 PPT per subtopic</span>
+        </div>
+      </div>
+
     </div>
   )
 }
