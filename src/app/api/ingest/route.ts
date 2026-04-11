@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAnthropicClient } from '@/lib/anthropic'
 import { createAdminClient } from '@/lib/supabase'
-import { classifyQuestion } from './classify-question/route'
+import { classifyQuestion } from '../classify-question/route'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
