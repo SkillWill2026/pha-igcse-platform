@@ -361,12 +361,16 @@ export async function POST(request: NextRequest) {
         } else if (data) {
           saved.push(data)
 
-          // Fire-and-forget sub-subtopic classification
-          fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/classify-question`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question_id: data.id }),
-          }).catch(err => console.warn('[upload] classify failed (non-fatal):', err))
+          // Classify sub-subtopic synchronously during ingest
+          try {
+            await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/classify-question`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question_id: data.id }),
+            })
+          } catch (classifyErr) {
+            console.warn('[ingest] Classification failed for question', data.id, ':', classifyErr instanceof Error ? classifyErr.message : String(classifyErr))
+          }
         }
       } catch (err) {
         console.warn(`[ingest] exception inserting question:`, err instanceof Error ? err.message : String(err))
