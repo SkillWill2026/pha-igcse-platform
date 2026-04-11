@@ -122,7 +122,9 @@ FORMATTING RULES:
 - Be precise — every mark should be earnable from your answer
 - Match the mark allocation exactly (${question.marks ?? 1} mark${(question.marks ?? 1) !== 1 ? 's' : ''})
 
-IMPORTANT: Never fabricate mark scheme steps. If unsure, show the most rigorous mathematical method.`
+IMPORTANT: Never fabricate mark scheme steps. If unsure, show the most rigorous mathematical method.
+
+CRITICAL: Never add any text after the Answer field. Do not add Notes, explanations, caveats, or observations after stating the Answer. Your response must end immediately after the Answer value. No exceptions.`
 
     const userPrompt = hasRAG
       ? `Topic: ${topicRef} ${topicName}${subtopicTitle ? ` — ${subtopicTitle}` : ''}
