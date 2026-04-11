@@ -40,7 +40,7 @@ export default function PptPage() {
     if (!subjectId) return
     fetch(`/api/topics?subject_id=${subjectId}`)
       .then(r => r.json())
-      .then(d => { setTopics(d.topics ?? []); setSelectedTopic(''); setSelectedSubtopic('') })
+      .then(d => { setTopics(Array.isArray(d) ? d : (d.topics ?? [])); setSelectedTopic(''); setSelectedSubtopic('') })
   }, [subjectId])
 
   // Load subtopics when topic changes
@@ -48,7 +48,7 @@ export default function PptPage() {
     if (!selectedTopic) { setSubtopics([]); setSelectedSubtopic(''); return }
     fetch(`/api/subtopics?topic_id=${selectedTopic}`)
       .then(r => r.json())
-      .then(d => { setSubtopics(d.subtopics ?? []); setSelectedSubtopic('') })
+      .then(d => { setSubtopics(Array.isArray(d) ? d : (d.subtopics ?? [])); setSelectedSubtopic('') })
   }, [selectedTopic])
 
   // Load existing decks
