@@ -58,9 +58,12 @@ export default async function ReviewPage({ searchParams }: PageProps) {
         .is('topic_id', null)
         .order('created_at', { ascending: false })
 
+      const { data: boardData2 } = await supabase.from('exam_boards').select('id, name')
+      const boardMap2 = new Map((boardData2 ?? []).map((b) => [b.id, b]))
+
       const pendingDrafts = (unclassified ?? []).map((q) => ({
         ...q,
-        exam_boards: null,
+        exam_boards: boardMap2.get(q.exam_board_id) ?? null,
         topics: null,
         subtopics: null,
         sub_subtopics: null,
