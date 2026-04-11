@@ -73,7 +73,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     return drafts.filter(d => !d.answer && !bgAnswers.has(d.id))
   }, [drafts, bgAnswers])
 
-  // Update currentQuestion when index changes
+  // Update currentQuestion when index changes (reset all edit states)
   useEffect(() => {
     const base = drafts[currentIdx] ?? null
     if (base && !base.answer && bgAnswers.has(base.id)) {
@@ -89,7 +89,15 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditTopicId(null)
     setEditSubtopicId(null)
     setEditSubSubtopicId(null)
-  }, [currentIdx, drafts, bgAnswers])
+  }, [currentIdx, drafts])
+
+  // Update currentQuestion with background answer (don't reset edit states)
+  useEffect(() => {
+    const base = drafts[currentIdx] ?? null
+    if (base && !base.answer && bgAnswers.has(base.id)) {
+      setCurrentQuestion((q) => q ? { ...q, answer: bgAnswers.get(base.id)! } : base)
+    }
+  }, [bgAnswers])
 
   // Fetch sub-subtopics when subtopic changes
   useEffect(() => {
@@ -185,13 +193,23 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     return () => { cancelled = true }
   }, []) // Run once on mount only
 
-  async function updateQuestionStatus(questionId: string, status: 'approved' | 'rejected', answerId?: string) {
+  async function updateQuestionStatus(
+    questionId: string,
+    status: 'approved' | 'rejected',
+    answerId?: string,
+    classificationUpdates?: { topic_id?: string; subtopic_id?: string; sub_subtopic_id?: string | null }
+  ) {
     try {
-      // Update question
+      // Update question with status and any classification changes
+      const updateBody: Record<string, unknown> = { status }
+      if (classificationUpdates?.topic_id) updateBody.topic_id = classificationUpdates.topic_id
+      if (classificationUpdates?.subtopic_id) updateBody.subtopic_id = classificationUpdates.subtopic_id
+      if (classificationUpdates?.sub_subtopic_id !== undefined) updateBody.sub_subtopic_id = classificationUpdates.sub_subtopic_id
+
       const qRes = await fetch(`/api/questions/${questionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(updateBody),
       })
 
       if (!qRes.ok) {
@@ -224,7 +242,22 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     if (!currentQuestion || actionLoading) return
     setActionLoading(true)
     try {
-      const ok = await updateQuestionStatus(currentQuestion.id, 'approved', currentQuestion.answer?.id)
+      // Include classification updates if any were made in edit mode
+      const classificationUpdates: Record<string, any> = {}
+      if (editTopicId) {
+        classificationUpdates.topic_id = editTopicId
+        // Save last used topic to localStorage
+        localStorage.setItem('lastUsedTopicId', editTopicId)
+      }
+      if (editSubtopicId) classificationUpdates.subtopic_id = editSubtopicId
+      if (editSubSubtopicId !== null) classificationUpdates.sub_subtopic_id = editSubSubtopicId
+
+      const ok = await updateQuestionStatus(
+        currentQuestion.id,
+        'approved',
+        currentQuestion.answer?.id,
+        Object.keys(classificationUpdates).length > 0 ? classificationUpdates : undefined
+      )
       if (ok) {
         setStats((s) => ({ ...s, approved: s.approved + 1 }))
         toast.success(`Approved ${currentQuestion.serial_number}`)
