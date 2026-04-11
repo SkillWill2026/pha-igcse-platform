@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAnthropicClient } from '@/lib/anthropic'
 import { createAdminClient } from '@/lib/supabase'
+import { classifyQuestion } from './classify-question/route'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -364,11 +365,7 @@ export async function POST(request: NextRequest) {
           // Classify sub-subtopic synchronously during ingest
           console.log('[ingest] Classifying question:', data.id)
           try {
-            await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/classify-question`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ question_id: data.id }),
-            })
+            await classifyQuestion(data.id)
             console.log('[ingest] Classification done for:', data.id)
           } catch (classifyErr) {
             console.error('[ingest] Classify failed:', data.id, classifyErr instanceof Error ? classifyErr.message : String(classifyErr))
