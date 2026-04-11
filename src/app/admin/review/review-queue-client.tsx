@@ -133,7 +133,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
   }, [editing])
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts (Arrow keys for navigation only)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Disable shortcuts when typing in any input/textarea/select
@@ -141,13 +141,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (editing || editingAnswer) return
 
-      if (e.key.toLowerCase() === 'a') {
-        e.preventDefault()
-        handleApprove()
-      } else if (e.key.toLowerCase() === 'r') {
-        e.preventDefault()
-        handleReject()
-      } else if (e.key === 'ArrowRight' || e.key === ' ') {
+      if (e.key === 'ArrowRight') {
         e.preventDefault()
         handleNext()
       } else if (e.key === 'ArrowLeft') {
@@ -245,6 +239,13 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
   async function handleApprove() {
     if (!currentQuestion || actionLoading) return
+
+    // Require classification before approval
+    if (!editTopicId || !editSubtopicId) {
+      alert('Classification required — please select a Topic and Subtopic before approving.')
+      return
+    }
+
     setActionLoading(true)
     try {
       // Include classification updates if any were made in edit mode
@@ -811,18 +812,19 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           className="gap-2"
         >
           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-          Reject (R)
+          Reject
         </Button>
 
         <Button
           variant="default"
           size="lg"
           onClick={handleApprove}
-          disabled={actionLoading}
-          className="gap-2 bg-green-600 hover:bg-green-700"
+          disabled={actionLoading || !editTopicId}
+          className={`gap-2 bg-green-600 hover:bg-green-700 ${!editTopicId ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={!editTopicId ? 'Classification required — select a Topic to approve' : 'Approve'}
         >
           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          Approve (A)
+          Approve
         </Button>
 
         <Button
