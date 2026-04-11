@@ -5,14 +5,6 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Database, FileText, LayoutDashboard, Loader2, LogOut, Upload, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { createClient } from '@supabase/supabase-js'
-
-console.log('[sidebar] supabase url exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
-
-const supabaseClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 interface NavLink {
   href:      string
@@ -83,9 +75,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   const activeSubject = searchParams.get('subject') ?? '0580'
   const theme = SUBJECT_THEMES[activeSubject] ?? SUBJECT_THEMES['0580']
   const [signingOut, setSigningOut] = useState(false)
-  const [counts, setCounts] = useState<{ rejected: number; deleted: number; draft: number } | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
-  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   const visibleLinks = NAV_LINKS.filter((l) => {
     if (l.tutorOnly && role !== 'tutor') return false
@@ -97,92 +87,12 @@ export function Sidebar({ role, fullName }: SidebarProps) {
     ? 'text-white/80 hover:text-white hover:bg-white/10'
     : ''
 
-  useEffect(() => {
-    // Wait for subjects to load before fetching counts
-    if (!subjects || subjects.length === 0) return
-
-    const fetchCounts = async () => {
-      console.log('[sidebar] activeSubject:', activeSubject)
-      console.log('[sidebar] subjects:', subjects)
-
-      const activeSubjectObj = subjects.find(s => s.code === activeSubject)
-      const subjectId = activeSubjectObj?.id
-
-      console.log('[sidebar] subjectId:', subjectId)
-
-      if (!subjectId) {
-        setCounts(prev => prev ? { ...prev, draft: 0 } : null)
-        return
-      }
-
-      try {
-        // Fetch rejected and deleted counts
-        const { count: rejectedCount } = await supabaseClient
-          .from('questions')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'rejected')
-
-        const { count: deletedCount } = await supabaseClient
-          .from('questions')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'deleted')
-
-        // Get topic IDs for this subject
-        const { data: topicData } = await supabaseClient
-          .from('topics')
-          .select('id')
-          .eq('subject_id', subjectId)
-
-        const topicIds = (topicData ?? []).map(t => t.id)
-
-        console.log('[sidebar] topicIds:', topicIds)
-
-        // Count draft questions: topic in subject OR unclassified (null)
-        let query = supabaseClient
-          .from('questions')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'draft')
-
-        if (topicIds.length > 0) {
-          query = query.or(`topic_id.in.(${topicIds.join(',')}),topic_id.is.null`)
-        } else {
-          query = query.is('topic_id', null)
-        }
-
-        const { count } = await query
-
-        console.log('[sidebar] draft count result:', count)
-
-        setCounts({
-          rejected: rejectedCount ?? 0,
-          deleted: deletedCount ?? 0,
-          draft: count ?? 0,
-        })
-      } catch (err) {
-        console.error('[Sidebar] Error fetching counts:', err)
-      }
-    }
-
-    fetchCounts()
-  }, [pathname, activeSubject, subjects, refreshTrigger])
-
+  // Load subjects
   useEffect(() => {
     fetch('/api/subjects')
       .then(r => r.json())
       .then(d => setSubjects(d.subjects ?? []))
       .catch(() => {})
-  }, [])
-
-  // Listen for question approval/rejection events to refresh the count
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'reviewQueueRefresh') {
-        setRefreshTrigger(prev => prev + 1)
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   const switchSubject = (code: string) => {
@@ -256,21 +166,14 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                 href={href}
                 prefetch={false}
                 className={cn(
-                  'flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   active
                     ? 'bg-primary text-primary-foreground'
                     : navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                 )}
               >
-                <div className="flex items-center gap-3">
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {label}
-                </div>
-                {href === '/admin/review' && counts !== null && counts.draft > 0 && (
-                  <span className="rounded-full bg-blue-100 text-blue-800 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                    {counts.draft}
-                  </span>
-                )}
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
               </Link>
 
               {/* Questions sub-links — always visible */}
@@ -279,34 +182,24 @@ export function Sidebar({ role, fullName }: SidebarProps) {
                   <Link
                     href="/admin/questions/rejected"
                     className={cn(
-                      'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                      'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                       pathname.startsWith('/admin/questions/rejected')
                         ? 'bg-amber-100 text-amber-800'
                         : navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     )}
                   >
-                    <span>Rejected</span>
-                    {counts !== null && counts.rejected > 0 && (
-                      <span className="rounded-full bg-amber-200 text-amber-800 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                        {counts.rejected}
-                      </span>
-                    )}
+                    Rejected
                   </Link>
                   <Link
                     href="/admin/questions/deleted"
                     className={cn(
-                      'flex items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                      'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                       pathname.startsWith('/admin/questions/deleted')
                         ? 'bg-red-100 text-red-800'
                         : navTextColor || 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
                     )}
                   >
-                    <span>Deleted</span>
-                    {counts !== null && counts.deleted > 0 && (
-                      <span className="rounded-full bg-red-200 text-red-800 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
-                        {counts.deleted}
-                      </span>
-                    )}
+                    Deleted
                   </Link>
                 </div>
               )}
