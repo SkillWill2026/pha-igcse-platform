@@ -362,14 +362,16 @@ export async function POST(request: NextRequest) {
           saved.push(data)
 
           // Classify sub-subtopic synchronously during ingest
+          console.log('[ingest] Classifying question:', data.id)
           try {
             await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/classify-question`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ question_id: data.id }),
             })
+            console.log('[ingest] Classification done for:', data.id)
           } catch (classifyErr) {
-            console.warn('[ingest] Classification failed for question', data.id, ':', classifyErr instanceof Error ? classifyErr.message : String(classifyErr))
+            console.error('[ingest] Classify failed:', data.id, classifyErr instanceof Error ? classifyErr.message : String(classifyErr))
           }
         }
       } catch (err) {
