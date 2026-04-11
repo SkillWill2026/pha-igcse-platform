@@ -425,18 +425,20 @@ export function ReviewClient({
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClassify}
-              disabled={isClassifying}
-              className="h-8 gap-1.5 text-xs"
-            >
-              {isClassifying
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <Sparkles className="h-3.5 w-3.5" />}
-              {isClassifying ? 'Classifying…' : 'Auto-classify'}
-            </Button>
+            {question.status === 'draft' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClassify}
+                disabled={isClassifying}
+                className="h-8 gap-1.5 text-xs"
+              >
+                {isClassifying
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Sparkles className="h-3.5 w-3.5" />}
+                {isClassifying ? 'Classifying…' : 'Auto-classify'}
+              </Button>
+            )}
           </div>
 
           {/* Sub-subtopic selector */}
