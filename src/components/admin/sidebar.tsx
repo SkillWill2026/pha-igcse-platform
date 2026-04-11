@@ -5,7 +5,12 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Database, FileText, LayoutDashboard, Loader2, LogOut, Upload, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseClient = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 interface NavLink {
   href:      string
@@ -75,7 +80,6 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   const searchParams = useSearchParams()
   const activeSubject = searchParams.get('subject') ?? '0580'
   const theme = SUBJECT_THEMES[activeSubject] ?? SUBJECT_THEMES['0580']
-  const supabase = createClientComponentClient()
   const [signingOut, setSigningOut] = useState(false)
   const [counts, setCounts] = useState<{ rejected: number; deleted: number; draft: number } | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -103,18 +107,18 @@ export function Sidebar({ role, fullName }: SidebarProps) {
 
       try {
         // Fetch rejected and deleted counts
-        const { count: rejectedCount } = await supabase
+        const { count: rejectedCount } = await supabaseClient
           .from('questions')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'rejected')
 
-        const { count: deletedCount } = await supabase
+        const { count: deletedCount } = await supabaseClient
           .from('questions')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'deleted')
 
         // Get topic IDs for this subject
-        const { data: topicData } = await supabase
+        const { data: topicData } = await supabaseClient
           .from('topics')
           .select('id')
           .eq('subject_id', subjectId)
@@ -122,7 +126,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
         const topicIds = (topicData ?? []).map(t => t.id)
 
         // Count draft questions: topic in subject OR unclassified (null)
-        let query = supabase
+        let query = supabaseClient
           .from('questions')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'draft')
@@ -146,7 +150,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
     }
 
     fetchCounts()
-  }, [pathname, activeSubject, subjects, refreshTrigger, supabase])
+  }, [pathname, activeSubject, subjects, refreshTrigger])
 
   useEffect(() => {
     fetch('/api/subjects')
