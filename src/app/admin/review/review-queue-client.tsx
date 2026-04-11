@@ -54,6 +54,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [editTopicId, setEditTopicId] = useState<string | null>(null)
   const [editSubtopicId, setEditSubtopicId] = useState<string | null>(null)
   const [editSubSubtopicId, setEditSubSubtopicId] = useState<string | null>(null)
+  const [editingAnswer, setEditingAnswer] = useState(false)
+  const [editedAnswerContent, setEditedAnswerContent] = useState('')
+  const [editAnswerSaving, setEditAnswerSaving] = useState(false)
 
   const remaining = drafts.length - currentIdx - 1
 
@@ -80,6 +83,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
     setEditing(false)
     setEditedText('')
+    setEditingAnswer(false)
+    setEditedAnswerContent('')
     setSelectedSubSubtopic(null)
     setEditTopicId(null)
     setEditSubtopicId(null)
@@ -105,6 +110,20 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       .catch((err) => console.error('Failed to fetch sub-subtopics:', err))
       .finally(() => setLoadingSubSubtopics(false))
   }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id])
+
+  // Load last used topic from localStorage when entering edit mode
+  useEffect(() => {
+    if (editing && !editTopicId) {
+      try {
+        const savedTopicId = localStorage.getItem('lastUsedTopicId')
+        if (savedTopicId) {
+          setEditTopicId(savedTopicId)
+        }
+      } catch (err) {
+        console.error('Failed to load last used topic:', err)
+      }
+    }
+  }, [editing])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -265,7 +284,11 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       const updates: Record<string, unknown> = {
         content: editedText.trim(),
       }
-      if (editTopicId) updates.topic_id = editTopicId
+      if (editTopicId) {
+        updates.topic_id = editTopicId
+        // Save last used topic to localStorage
+        localStorage.setItem('lastUsedTopicId', editTopicId)
+      }
       if (editSubtopicId) updates.subtopic_id = editSubtopicId
       if (editSubSubtopicId) updates.sub_subtopic_id = editSubSubtopicId
 
@@ -315,6 +338,52 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     if (!currentQuestion) return
     setEditedText(currentQuestion.content_text)
     setEditing(true)
+  }
+
+  function handleStartEditAnswer() {
+    if (!currentQuestion?.answer) return
+    setEditedAnswerContent(currentQuestion.answer.content ?? '')
+    setEditingAnswer(true)
+  }
+
+  function handleCancelEditAnswer() {
+    setEditingAnswer(false)
+    setEditedAnswerContent('')
+  }
+
+  async function handleSaveEditAnswer() {
+    if (!currentQuestion?.answer || editAnswerSaving || !editedAnswerContent.trim()) return
+    setEditAnswerSaving(true)
+    try {
+      const res = await fetch(`/api/answers/${currentQuestion.answer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editedAnswerContent.trim() }),
+      })
+
+      if (!res.ok) {
+        const d = await res.json() as { error?: string }
+        throw new Error(d.error ?? 'Save failed')
+      }
+
+      // Update current question with new answer content
+      setCurrentQuestion((q) =>
+        q
+          ? {
+              ...q,
+              answer: { ...q.answer!, content: editedAnswerContent.trim() },
+            }
+          : (q as any)
+      )
+      setEditingAnswer(false)
+      setEditedAnswerContent('')
+      toast.success('Answer updated')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Save failed'
+      toast.error(msg)
+    } finally {
+      setEditAnswerSaving(false)
+    }
   }
 
   async function handleSelectSubSubtopic(subSubtopicId: string) {
@@ -566,15 +635,54 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         <div className="flex-[2] rounded-lg border bg-muted/20 p-5 flex flex-col space-y-4">
           {currentQuestion.answer ? (
             <>
-              <div className="text-sm font-semibold">Answer</div>
-              <div className="prose prose-sm max-w-none leading-relaxed">
-                <ReactMarkdown
-                  remarkPlugins={[remarkMath]}
-                  rehypePlugins={[rehypeKatex]}
-                >
-                  {currentQuestion.answer.content ?? ''}
-                </ReactMarkdown>
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">Answer</div>
+                {!editingAnswer && (
+                  <button
+                    onClick={handleStartEditAnswer}
+                    disabled={editAnswerSaving}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-muted transition-colors disabled:opacity-60"
+                  >
+                    ✏ Edit Answer
+                  </button>
+                )}
               </div>
+              {editingAnswer ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={editedAnswerContent}
+                    onChange={(e) => setEditedAnswerContent(e.target.value)}
+                    className="w-full h-64 p-4 rounded-lg border bg-white text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Answer content..."
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveEditAnswer}
+                      disabled={editAnswerSaving || !editedAnswerContent.trim()}
+                      className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {editAnswerSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓'}
+                      Save Answer
+                    </button>
+                    <button
+                      onClick={handleCancelEditAnswer}
+                      disabled={editAnswerSaving}
+                      className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md bg-gray-300 text-gray-800 hover:bg-gray-400 disabled:opacity-50"
+                    >
+                      ✗ Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="prose prose-sm max-w-none leading-relaxed">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                  >
+                    {currentQuestion.answer.content ?? ''}
+                  </ReactMarkdown>
+                </div>
+              )}
             </>
           ) : (
             <div className="text-center py-8 space-y-4">
