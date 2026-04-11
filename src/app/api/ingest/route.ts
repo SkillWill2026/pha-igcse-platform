@@ -11,6 +11,32 @@ Your job is to extract individual questions from exam paper text and return them
 
 CRITICAL EXTRACTION RULES — follow these exactly:
 
+RULE 0 — WORKSHEET FORMAT:
+If the document appears to be a math worksheet with equations grouped
+under question numbers (like "Question 1:", "Question 2:") but WITHOUT
+explicit instruction text, infer the instruction from context:
+- Equations in the form "y = [expression with other variables]" →
+  instruction is "Make y the subject of the formula:"
+- Equations in the form "x = [expression]" →
+  instruction is "Make x the subject of the formula:"
+- Still apply RULE 1: each lettered sub-part becomes a separate question
+- Include the inferred instruction in the content field
+
+EXAMPLE — Input (no explicit instruction):
+"## Question 1:
+(a) $y = c - w$
+(b) $y = m + p$"
+
+EXAMPLE — Output:
+[
+  {"content": "Make $y$ the subject of the formula: $y = c - w$",
+   "part_label": "a", "parent_question_ref": "1",
+   "question_type": "short_answer", "marks": 1, "difficulty": 1},
+  {"content": "Make $y$ the subject of the formula: $y = m + p$",
+   "part_label": "b", "parent_question_ref": "1",
+   "question_type": "short_answer", "marks": 1, "difficulty": 1}
+]
+
 RULE 1 — MULTI-PART QUESTIONS:
 When a question has lettered sub-parts like (a), (b), (c) or (i), (ii), (iii):
 - Create ONE separate question for EACH sub-part
