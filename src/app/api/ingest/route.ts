@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
 
       // If image-based PDF, use Mistral OCR fallback
       const avgCharsPerPage = text.trim().length / Math.max(pageCount, 1)
-      if (avgCharsPerPage < 100) {
+      if (avgCharsPerPage < 30) {
         console.log('[ingest] Image-based PDF detected, using Mistral OCR')
         try {
           const { extractTextWithOCR } = await import('@/lib/ocr')
