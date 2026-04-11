@@ -19,6 +19,9 @@ export async function GET(request: NextRequest) {
     if (subtopic_id) query = query.eq('subtopic_id', subtopic_id)
     if (subject_id) query = query.eq('subject_id', subject_id)
 
+    const status = searchParams.get('status')
+    if (status === 'approved' || status === 'draft') query = query.eq('status', status)
+
     const { data, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
