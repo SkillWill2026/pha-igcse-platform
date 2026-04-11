@@ -98,6 +98,9 @@ export function Sidebar({ role, fullName }: SidebarProps) {
     : ''
 
   useEffect(() => {
+    // Wait for subjects to load before fetching counts
+    if (!subjects || subjects.length === 0) return
+
     const fetchCounts = async () => {
       console.log('[sidebar] activeSubject:', activeSubject)
       console.log('[sidebar] subjects:', subjects)
