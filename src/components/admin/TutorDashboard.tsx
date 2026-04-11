@@ -40,6 +40,9 @@ export default function TutorDashboard({ fullName, role }: Props) {
   const [data, setData] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
+  const [pptApproved, setPptApproved] = useState(0)
+  const [pptRequired, setPptRequired] = useState(0)
+  const [pptDraft, setPptDraft] = useState(0)
 
   async function fetchProgress() {
     try {
@@ -56,6 +59,23 @@ export default function TutorDashboard({ fullName, role }: Props) {
     fetchProgress()
     const iv = setInterval(() => { fetchProgress(); setLastRefresh(new Date()) }, 60000)
     return () => clearInterval(iv)
+  }, [])
+
+  useEffect(() => {
+    // Fetch live PPT stats
+    Promise.all([
+      fetch('/api/ppt?status=approved').then(r => r.json()),
+      fetch('/api/ppt').then(r => r.json()),
+      fetch('/api/schedule/topics').then(r => r.json()),
+    ]).then(([approvedData, allData, topicsData]) => {
+      const allDecks = allData.decks ?? []
+      const approvedDecks = approvedData.decks ?? []
+      const allSubtopics = (topicsData.topics ?? []).flatMap((t: { subtopics?: { ppt_required?: boolean }[] }) => t.subtopics ?? [])
+      const required = allSubtopics.filter((s: { ppt_required?: boolean }) => s.ppt_required).length
+      setPptApproved(approvedDecks.length)
+      setPptDraft(allDecks.filter((d: { status: string }) => d.status === 'draft').length)
+      setPptRequired(required > 0 ? required : allSubtopics.length)
+    }).catch(() => {})
   }, [])
 
   const dailyPct = data
@@ -180,6 +200,30 @@ export default function TutorDashboard({ fullName, role }: Props) {
           </p>
         </div>
       )}
+
+      {/* PPT progress */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="font-semibold text-gray-800 mb-3">PPT Presentations</h2>
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <div className="w-full bg-gray-100 rounded-full h-2">
+              <div
+                className="h-2 rounded-full bg-blue-500 transition-all"
+                style={{ width: pptRequired > 0 ? `${Math.round((pptApproved / pptRequired) * 100)}%` : '0%' }}
+              />
+            </div>
+          </div>
+          <span className="text-xs text-gray-400">
+            {pptApproved} / {pptRequired} approved
+          </span>
+        </div>
+        <div className="flex items-center gap-3 mt-2">
+          {pptDraft > 0 && (
+            <span className="text-xs text-amber-500">{pptDraft} draft{pptDraft !== 1 ? 's' : ''} pending review</span>
+          )}
+          <span className="text-xs text-gray-400 ml-auto">1 PPT per subtopic</span>
+        </div>
+      </div>
 
       {/* Quick Actions */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
