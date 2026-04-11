@@ -91,11 +91,11 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   useEffect(() => {
     Promise.all([
       fetch('/api/questions/counts').then((r) => r.json()),
-      fetch('/api/questions?status=draft').then((r) => r.json()).then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 })),
+      fetch(`/api/questions?status=draft&subject=${activeSubject}`).then((r) => r.json()).then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 })),
     ])
       .then(([qCounts, draftCount]) => setCounts({ ...qCounts, ...draftCount }))
       .catch(() => {})
-  }, [pathname])
+  }, [pathname, activeSubject])
 
   useEffect(() => {
     fetch('/api/subjects')

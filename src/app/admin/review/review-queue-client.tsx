@@ -240,9 +240,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   async function handleApprove() {
     if (!currentQuestion || actionLoading) return
 
-    // Require classification before approval
-    if (!editTopicId || !editSubtopicId) {
-      alert('Classification required — please select a Topic and Subtopic before approving.')
+    // Require all three classifications before approval
+    if (!editTopicId || !editSubtopicId || !editSubSubtopicId) {
+      alert('Classification required — please select a Topic, Subtopic, and Sub-subtopic before approving.')
       return
     }
 
@@ -819,9 +819,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           variant="default"
           size="lg"
           onClick={handleApprove}
-          disabled={actionLoading || !editTopicId}
-          className={`gap-2 bg-green-600 hover:bg-green-700 ${!editTopicId ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title={!editTopicId ? 'Classification required — select a Topic to approve' : 'Approve'}
+          disabled={actionLoading || !editTopicId || !editSubtopicId || !editSubSubtopicId}
+          className={`gap-2 bg-green-600 hover:bg-green-700 ${(!editTopicId || !editSubtopicId || !editSubSubtopicId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+          title={(!editTopicId || !editSubtopicId || !editSubSubtopicId) ? 'Classification required — select Topic, Subtopic, and Sub-subtopic to approve' : 'Approve'}
         >
           {actionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
           Approve
