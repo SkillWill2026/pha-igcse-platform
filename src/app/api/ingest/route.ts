@@ -127,6 +127,11 @@ export async function POST(request: NextRequest) {
       text = parsed.text
       const pageCount = parsed.numpages
 
+      // Debug: log extracted text info
+      console.log('[ingest] PDF text sample (first 500 chars):', text.substring(0, 500))
+      console.log('[ingest] Total chars extracted:', text.trim().length)
+      console.log('[ingest] Page count:', pageCount)
+
       // If image-based PDF, use Mistral OCR fallback
       const avgCharsPerPage = text.trim().length / Math.max(pageCount, 1)
       if (avgCharsPerPage < 30) {
