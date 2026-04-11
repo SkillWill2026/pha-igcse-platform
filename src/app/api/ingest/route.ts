@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
         try {
           const { extractTextWithOCR } = await import('@/lib/ocr')
           text = await extractTextWithOCR(buffer)
+          console.log('[ingest] Mistral OCR output (first 1000 chars):', text.substring(0, 1000))
           console.log('[ingest] OCR extracted', text.length, 'chars')
         } catch (ocrErr) {
           console.warn('[ingest] OCR failed:', ocrErr)
@@ -244,6 +245,9 @@ export async function POST(request: NextRequest) {
         })
         const rawContent = response.content[0]
         const responseText = rawContent?.type === 'text' ? rawContent.text : ''
+
+        // Debug: log Claude's raw response
+        console.log('[ingest] Claude raw response:', responseText.substring(0, 500))
 
         // Extract JSON array from response - handles markdown fences and extra text
         let questions: Array<{
