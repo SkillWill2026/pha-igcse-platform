@@ -367,19 +367,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Classify all questions in parallel
-    if (saved.length > 0) {
-      console.log('[ingest] Starting parallel classification for', saved.length, 'questions')
-      await Promise.all(
-        saved.map(q =>
-          classifyQuestion(q.id).catch(err =>
-            console.error('[ingest] Classify failed for', q.id, ':', err.message)
-          )
-        )
-      )
-      console.log('[ingest] All classifications complete')
-    }
-
     if (saved.length === 0 && rows.length > 0) {
       return NextResponse.json(
         { error: 'No questions were successfully inserted. All may be duplicates or invalid.', details: errors },
