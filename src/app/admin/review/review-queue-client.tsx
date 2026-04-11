@@ -136,6 +136,11 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Disable shortcuts when typing in any input/textarea/select
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (editing || editingAnswer) return
+
       if (e.key.toLowerCase() === 'a') {
         e.preventDefault()
         handleApprove()
@@ -153,7 +158,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [currentIdx, actionLoading])
+  }, [currentIdx, actionLoading, editing, editingAnswer])
 
   // Background answer generation
   useEffect(() => {
