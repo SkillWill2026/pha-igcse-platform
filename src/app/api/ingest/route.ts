@@ -361,19 +361,23 @@ export async function POST(request: NextRequest) {
           }
         } else if (data) {
           saved.push(data)
-
-          // Classify sub-subtopic synchronously during ingest
-          console.log('[ingest] Classifying question:', data.id)
-          try {
-            await classifyQuestion(data.id)
-            console.log('[ingest] Classification done for:', data.id)
-          } catch (classifyErr) {
-            console.error('[ingest] Classify failed:', data.id, classifyErr instanceof Error ? classifyErr.message : String(classifyErr))
-          }
         }
       } catch (err) {
         console.warn(`[ingest] exception inserting question:`, err instanceof Error ? err.message : String(err))
       }
+    }
+
+    // Classify all questions in parallel
+    if (saved.length > 0) {
+      console.log('[ingest] Starting parallel classification for', saved.length, 'questions')
+      await Promise.all(
+        saved.map(q =>
+          classifyQuestion(q.id).catch(err =>
+            console.error('[ingest] Classify failed for', q.id, ':', err.message)
+          )
+        )
+      )
+      console.log('[ingest] All classifications complete')
     }
 
     if (saved.length === 0 && rows.length > 0) {
