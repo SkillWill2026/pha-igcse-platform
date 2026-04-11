@@ -55,6 +55,9 @@ export function ProductionDashboard({ isAdmin }: Props) {
   const [saving, setSaving] = useState(false)
   const [tutors, setTutors] = useState<TutorBreakdown[]>([])
   const [tutorsLoading, setTutorsLoading] = useState(true)
+  const [pptApproved, setPptApproved] = useState(0)
+  const [pptRequired, setPptRequired] = useState(0)
+  const [pptDraft, setPptDraft]   = useState(0)
 
   const fetchProgress = useCallback(async () => {
     try {
@@ -82,6 +85,21 @@ export function ProductionDashboard({ isAdmin }: Props) {
       .then(r => r.json())
       .then(d => { setTutors(d.tutors ?? []); setTutorsLoading(false) })
       .catch(() => setTutorsLoading(false))
+
+    // Fetch live PPT stats
+    Promise.all([
+      fetch('/api/ppt?status=approved').then(r => r.json()),
+      fetch('/api/ppt').then(r => r.json()),
+      fetch('/api/schedule/topics').then(r => r.json()),
+    ]).then(([approvedData, allData, topicsData]) => {
+      const allDecks = allData.decks ?? []
+      const approvedDecks = approvedData.decks ?? []
+      const allSubtopics = (topicsData.topics ?? []).flatMap((t: { subtopics?: { ppt_required?: boolean }[] }) => t.subtopics ?? [])
+      const required = allSubtopics.filter((s: { ppt_required?: boolean }) => s.ppt_required).length
+      setPptApproved(approvedDecks.length)
+      setPptDraft(allDecks.filter((d: { status: string }) => d.status === 'draft').length)
+      setPptRequired(required > 0 ? required : allSubtopics.length)
+    }).catch(() => {})
   }, [fetchProgress])
 
   const saveTotal = async () => {
@@ -442,12 +460,22 @@ export function ProductionDashboard({ isAdmin }: Props) {
         <div className="flex items-center gap-3">
           <div className="flex-1">
             <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2">
-              <div className="h-2 rounded-full bg-blue-500" style={{ width: '0%' }} />
+              <div
+                className="h-2 rounded-full bg-blue-500 transition-all"
+                style={{ width: pptRequired > 0 ? `${Math.round((pptApproved / pptRequired) * 100)}%` : '0%' }}
+              />
             </div>
           </div>
-          <span className="text-xs text-gray-400">0 / 72 subtopics</span>
+          <span className="text-xs text-gray-400">
+            {pptApproved} / {pptRequired} approved
+          </span>
         </div>
-        <div className="text-xs text-gray-400 mt-2">1 PPT per subtopic — no hard deadline</div>
+        <div className="flex items-center gap-3 mt-2">
+          {pptDraft > 0 && (
+            <span className="text-xs text-amber-500">{pptDraft} draft{pptDraft !== 1 ? 's' : ''} pending review</span>
+          )}
+          <span className="text-xs text-gray-400 ml-auto">1 PPT per subtopic</span>
+        </div>
       </div>
 
     </div>
