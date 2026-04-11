@@ -7,6 +7,8 @@ import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Database, FileText
 import { cn } from '@/lib/utils'
 import { createClient } from '@supabase/supabase-js'
 
+console.log('[sidebar] supabase url exists:', !!process.env.NEXT_PUBLIC_SUPABASE_URL)
+
 const supabaseClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -97,8 +99,13 @@ export function Sidebar({ role, fullName }: SidebarProps) {
 
   useEffect(() => {
     const fetchCounts = async () => {
+      console.log('[sidebar] activeSubject:', activeSubject)
+      console.log('[sidebar] subjects:', subjects)
+
       const activeSubjectObj = subjects.find(s => s.code === activeSubject)
       const subjectId = activeSubjectObj?.id
+
+      console.log('[sidebar] subjectId:', subjectId)
 
       if (!subjectId) {
         setCounts(prev => prev ? { ...prev, draft: 0 } : null)
@@ -125,6 +132,8 @@ export function Sidebar({ role, fullName }: SidebarProps) {
 
         const topicIds = (topicData ?? []).map(t => t.id)
 
+        console.log('[sidebar] topicIds:', topicIds)
+
         // Count draft questions: topic in subject OR unclassified (null)
         let query = supabaseClient
           .from('questions')
@@ -138,6 +147,8 @@ export function Sidebar({ role, fullName }: SidebarProps) {
         }
 
         const { count } = await query
+
+        console.log('[sidebar] draft count result:', count)
 
         setCounts({
           rejected: rejectedCount ?? 0,
