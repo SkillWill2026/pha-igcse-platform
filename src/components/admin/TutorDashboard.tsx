@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import { Target, TrendingUp, Calendar, BookOpen, Upload, ClipboardCheck, RefreshCw } from 'lucide-react'
 
 interface TopicBreakdown {
@@ -25,13 +24,6 @@ interface ProgressData {
   topic_breakdown: TopicBreakdown[]
 }
 
-interface CountsData {
-  qApproved: number
-  qPending: number
-  aApproved: number
-  aPending: number
-}
-
 interface Props {
   fullName: string
   role: string
@@ -45,12 +37,8 @@ function getGreeting(): string {
 }
 
 export default function TutorDashboard({ fullName, role }: Props) {
-  const searchParams = useSearchParams()
-  const activeSubject = searchParams.get('subject') ?? '0580'
   const [data, setData] = useState<ProgressData | null>(null)
-  const [counts, setCounts] = useState<CountsData>({ qApproved: 0, qPending: 0, aApproved: 0, aPending: 0 })
   const [loading, setLoading] = useState(true)
-  const [countsLoading, setCountsLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
 
   async function fetchProgress() {
@@ -64,27 +52,11 @@ export default function TutorDashboard({ fullName, role }: Props) {
     }
   }
 
-  async function fetchCounts() {
-    try {
-      const res = await fetch(`/api/stats?subject_id=${activeSubject}`)
-      if (res.ok) setCounts(await res.json())
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setCountsLoading(false)
-    }
-  }
-
   useEffect(() => {
     fetchProgress()
     const iv = setInterval(() => { fetchProgress(); setLastRefresh(new Date()) }, 60000)
     return () => clearInterval(iv)
   }, [])
-
-  useEffect(() => {
-    setCountsLoading(true)
-    fetchCounts()
-  }, [activeSubject])
 
   const dailyPct = data
     ? Math.min(100, Math.round((data.done_today / Math.max(data.daily_target, 1)) * 100))
@@ -113,29 +85,6 @@ export default function TutorDashboard({ fullName, role }: Props) {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
-      </div>
-
-      {/* Question & Answer Counts */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Summary</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div>
-            <p className="text-gray-600">Questions Draft</p>
-            <p className="text-2xl font-bold text-amber-600">{countsLoading ? '—' : counts.qPending}</p>
-          </div>
-          <div>
-            <p className="text-gray-600">Questions Approved</p>
-            <p className="text-2xl font-bold text-green-600">{countsLoading ? '—' : counts.qApproved}</p>
-          </div>
-          <div>
-            <p className="text-gray-600">Answers Approved</p>
-            <p className="text-2xl font-bold text-green-600">{countsLoading ? '—' : counts.aApproved}</p>
-          </div>
-          <div>
-            <p className="text-gray-600">Answers Pending</p>
-            <p className="text-2xl font-bold text-amber-600">{countsLoading ? '—' : counts.aPending}</p>
-          </div>
-        </div>
       </div>
 
       {/* Stat Cards */}
@@ -245,17 +194,10 @@ export default function TutorDashboard({ fullName, role }: Props) {
           </Link>
           <Link
             href="/admin/review"
-            className="flex items-center justify-between gap-3 p-3 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+            className="flex items-center gap-3 p-3 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
           >
-            <div className="flex items-center gap-3">
-              <ClipboardCheck className="w-5 h-5" />
-              <span className="font-medium text-sm">Review Queue</span>
-            </div>
-            {counts.qPending > 0 && !countsLoading && (
-              <span className="bg-red-500 text-white text-xs font-semibold rounded-full h-6 w-6 flex items-center justify-center">
-                {counts.qPending}
-              </span>
-            )}
+            <ClipboardCheck className="w-5 h-5" />
+            <span className="font-medium text-sm">Review Queue</span>
           </Link>
         </div>
       </div>
