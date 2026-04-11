@@ -232,52 +232,59 @@ export async function POST(request: NextRequest) {
     const extractionPrompt = `${systemPrompt}\n\n${contextLine}`
 
     const allQuestions: AIQuestion[] = []
-    for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
-      const chunk = chunks[chunkIdx]
-      try {
-        const response = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 4096,
-          messages: [{
-            role: 'user',
-            content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${chunk}`,
-          }],
-        })
-        const rawContent = response.content[0]
-        const responseText = rawContent?.type === 'text' ? rawContent.text : ''
-
-        // Debug: log Claude's raw response
-        console.log('[ingest] Claude raw response:', responseText.substring(0, 500))
-
-        // Extract JSON array from response - handles markdown fences and extra text
-        let questions: Array<{
-          content: string
-          part_label?: string | null
-          parent_question_ref?: string | null
-          question_type?: string
-          marks?: number
-          difficulty?: number
-        }> = []
-
+    try {
+      console.log('[ingest] Calling Claude for extraction...')
+      for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+        const chunk = chunks[chunkIdx]
         try {
-          // Find the first [ and last ] to extract the JSON array
-          const firstBracket = responseText.indexOf('[')
-          const lastBracket = responseText.lastIndexOf(']')
+          const response = await anthropic.messages.create({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 4096,
+            messages: [{
+              role: 'user',
+              content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${chunk}`,
+            }],
+          })
+          const rawContent = response.content[0]
+          const responseText = rawContent?.type === 'text' ? rawContent.text : ''
 
-          if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-            const jsonStr = responseText.slice(firstBracket, lastBracket + 1)
-            const parsed = JSON.parse(jsonStr)
-            questions = Array.isArray(parsed) ? parsed : []
+          // Debug: log Claude's raw response immediately after API call
+          console.log('[ingest] Claude raw response:', responseText.substring(0, 500))
+
+          // Extract JSON array from response - handles markdown fences and extra text
+          let questions: Array<{
+            content: string
+            part_label?: string | null
+            parent_question_ref?: string | null
+            question_type?: string
+            marks?: number
+            difficulty?: number
+          }> = []
+
+          try {
+            // Find the first [ and last ] to extract the JSON array
+            const firstBracket = responseText.indexOf('[')
+            const lastBracket = responseText.lastIndexOf(']')
+
+            if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+              const jsonStr = responseText.slice(firstBracket, lastBracket + 1)
+              const parsed = JSON.parse(jsonStr)
+              questions = Array.isArray(parsed) ? parsed : []
+            }
+          } catch (parseErr) {
+            console.warn('[ingest] JSON parse failed:', String(parseErr).slice(0, 100))
+            questions = []
           }
-        } catch (parseErr) {
-          console.warn('[ingest] JSON parse failed:', String(parseErr).slice(0, 100))
-          questions = []
-        }
 
-        allQuestions.push(...(questions as AIQuestion[]))
-      } catch {
-        continue
+          allQuestions.push(...(questions as AIQuestion[]))
+        } catch (chunkError: any) {
+          console.error('[ingest] Chunk extraction failed:', chunkError.message)
+          continue
+        }
       }
+    } catch (extractionError: any) {
+      console.error('[ingest] EXTRACTION FAILED:', extractionError.message)
+      console.error('[ingest] Stack:', extractionError.stack)
     }
 
     if (allQuestions.length === 0) {
