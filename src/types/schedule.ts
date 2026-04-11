@@ -28,11 +28,13 @@ export interface Topic {
 export interface PPTDeck {
   id: string
   subtopic_id: string
-  filename: string
-  file_path: string
-  file_size: number | null
-  uploaded_by: string | null
+  subject_id: string
+  title: string
+  status: 'draft' | 'approved'
+  slides: unknown[]
+  tutor_notes: string | null
   created_at: string
+  updated_at: string
 }
 
 export interface Subtopic {
