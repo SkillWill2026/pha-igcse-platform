@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Database, FileText, LayoutDashboard, Loader2, LogOut, Upload, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 interface NavLink {
   href:      string
@@ -74,6 +75,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   const searchParams = useSearchParams()
   const activeSubject = searchParams.get('subject') ?? '0580'
   const theme = SUBJECT_THEMES[activeSubject] ?? SUBJECT_THEMES['0580']
+  const supabase = createClientComponentClient()
   const [signingOut, setSigningOut] = useState(false)
   const [counts, setCounts] = useState<{ rejected: number; deleted: number; draft: number } | null>(null)
   const [subjects, setSubjects] = useState<Subject[]>([])
@@ -90,36 +92,61 @@ export function Sidebar({ role, fullName }: SidebarProps) {
     : ''
 
   useEffect(() => {
-    const activeSubjectObj = subjects.find(s => s.code === activeSubject)
-    const subjectId = activeSubjectObj?.id
+    const fetchCounts = async () => {
+      const activeSubjectObj = subjects.find(s => s.code === activeSubject)
+      const subjectId = activeSubjectObj?.id
 
-    if (!subjectId) {
-      setCounts(prev => prev ? { ...prev, draft: 0 } : null)
-      return
+      if (!subjectId) {
+        setCounts(prev => prev ? { ...prev, draft: 0 } : null)
+        return
+      }
+
+      try {
+        // Fetch rejected and deleted counts
+        const { count: rejectedCount } = await supabase
+          .from('questions')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'rejected')
+
+        const { count: deletedCount } = await supabase
+          .from('questions')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'deleted')
+
+        // Get topic IDs for this subject
+        const { data: topicData } = await supabase
+          .from('topics')
+          .select('id')
+          .eq('subject_id', subjectId)
+
+        const topicIds = (topicData ?? []).map(t => t.id)
+
+        // Count draft questions: topic in subject OR unclassified (null)
+        let query = supabase
+          .from('questions')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'draft')
+
+        if (topicIds.length > 0) {
+          query = query.or(`topic_id.in.(${topicIds.join(',')}),topic_id.is.null`)
+        } else {
+          query = query.is('topic_id', null)
+        }
+
+        const { count } = await query
+
+        setCounts({
+          rejected: rejectedCount ?? 0,
+          deleted: deletedCount ?? 0,
+          draft: count ?? 0,
+        })
+      } catch (err) {
+        console.error('[Sidebar] Error fetching counts:', err)
+      }
     }
 
-    // Match the exact query logic from review queue page:
-    // status='draft' AND (topic_id in subject's topics OR topic_id is null)
-    Promise.all([
-      fetch('/api/questions/counts').then((r) => r.json()),
-      fetch(`/api/topics?subject_id=${subjectId}`).then((r) => r.json())
-        .then((topics) => {
-          const topicIds = Array.isArray(topics) ? topics.map((t: any) => t.id) : []
-          if (topicIds.length === 0) {
-            // Subject has no topics yet, but still show unclassified (null topic_id) questions
-            return fetch('/api/questions?status=draft&topic_id=null').then(r => r.json())
-              .then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 }))
-          }
-          // Query for: status=draft AND (topic_id in subject's topics OR topic_id is null)
-          const topicFilter = topicIds.map((id: string) => `id.eq.${id}`).join(',')
-          return fetch(`/api/questions?status=draft&or=(topic_id.in.(${topicIds.join(',')}),topic_id.is.null)`)
-            .then(r => r.json())
-            .then((qs) => ({ draft: Array.isArray(qs) ? qs.length : 0 }))
-        })
-    ])
-      .then(([qCounts, draftCount]) => setCounts({ ...qCounts, ...draftCount }))
-      .catch(() => {})
-  }, [pathname, activeSubject, subjects, refreshTrigger])
+    fetchCounts()
+  }, [pathname, activeSubject, subjects, refreshTrigger, supabase])
 
   useEffect(() => {
     fetch('/api/subjects')
