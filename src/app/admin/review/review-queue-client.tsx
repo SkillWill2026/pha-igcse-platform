@@ -332,8 +332,22 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
   }
 
-  function handleGraphSaved() {
-    router.refresh()
+  function handleGraphSaved(savedImage: { image_url: string; image_id: string; storage_path: string; image_type: string }) {
+    setCurrentQuestion((q) => {
+      if (!q) return q
+      const newImg = {
+        id: savedImage.image_id,
+        question_id: q.id,
+        storage_path: savedImage.storage_path,
+        image_type: savedImage.image_type,
+        sort_order: (q.question_images?.length ?? 0) + 1,
+        created_at: new Date().toISOString(),
+      }
+      return {
+        ...q,
+        question_images: [...(q.question_images ?? []), newImg],
+      }
+    })
   }
 
   async function handleGenerateAnswer() {

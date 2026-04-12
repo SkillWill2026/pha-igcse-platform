@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 interface GraphModalProps {
   isOpen: boolean
   onClose: () => void
-  onSaved: () => void
+  onSaved: (savedImage: { image_url: string; image_id: string; storage_path: string; image_type: string }) => void
   questionId: string
   imageType: 'question' | 'answer'
   prefillText?: string
@@ -303,6 +303,36 @@ export default function GraphModal({
     }
   }, [])
 
+  function addCopyrightToCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+    const ctx = canvas.getContext('2d')!
+    const year = new Date().getFullYear()
+    const text = `skillwill.ae - PHA ${year}`
+    ctx.save()
+    ctx.font = '11px sans-serif'
+    ctx.fillStyle = 'rgba(80, 80, 80, 0.75)'
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'bottom'
+    ctx.fillText(text, canvas.width - 10, canvas.height - 8)
+    ctx.restore()
+    return canvas
+  }
+
+  function addCopyrightToDataUrl(dataUrl: string): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0)
+        addCopyrightToCanvas(canvas)
+        resolve(canvas.toDataURL('image/png'))
+      }
+      img.src = dataUrl
+    })
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setSaveError('')
@@ -317,6 +347,7 @@ export default function GraphModal({
           setSaving(false)
           return
         }
+        addCopyrightToCanvas(canvasRef.current)
         imageData = canvasRef.current.toDataURL('image/png')
       } else {
         if (!desmosCalculatorRef.current) {
@@ -326,11 +357,11 @@ export default function GraphModal({
         }
 
         try {
-          const screenshot = await desmosCalculatorRef.current.screenshot({
+          const rawScreenshot = await desmosCalculatorRef.current.screenshot({
             width: 600,
             height: 400,
           })
-          imageData = screenshot
+          imageData = await addCopyrightToDataUrl(rawScreenshot)
         } catch (err) {
           setSaveError(`Screenshot failed: ${err instanceof Error ? err.message : String(err)}`)
           setSaving(false)
@@ -354,9 +385,16 @@ export default function GraphModal({
         throw new Error(errData.error ?? `Server error ${res.status}`)
       }
 
+      const data = (await res.json()) as { image_url: string; image_id: string; storage_path: string }
+
       setSaveSuccess(true)
       setTimeout(() => {
-        onSaved()
+        onSaved({
+          image_url: data.image_url,
+          image_id: data.image_id,
+          storage_path: data.storage_path,
+          image_type: imageType,
+        })
         onClose()
       }, 800)
     } catch (err) {
