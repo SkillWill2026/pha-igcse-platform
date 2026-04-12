@@ -113,6 +113,20 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
   }, [bgAnswers])
 
+  // Close sub-subtopic dropdown when clicking outside
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      const target = e.target as HTMLElement
+      if (!target.closest('[data-subtopic-dropdown]')) {
+        setSubSubtopicOpen(false)
+      }
+    }
+    if (subSubtopicOpen) {
+      document.addEventListener('mousedown', handleOutsideClick)
+      return () => document.removeEventListener('mousedown', handleOutsideClick)
+    }
+  }, [subSubtopicOpen])
+
   // Fetch sub-subtopics when subtopic changes
   useEffect(() => {
     if (!currentQuestion?.subtopic_id) {
@@ -611,7 +625,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           {subSubtopics.length > 0 && (
             <div className="flex items-start gap-3 py-2">
               <label className="text-sm font-medium text-muted-foreground mt-1.5 shrink-0">Sub-subtopic:</label>
-              <div className="relative flex-1 max-w-sm">
+              <div className="relative flex-1 max-w-sm" data-subtopic-dropdown>
                 <input
                   type="text"
                   value={(() => {
@@ -627,11 +641,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                     setSubSubtopicOpen(true)
                   }}
                   onFocus={() => setSubSubtopicOpen(true)}
-                  onClick={() => {
-                    setSubSubtopicSearch('')
-                    setSubSubtopicOpen(true)
-                  }}
-                  onBlur={() => setTimeout(() => setSubSubtopicOpen(false), 150)}
+                  onClick={() => setSubSubtopicOpen(true)}
                   disabled={loadingSubSubtopics}
                   placeholder={loadingSubSubtopics ? 'Loading...' : 'Type to search sub-subtopics...'}
                   className="w-full px-2 py-1 text-sm rounded-md border bg-white hover:bg-gray-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
