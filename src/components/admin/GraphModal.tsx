@@ -325,10 +325,10 @@ export default function GraphModal({
 
           const logoImg = new Image()
           logoImg.onload = () => {
-            const logoW = 100
-            const logoH = (logoImg.height / logoImg.width) * logoW  // Maintain aspect ratio
+            const logoH = 36
+            const logoW = Math.round(logoH * 1024 / 768)
             const logoX = canvas.width - logoW - 10
-            const logoY = 8
+            const logoY = 7
 
             // White background behind logo for contrast
             ctx.save()
@@ -399,7 +399,7 @@ export default function GraphModal({
     })
 
     // ── Copyright bottom-right ────────────────────────────
-    const copyText = `skillwill.ae - PHA ${year}`
+    const copyText = `© skillwill.ae - PHA ${year}`
     ctx.save()
     ctx.font = 'bold 13px Arial, sans-serif'
     ctx.textAlign = 'right'
