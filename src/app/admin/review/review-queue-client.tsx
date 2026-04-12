@@ -17,6 +17,7 @@ import type { QuestionWithRelations, AnswerRow } from '@/types/database'
 
 const DrawingModal = dynamic(() => import('@/components/DrawingModal'), { ssr: false })
 const PDFCropModal = dynamic(() => import('@/components/PDFCropModal'), { ssr: false })
+const GraphModal = dynamic(() => import('@/components/admin/GraphModal'), { ssr: false })
 
 interface SubSubtopic {
   id: string
@@ -53,6 +54,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [showDrawing, setShowDrawing] = useState(false)
   const [showCropper, setShowCropper] = useState(false)
   const [drawingTarget, setDrawingTarget] = useState<'question' | 'answer'>('answer')
+  const [showGraphModal, setShowGraphModal] = useState(false)
+  const [graphModalTarget, setGraphModalTarget] = useState<'question' | 'answer'>('question')
   const [subSubtopics, setSubSubtopics] = useState<SubSubtopic[]>([])
   const [selectedSubSubtopic, setSelectedSubSubtopic] = useState<string | null>(null)
   const [loadingSubSubtopics, setLoadingSubSubtopics] = useState(false)
@@ -327,6 +330,10 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     } finally {
       setActionLoading(false)
     }
+  }
+
+  function handleGraphSaved() {
+    router.refresh()
   }
 
   async function handleGenerateAnswer() {
@@ -780,6 +787,17 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                       >
                         ✏️ Draw
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setGraphModalTarget('question')
+                          setShowGraphModal(true)
+                        }}
+                        className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                      >
+                        📈 Graph
+                      </Button>
                       {currentQuestion.batch_id && (
                         <Button
                           variant="outline"
@@ -942,6 +960,17 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                 >
                   ✏️ Draw
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setGraphModalTarget('answer')
+                    setShowGraphModal(true)
+                  }}
+                  className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                >
+                  📈 Graph
+                </Button>
                 {currentQuestion.batch_id && (
                   <Button
                     variant="outline"
@@ -1044,6 +1073,14 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           imageType={drawingTarget}
         />
       )}
+      <GraphModal
+        isOpen={showGraphModal}
+        onClose={() => setShowGraphModal(false)}
+        onSaved={handleGraphSaved}
+        questionId={currentQuestion?.id ?? ''}
+        imageType={graphModalTarget}
+        prefillText={currentQuestion?.content_text ?? ''}
+      />
     </div>
   )
 }
