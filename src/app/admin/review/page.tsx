@@ -56,7 +56,7 @@ export default async function ReviewPage({ searchParams }: PageProps) {
         `)
         .eq('status', 'draft')
         .is('topic_id', null)
-        .order('created_at', { ascending: false })
+        .order('batch_id', { ascending: false, nullsFirst: false })
         .order('batch_position', { ascending: true, nullsFirst: false })
 
       const { data: boardData2 } = await supabase.from('exam_boards').select('id, name')
@@ -91,7 +91,7 @@ export default async function ReviewPage({ searchParams }: PageProps) {
       `)
       .eq('status', 'draft')
       .or(`topic_id.in.(${topicIds.join(',')}),topic_id.is.null`)
-      .order('created_at', { ascending: false })
+      .order('batch_id', { ascending: false, nullsFirst: false })
       .order('batch_position', { ascending: true, nullsFirst: false })
 
     if (qErr) {

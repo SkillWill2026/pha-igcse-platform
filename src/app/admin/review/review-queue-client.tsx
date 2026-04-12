@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { ArrowLeft, ArrowRight, Check, Loader2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Loader2, X, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { MathRenderer } from '@/components/admin/math-renderer'
 import { QuestionImageUpload } from '@/components/QuestionImageUpload'
@@ -44,6 +44,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [editing, setEditing] = useState(false)
   const [editedText, setEditedText] = useState('')
   const [editedDifficulty, setEditedDifficulty] = useState<number>(3)
+  const [isClassifying, setIsClassifying] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const [showDrawing, setShowDrawing] = useState(false)
   const [showCropper, setShowCropper] = useState(false)
@@ -376,6 +377,39 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
   }
 
+  async function handleAutoClassify() {
+    if (!currentQuestion) return
+    setIsClassifying(true)
+    try {
+      const res = await fetch('/api/classify-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question_id: currentQuestion.id,
+          topic_id: editTopicId || currentQuestion.topic_id || null,
+        }),
+      })
+      const data = await res.json() as {
+        subtopic_id?: string
+        sub_subtopic_id?: string | null
+        subtopic_title?: string
+        error?: string
+      }
+      if (!res.ok) throw new Error(data.error ?? 'Classification failed')
+      if (data.subtopic_id) {
+        setEditSubtopicId(data.subtopic_id)
+        if (data.sub_subtopic_id) setEditSubSubtopicId(data.sub_subtopic_id)
+        toast.success(`Auto-classified to: ${data.subtopic_title ?? data.subtopic_id}`)
+      } else {
+        toast.warning('Could not classify — no matching subtopic found')
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Classification failed')
+    } finally {
+      setIsClassifying(false)
+    }
+  }
+
   function handleCancelEdit() {
     setEditing(false)
     setEditedText('')
@@ -580,9 +614,21 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             {editing ? (
               <div className="space-y-4">
                 <div className="border rounded-md p-3 bg-muted/20 space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Classification (optional — leave blank to keep existing)
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Classification (optional — leave blank to keep existing)
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleAutoClassify}
+                      disabled={isClassifying}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                    >
+                      {isClassifying
+                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Classifying…</>
+                        : <><Sparkles className="h-3 w-3" /> Auto-classify</>}
+                    </button>
+                  </div>
                   <SyllabusSelector
                     onTopicChange={setEditTopicId}
                     onSubtopicChange={setEditSubtopicId}
