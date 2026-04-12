@@ -214,7 +214,7 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
         <div>
           <h2 className="text-sm font-semibold">Syllabus Tagging</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            AI classifies each question individually by topic, subtopic and sub-subtopic automatically.
+            Select a topic to auto-classify subtopics. Choose Mix Topics to assign classification manually in Review Queue.
           </p>
         </div>
 
