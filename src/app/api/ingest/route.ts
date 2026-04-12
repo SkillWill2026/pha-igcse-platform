@@ -120,7 +120,9 @@ export async function POST(request: NextRequest) {
     const exam_board_id = formData.get('exam_board_id') as string | null
     const subtopic_id = formData.get('subtopic_id') as string | null
     const sub_subtopic_id = (formData.get('sub_subtopic_id') as string | null) || null
+    const topic_id_param  = (formData.get('topic_id')       as string | null) || null
     const batch_id        = (formData.get('batch_id')        as string | null) || null
+    const isMixTopic      = topic_id_param === 'mixed' || !topic_id_param
 
     if (!file || !exam_board_id || !subtopic_id) {
       return NextResponse.json(
@@ -322,11 +324,12 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Insert into questions table ──────────────────────────────────────────
-    const rows = allQuestions.map((q) => ({
+    const rows = allQuestions.map((q, idx) => ({
       exam_board_id,
-      topic_id: isMixed ? null : (subtopic?.topic_id ?? null),
+      topic_id: isMixed ? (isMixTopic ? null : topic_id_param) : (subtopic?.topic_id ?? null),
       subtopic_id: isMixed ? null : subtopic_id,
       sub_subtopic_id: sub_subtopic_id || null,
+      batch_position: idx,
       content_text: String(q.content ?? '').trim(),
       parent_question_ref: q.parent_question_ref ?? null,
       part_label: q.part_label ?? null,

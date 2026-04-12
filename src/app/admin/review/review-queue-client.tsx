@@ -43,6 +43,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [currentQuestion, setCurrentQuestion] = useState(drafts[currentIdx] ?? null)
   const [editing, setEditing] = useState(false)
   const [editedText, setEditedText] = useState('')
+  const [editedDifficulty, setEditedDifficulty] = useState<number>(3)
   const [editSaving, setEditSaving] = useState(false)
   const [showDrawing, setShowDrawing] = useState(false)
   const [showCropper, setShowCropper] = useState(false)
@@ -328,6 +329,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     try {
       const updates: Record<string, unknown> = {
         content: editedText.trim(),
+        difficulty: editedDifficulty,
       }
       if (editTopicId) {
         updates.topic_id = editTopicId
@@ -377,11 +379,13 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   function handleCancelEdit() {
     setEditing(false)
     setEditedText('')
+    setEditedDifficulty(3)
   }
 
   function handleStartEdit() {
     if (!currentQuestion) return
     setEditedText(currentQuestion.content_text)
+    setEditedDifficulty(currentQuestion.difficulty ?? 3)
     setEditing(true)
   }
 
@@ -586,6 +590,29 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                     showTierBadge={false}
                     subjectId={null}
                   />
+                </div>
+
+                <div className="border rounded-md p-3 bg-muted/20 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Difficulty</p>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setEditedDifficulty(star)}
+                        className={`text-2xl transition-colors ${
+                          star <= editedDifficulty
+                            ? 'text-yellow-400 hover:text-yellow-500'
+                            : 'text-gray-300 hover:text-yellow-300'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                    <span className="ml-2 text-sm text-muted-foreground self-center">
+                      {editedDifficulty} / 5
+                    </span>
+                  </div>
                 </div>
 
                 <textarea
