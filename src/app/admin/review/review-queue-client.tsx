@@ -79,7 +79,11 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     return drafts.filter(d => !d.answer && !bgAnswers.has(d.id))
   }, [drafts, bgAnswers])
 
-  const canApprove = !!(editTopicId && editSubtopicId && editSubSubtopicId)
+  const canApprove = !!(
+    (editTopicId || currentQuestion?.topic_id) &&
+    (editSubtopicId || currentQuestion?.subtopic_id) &&
+    (editSubSubtopicId || selectedSubSubtopic || currentQuestion?.sub_subtopic_id)
+  )
 
   // Update currentQuestion when index changes (reset all edit states)
   useEffect(() => {
@@ -251,7 +255,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     if (!currentQuestion || actionLoading) return
 
     // Require all three classifications before approval
-    if (!editTopicId || !editSubtopicId || !editSubSubtopicId) {
+    const effectiveSubSubtopicId = editSubSubtopicId || selectedSubSubtopic || currentQuestion?.sub_subtopic_id
+    if ((!editTopicId && !currentQuestion?.topic_id) || (!editSubtopicId && !currentQuestion?.subtopic_id) || !effectiveSubSubtopicId) {
       alert('Classification required — please select a Topic, Subtopic, and Sub-subtopic before approving.')
       return
     }
@@ -262,11 +267,11 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       const classificationUpdates: Record<string, any> = {}
       if (editTopicId) {
         classificationUpdates.topic_id = editTopicId
-        // Save last used topic to localStorage
         localStorage.setItem('lastUsedTopicId', editTopicId)
       }
       if (editSubtopicId) classificationUpdates.subtopic_id = editSubtopicId
       if (editSubSubtopicId !== null) classificationUpdates.sub_subtopic_id = editSubSubtopicId
+      else if (selectedSubSubtopic) classificationUpdates.sub_subtopic_id = selectedSubSubtopic
 
       const ok = await updateQuestionStatus(
         currentQuestion.id,
@@ -609,12 +614,20 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
               <div className="relative flex-1 max-w-sm">
                 <input
                   type="text"
-                  value={subSubtopicSearch !== '' ? subSubtopicSearch : (selectedSubSubtopic ? (subSubtopics.find(s => s.id === selectedSubSubtopic)?.ref + ' – ' + subSubtopics.find(s => s.id === selectedSubSubtopic)?.name) : '')}
+                  value={(() => {
+                    if (subSubtopicSearch !== '') return subSubtopicSearch
+                    if (selectedSubSubtopic) {
+                      const found = subSubtopics.find(s => s.id === selectedSubSubtopic)
+                      return found ? `${found.ref} – ${found.name}` : ''
+                    }
+                    return ''
+                  })()}
                   onChange={(e) => {
                     setSubSubtopicSearch(e.target.value)
                     setSubSubtopicOpen(true)
                   }}
-                  onFocus={() => {
+                  onFocus={() => setSubSubtopicOpen(true)}
+                  onClick={() => {
                     setSubSubtopicSearch('')
                     setSubSubtopicOpen(true)
                   }}
