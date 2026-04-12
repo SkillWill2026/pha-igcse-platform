@@ -71,6 +71,14 @@ export async function POST(request: NextRequest) {
     const imageUrl = publicUrlData?.publicUrl ?? ''
     console.log('[graph/save] Public URL:', imageUrl)
 
+    // Generate a signed URL so the thumbnail appears immediately
+    const { data: signedUrlData } = await supabase.storage
+      .from('question-images')
+      .createSignedUrl(storagePath, 3600 * 24)  // 24h signed URL
+
+    const displayUrl = signedUrlData?.signedUrl ?? publicUrlData?.publicUrl ?? ''
+    console.log('[graph/save] Display URL:', displayUrl)
+
     // Get max sort_order for this question + image_type
     try {
       const { data: existing, error: queryErr } = await supabase
@@ -99,6 +107,7 @@ export async function POST(request: NextRequest) {
           storage_path: storagePath,
           image_type,
           sort_order: newSortOrder,
+          display_url: displayUrl,
         })
         .select('id')
         .single()
@@ -115,6 +124,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         image_url: imageUrl,
+        display_url: displayUrl,
         storage_path: storagePath,
         image_id: imageId,
       })

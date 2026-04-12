@@ -332,7 +332,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     }
   }
 
-  function handleGraphSaved(savedImage: { image_url: string; image_id: string; storage_path: string; image_type: string }) {
+  function handleGraphSaved(savedImage: { image_url: string; display_url: string | null; image_id: string; storage_path: string; image_type: string }) {
     setCurrentQuestion((q) => {
       if (!q) return q
       const newImg = {
@@ -340,6 +340,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         question_id: q.id,
         storage_path: savedImage.storage_path,
         image_type: savedImage.image_type,
+        display_url: savedImage.display_url ?? null,
         sort_order: (q.question_images?.length ?? 0) + 1,
         created_at: new Date().toISOString(),
       }

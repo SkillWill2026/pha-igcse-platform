@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 interface GraphModalProps {
   isOpen: boolean
   onClose: () => void
-  onSaved: (savedImage: { image_url: string; image_id: string; storage_path: string; image_type: string }) => void
+  onSaved: (savedImage: { image_url: string; display_url: string | null; image_id: string; storage_path: string; image_type: string }) => void
   questionId: string
   imageType: 'question' | 'answer'
   prefillText?: string
@@ -445,12 +445,13 @@ export default function GraphModal({
         throw new Error(errData.error ?? `Server error ${res.status}`)
       }
 
-      const data = (await res.json()) as { image_url: string; image_id: string; storage_path: string }
+      const data = (await res.json()) as { image_url: string; display_url: string | null; image_id: string; storage_path: string }
 
       setSaveSuccess(true)
       setTimeout(() => {
         onSaved({
           image_url: data.image_url,
+          display_url: data.display_url,
           image_id: data.image_id,
           storage_path: data.storage_path,
           image_type: imageType,
