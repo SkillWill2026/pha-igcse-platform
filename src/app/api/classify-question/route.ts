@@ -113,13 +113,41 @@ Return ONLY JSON: {"subtopic_id": "..."}`
 
 export async function POST(request: Request) {
   try {
-    const { question_id } = await request.json()
+    const body = await request.json() as { question_id?: string; topic_id?: string | null }
+    const { question_id, topic_id } = body
+
     if (!question_id) {
       return NextResponse.json({ error: 'question_id is required' }, { status: 400 })
     }
 
-    await classifyQuestion(question_id)
-    return NextResponse.json({ success: true })
+    const supabase = createAdminClient()
+
+    // Run classification
+    await classifyQuestion(question_id, topic_id ?? null)
+
+    // Fetch the updated question to return the result
+    const { data: updated } = await supabase
+      .from('questions')
+      .select('subtopic_id, topic_id')
+      .eq('id', question_id)
+      .single()
+
+    if (!updated?.subtopic_id) {
+      return NextResponse.json({ error: 'No matching subtopic found' }, { status: 422 })
+    }
+
+    // Fetch subtopic title for the toast message
+    const { data: subtopicData } = await supabase
+      .from('subtopics')
+      .select('title, ref')
+      .eq('id', updated.subtopic_id)
+      .single()
+
+    return NextResponse.json({
+      subtopic_id: updated.subtopic_id,
+      sub_subtopic_id: null,
+      subtopic_title: subtopicData ? `${subtopicData.ref} – ${subtopicData.title}` : updated.subtopic_id,
+    })
   } catch (error) {
     console.error('[classify-question] Error:', error)
     return NextResponse.json(
