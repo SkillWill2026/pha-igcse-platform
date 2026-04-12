@@ -309,51 +309,93 @@ export default function GraphModal({
 
     // ── Logo top-right ────────────────────────────────────
     await new Promise<void>((resolve) => {
-      const logoImg = new Image()
-      logoImg.onload = () => {
-        const logoW = 100
-        const logoH = 48
-        const logoX = canvas.width - logoW - 10
-        const logoY = 8
-        // White background behind logo for contrast
-        ctx.save()
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'
-        ctx.beginPath()
-        if (typeof ctx.roundRect !== 'undefined') {
-          ctx.roundRect(logoX - 5, logoY - 4, logoW + 10, logoH + 8, 6)
-        } else {
-          ctx.rect(logoX - 5, logoY - 4, logoW + 10, logoH + 8)
-        }
-        ctx.fill()
-        ctx.drawImage(logoImg, logoX, logoY, logoW, logoH)
-        ctx.restore()
-        resolve()
-      }
-      logoImg.onerror = () => {
-        // Fallback to text badge if SVG fails to load
-        const logoX = canvas.width - 100
-        const logoY = 8
-        ctx.save()
-        ctx.fillStyle = 'rgba(20, 80, 135, 0.92)'
-        ctx.beginPath()
-        if (typeof ctx.roundRect !== 'undefined') {
-          ctx.roundRect(logoX, logoY, 92, 36, 6)
-        } else {
-          ctx.rect(logoX, logoY, 92, 36)
-        }
-        ctx.fill()
-        ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 13px Arial, sans-serif'
-        ctx.textAlign = 'left'
-        ctx.textBaseline = 'top'
-        ctx.fillText('SkillWill', logoX + 7, logoY + 5)
-        ctx.font = '10px Arial, sans-serif'
-        ctx.fillStyle = 'rgba(255,255,255,0.8)'
-        ctx.fillText('Education', logoX + 7, logoY + 21)
-        ctx.restore()
-        resolve()
-      }
-      logoImg.src = '/skillwill-logo.svg'
+      fetch('/skillwill-logo.svg')
+        .then((res) => res.text())
+        .then((svgText) => {
+          // Patch SVG dimensions from "100%" to explicit pixels
+          const patched = svgText
+            .replace(/width="100%"/g, 'width="1024"')
+            .replace(/height="100%"/g, 'height="768"')
+            .replace(/width='100%'/g, "width='1024'")
+            .replace(/height='100%'/g, "height='768'")
+
+          // Create blob URL from patched SVG
+          const blob = new Blob([patched], { type: 'image/svg+xml' })
+          const blobUrl = URL.createObjectURL(blob)
+
+          const logoImg = new Image()
+          logoImg.onload = () => {
+            const logoW = 100
+            const logoH = (logoImg.height / logoImg.width) * logoW  // Maintain aspect ratio
+            const logoX = canvas.width - logoW - 10
+            const logoY = 8
+
+            // White background behind logo for contrast
+            ctx.save()
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'
+            ctx.beginPath()
+            if (typeof ctx.roundRect !== 'undefined') {
+              ctx.roundRect(logoX - 5, logoY - 4, logoW + 10, logoH + 8, 6)
+            } else {
+              ctx.rect(logoX - 5, logoY - 4, logoW + 10, logoH + 8)
+            }
+            ctx.fill()
+            ctx.drawImage(logoImg, logoX, logoY, logoW, logoH)
+            ctx.restore()
+            URL.revokeObjectURL(blobUrl)
+            resolve()
+          }
+          logoImg.onerror = () => {
+            URL.revokeObjectURL(blobUrl)
+            // Fallback to text badge if SVG fails to load
+            const logoX = canvas.width - 100
+            const logoY = 8
+            ctx.save()
+            ctx.fillStyle = 'rgba(20, 80, 135, 0.92)'
+            ctx.beginPath()
+            if (typeof ctx.roundRect !== 'undefined') {
+              ctx.roundRect(logoX, logoY, 92, 36, 6)
+            } else {
+              ctx.rect(logoX, logoY, 92, 36)
+            }
+            ctx.fill()
+            ctx.fillStyle = '#ffffff'
+            ctx.font = 'bold 13px Arial, sans-serif'
+            ctx.textAlign = 'left'
+            ctx.textBaseline = 'top'
+            ctx.fillText('SkillWill', logoX + 7, logoY + 5)
+            ctx.font = '10px Arial, sans-serif'
+            ctx.fillStyle = 'rgba(255,255,255,0.8)'
+            ctx.fillText('Education', logoX + 7, logoY + 21)
+            ctx.restore()
+            resolve()
+          }
+          logoImg.src = blobUrl
+        })
+        .catch(() => {
+          // Fallback to text badge if fetch fails
+          const logoX = canvas.width - 100
+          const logoY = 8
+          ctx.save()
+          ctx.fillStyle = 'rgba(20, 80, 135, 0.92)'
+          ctx.beginPath()
+          if (typeof ctx.roundRect !== 'undefined') {
+            ctx.roundRect(logoX, logoY, 92, 36, 6)
+          } else {
+            ctx.rect(logoX, logoY, 92, 36)
+          }
+          ctx.fill()
+          ctx.fillStyle = '#ffffff'
+          ctx.font = 'bold 13px Arial, sans-serif'
+          ctx.textAlign = 'left'
+          ctx.textBaseline = 'top'
+          ctx.fillText('SkillWill', logoX + 7, logoY + 5)
+          ctx.font = '10px Arial, sans-serif'
+          ctx.fillStyle = 'rgba(255,255,255,0.8)'
+          ctx.fillText('Education', logoX + 7, logoY + 21)
+          ctx.restore()
+          resolve()
+        })
     })
 
     // ── Copyright bottom-right ────────────────────────────
