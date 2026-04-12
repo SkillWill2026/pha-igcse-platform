@@ -159,6 +159,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       subtopic_id: updated.subtopic_id,
+      topic_id: updated.topic_id,
       sub_subtopic_id: null,
       subtopic_title: subtopicData ? `${subtopicData.ref} – ${subtopicData.title}` : updated.subtopic_id,
     })

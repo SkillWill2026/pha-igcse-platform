@@ -393,6 +393,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       })
       const data = await res.json() as {
         subtopic_id?: string
+        topic_id?: string
         sub_subtopic_id?: string | null
         subtopic_title?: string
         error?: string
@@ -401,20 +402,12 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       if (data.subtopic_id) {
         setEditSubtopicId(data.subtopic_id)
         if (data.sub_subtopic_id) setEditSubSubtopicId(data.sub_subtopic_id)
-        // Fetch topic_id for this subtopic to pre-populate SyllabusSelector
-        fetch(`/api/subtopics?id=${data.subtopic_id}`)
-          .then(r => r.json())
-          .then((subtopics: { topic_id?: string }[]) => {
-            const topicId = Array.isArray(subtopics) ? subtopics[0]?.topic_id : null
-            if (topicId) {
-              setAutoClassifiedTopicId(topicId)
-              setEditTopicId(topicId)
-            }
-            setAutoClassifiedSubtopicId(data.subtopic_id!)
-          })
-          .catch(() => {
-            setAutoClassifiedSubtopicId(data.subtopic_id!)
-          })
+        // Use topic_id directly from API response — no second fetch needed
+        if (data.topic_id) {
+          setAutoClassifiedTopicId(data.topic_id)
+          setEditTopicId(data.topic_id)
+        }
+        setAutoClassifiedSubtopicId(data.subtopic_id)
         toast.success(`Auto-classified: ${data.subtopic_title ?? data.subtopic_id}`)
       } else {
         toast.warning('Could not classify — no matching subtopic found')
