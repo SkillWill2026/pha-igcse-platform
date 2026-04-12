@@ -85,7 +85,9 @@ Return ONLY JSON: {"subtopic_id": "..."}`
     return
   }
 
-  if (!classification.subtopic_id) {
+  // Validate that subtopic_id is a proper UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!classification.subtopic_id || !uuidRegex.test(classification.subtopic_id)) {
     return
   }
 
@@ -140,8 +142,8 @@ export async function POST(request: Request) {
       .eq('id', question_id)
       .single()
 
-    // If subtopic unchanged after classification, no match was found
-    if (!updated?.subtopic_id || updated.subtopic_id === before?.subtopic_id) {
+    // If no subtopic assigned after classification attempt, no match was found
+    if (!updated?.subtopic_id) {
       return NextResponse.json(
         { error: 'No matching subtopic found for this question within the selected topic. Try selecting a different topic first.' },
         { status: 422 }
