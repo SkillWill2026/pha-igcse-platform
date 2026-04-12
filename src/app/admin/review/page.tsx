@@ -58,6 +58,7 @@ export default async function ReviewPage({ searchParams }: PageProps) {
         .is('topic_id', null)
         .order('batch_id', { ascending: false, nullsFirst: false })
         .order('batch_position', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
 
       const { data: boardData2 } = await supabase.from('exam_boards').select('id, name')
       const boardMap2 = new Map((boardData2 ?? []).map((b) => [b.id, b]))
@@ -93,6 +94,7 @@ export default async function ReviewPage({ searchParams }: PageProps) {
       .or(`topic_id.in.(${topicIds.join(',')}),topic_id.is.null`)
       .order('batch_id', { ascending: false, nullsFirst: false })
       .order('batch_position', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true })
 
     if (qErr) {
       console.error('[ReviewPage] questions fetch error:', qErr.message)
