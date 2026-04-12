@@ -628,79 +628,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             {currentQuestion.subtopics?.name}
           </div>
 
-          {/* Sub-subtopic searchable selector */}
-          {subSubtopics.length > 0 && (
-            <div className="flex items-start gap-3 py-2">
-              <label className="text-sm font-medium text-muted-foreground mt-1.5 shrink-0">Sub-subtopic:</label>
-              <div className="relative flex-1 max-w-sm" data-subtopic-dropdown>
-                <input
-                  type="text"
-                  value={(() => {
-                    if (subSubtopicSearch !== '') return subSubtopicSearch
-                    if (selectedSubSubtopic) {
-                      const found = subSubtopics.find(s => s.id === selectedSubSubtopic)
-                      return found ? found.outcome : ''
-                    }
-                    return ''
-                  })()}
-                  onChange={(e) => {
-                    setSubSubtopicSearch(e.target.value)
-                    setSubSubtopicOpen(true)
-                  }}
-                  onFocus={() => setSubSubtopicOpen(true)}
-                  onClick={() => setSubSubtopicOpen(true)}
-                  disabled={loadingSubSubtopics}
-                  placeholder={loadingSubSubtopics ? 'Loading...' : 'Type to search sub-subtopics...'}
-                  className="w-full px-2 py-1 text-sm rounded-md border bg-white hover:bg-gray-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
-                {subSubtopicOpen && (
-                  <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto rounded-md border bg-white shadow-lg">
-                    {[...subSubtopics]
-                      .filter(s => {
-                        const q = subSubtopicSearch.toLowerCase()
-                        return !q || s.outcome.toLowerCase().includes(q)
-                      })
-                      .sort((a, b) => {
-                        if (!subSubtopicSearch) return 0
-                        const q = subSubtopicSearch.toLowerCase()
-                        const aStarts = a.outcome.toLowerCase().startsWith(q)
-                        const bStarts = b.outcome.toLowerCase().startsWith(q)
-                        if (aStarts && !bStarts) return -1
-                        if (!aStarts && bStarts) return 1
-                        return 0
-                      })
-                      .map(sub => (
-                        <button
-                          key={sub.id}
-                          type="button"
-                          onMouseDown={() => {
-                            handleSelectSubSubtopic(sub.id)
-                            setSubSubtopicSearch('')
-                            setSubSubtopicOpen(false)
-                          }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
-                            selectedSubSubtopic === sub.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'
-                          }`}
-                        >
-                          {sub.tier === 'extended' && (
-                            <span className="mr-1.5 text-[10px] text-purple-600 font-medium bg-purple-50 px-1 py-0.5 rounded">E</span>
-                          )}
-                          {sub.outcome}
-                        </button>
-                      ))
-                    }
-                    {subSubtopics.filter(s => {
-                      const q = subSubtopicSearch.toLowerCase()
-                      return !q || s.outcome.toLowerCase().includes(q)
-                    }).length === 0 && subSubtopicSearch && (
-                      <div className="px-3 py-2 text-sm text-gray-400">No results for "{subSubtopicSearch}"</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Question content */}
           <section className="space-y-3">
             <h3 className="font-semibold">Question</h3>
@@ -731,7 +658,81 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                     subjectId={null}
                     initialTopicId={autoClassifiedTopicId}
                     initialSubtopicId={autoClassifiedSubtopicId}
+                    hideSubSubtopic={true}
                   />
+
+                  {/* Searchable sub-subtopic — inside Classification section */}
+                  {subSubtopics.length > 0 && (
+                    <div className="space-y-1 pt-1" data-subtopic-dropdown>
+                      <p className="text-xs font-medium text-muted-foreground">Sub-subtopic</p>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={(() => {
+                            if (subSubtopicSearch !== '') return subSubtopicSearch
+                            if (editSubSubtopicId) {
+                              const found = subSubtopics.find(s => s.id === editSubSubtopicId)
+                              return found ? found.outcome : ''
+                            }
+                            return ''
+                          })()}
+                          onChange={(e) => {
+                            setSubSubtopicSearch(e.target.value)
+                            setSubSubtopicOpen(true)
+                          }}
+                          onFocus={() => setSubSubtopicOpen(true)}
+                          onClick={() => setSubSubtopicOpen(true)}
+                          disabled={loadingSubSubtopics}
+                          placeholder={loadingSubSubtopics ? 'Loading...' : 'Type to search...'}
+                          className="w-full px-2 py-1 text-sm rounded-md border bg-white hover:bg-gray-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        />
+                        {subSubtopicOpen && (
+                          <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto rounded-md border bg-white shadow-lg">
+                            {[...subSubtopics]
+                              .filter(s => {
+                                const q = subSubtopicSearch.toLowerCase()
+                                return !q || s.outcome.toLowerCase().includes(q)
+                              })
+                              .sort((a, b) => {
+                                if (!subSubtopicSearch) return 0
+                                const q = subSubtopicSearch.toLowerCase()
+                                const aStarts = a.outcome.toLowerCase().startsWith(q)
+                                const bStarts = b.outcome.toLowerCase().startsWith(q)
+                                if (aStarts && !bStarts) return -1
+                                if (!aStarts && bStarts) return 1
+                                return 0
+                              })
+                              .map(sub => (
+                                <button
+                                  key={sub.id}
+                                  type="button"
+                                  onMouseDown={() => {
+                                    setEditSubSubtopicId(sub.id)
+                                    setSubSubtopicSearch('')
+                                    setSubSubtopicOpen(false)
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
+                                    editSubSubtopicId === sub.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'
+                                  }`}
+                                >
+                                  {sub.tier === 'extended' && (
+                                    <span className="mr-1.5 text-[10px] text-purple-600 font-medium bg-purple-50 px-1 py-0.5 rounded">E</span>
+                                  )}
+                                  {sub.outcome}
+                                </button>
+                              ))
+                            }
+                            {subSubtopics.filter(s => {
+                              const q = subSubtopicSearch.toLowerCase()
+                              return !q || s.outcome.toLowerCase().includes(q)
+                            }).length === 0 && subSubtopicSearch && (
+                              <div className="px-3 py-2 text-sm text-gray-400">No results for "{subSubtopicSearch}"</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border rounded-md p-3 bg-muted/20 space-y-1">

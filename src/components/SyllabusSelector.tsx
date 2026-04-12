@@ -52,6 +52,7 @@ interface Props {
   subjectId?: string | null
   initialTopicId?: string | null
   initialSubtopicId?: string | null
+  hideSubSubtopic?: boolean
 }
 
 export function SyllabusSelector({
@@ -62,6 +63,7 @@ export function SyllabusSelector({
   subjectId,
   initialTopicId,
   initialSubtopicId,
+  hideSubSubtopic = false,
 }: Props) {
   const [topics, setTopics]             = useState<Topic[]>([])
   const [subtopics, setSubtopics]       = useState<Subtopic[]>([])
@@ -183,7 +185,7 @@ export function SyllabusSelector({
       </div>
 
       {/* Sub-subtopic */}
-      <div className="space-y-1">
+      {!hideSubSubtopic && <div className="space-y-1">
         <Label className="text-xs">Sub-subtopic</Label>
         <Select value={subSubtopicId} onValueChange={handleSubSubtopicChange} disabled={!subtopicId}>
           <SelectTrigger className="h-8 text-xs w-full">
@@ -215,7 +217,7 @@ export function SyllabusSelector({
             })}
           </SelectContent>
         </Select>
-      </div>
+      </div>}
     </div>
   )
 }
