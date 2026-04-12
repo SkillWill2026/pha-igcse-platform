@@ -826,7 +826,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                       )}
                     </div>
                     <QuestionImageUpload
-                      key={`question-${currentQuestion.id}`}
+                      key={`question-${currentQuestion.id}-${questionImages.length}`}
                       questionId={currentQuestion.id}
                       imageType="question"
                       batchId={currentQuestion.batch_id ?? null}
@@ -999,7 +999,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                 )}
               </div>
               <QuestionImageUpload
-                key={`answer-${currentQuestion.id}`}
+                key={`answer-${currentQuestion.id}-${answerImages.length}`}
                 questionId={currentQuestion.id}
                 imageType="answer"
                 batchId={currentQuestion.batch_id ?? null}

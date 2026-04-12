@@ -303,34 +303,82 @@ export default function GraphModal({
     }
   }, [])
 
-  function addCopyrightToCanvas(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  async function applyWatermarks(canvas: HTMLCanvasElement): Promise<void> {
     const ctx = canvas.getContext('2d')!
     const year = new Date().getFullYear()
-    const text = `skillwill.ae - PHA ${year}`
+
+    // ── Logo top-right ────────────────────────────────────
+    await new Promise<void>((resolve) => {
+      const logoImg = new Image()
+      logoImg.onload = () => {
+        const logoW = 100
+        const logoH = 48
+        const logoX = canvas.width - logoW - 10
+        const logoY = 8
+        // White background behind logo for contrast
+        ctx.save()
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'
+        ctx.beginPath()
+        if (typeof ctx.roundRect !== 'undefined') {
+          ctx.roundRect(logoX - 5, logoY - 4, logoW + 10, logoH + 8, 6)
+        } else {
+          ctx.rect(logoX - 5, logoY - 4, logoW + 10, logoH + 8)
+        }
+        ctx.fill()
+        ctx.drawImage(logoImg, logoX, logoY, logoW, logoH)
+        ctx.restore()
+        resolve()
+      }
+      logoImg.onerror = () => {
+        // Fallback to text badge if SVG fails to load
+        const logoX = canvas.width - 100
+        const logoY = 8
+        ctx.save()
+        ctx.fillStyle = 'rgba(20, 80, 135, 0.92)'
+        ctx.beginPath()
+        if (typeof ctx.roundRect !== 'undefined') {
+          ctx.roundRect(logoX, logoY, 92, 36, 6)
+        } else {
+          ctx.rect(logoX, logoY, 92, 36)
+        }
+        ctx.fill()
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 13px Arial, sans-serif'
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'top'
+        ctx.fillText('SkillWill', logoX + 7, logoY + 5)
+        ctx.font = '10px Arial, sans-serif'
+        ctx.fillStyle = 'rgba(255,255,255,0.8)'
+        ctx.fillText('Education', logoX + 7, logoY + 21)
+        ctx.restore()
+        resolve()
+      }
+      logoImg.src = '/skillwill-logo.svg'
+    })
+
+    // ── Copyright bottom-right ────────────────────────────
+    const copyText = `skillwill.ae - PHA ${year}`
     ctx.save()
-    ctx.font = '11px sans-serif'
-    ctx.fillStyle = 'rgba(80, 80, 80, 0.75)'
+    ctx.font = 'bold 13px Arial, sans-serif'
     ctx.textAlign = 'right'
     ctx.textBaseline = 'bottom'
-    ctx.fillText(text, canvas.width - 10, canvas.height - 8)
+    const tw = ctx.measureText(copyText).width
+    const padX = 6
+    const padY = 4
+    const boxX = canvas.width - tw - padX * 2 - 10
+    const boxY = canvas.height - 14 - padY * 2 - 6
+    // White pill background
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'
+    ctx.beginPath()
+    if (typeof ctx.roundRect !== 'undefined') {
+      ctx.roundRect(boxX, boxY, tw + padX * 2, 14 + padY * 2, 4)
+    } else {
+      ctx.rect(boxX, boxY, tw + padX * 2, 14 + padY * 2)
+    }
+    ctx.fill()
+    ctx.fillStyle = 'rgba(20, 20, 20, 0.92)'
+    ctx.fillText(copyText, canvas.width - 10 - padX, canvas.height - 6 - padY)
     ctx.restore()
-    return canvas
-  }
-
-  function addCopyrightToDataUrl(dataUrl: string): Promise<string> {
-    return new Promise((resolve) => {
-      const img = new Image()
-      img.onload = () => {
-        const canvas = document.createElement('canvas')
-        canvas.width = img.width
-        canvas.height = img.height
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0)
-        addCopyrightToCanvas(canvas)
-        resolve(canvas.toDataURL('image/png'))
-      }
-      img.src = dataUrl
-    })
   }
 
   const handleSave = async () => {
@@ -347,7 +395,7 @@ export default function GraphModal({
           setSaving(false)
           return
         }
-        addCopyrightToCanvas(canvasRef.current)
+        await applyWatermarks(canvasRef.current)
         imageData = canvasRef.current.toDataURL('image/png')
       } else {
         if (!desmosCalculatorRef.current) {
@@ -361,7 +409,19 @@ export default function GraphModal({
             width: 600,
             height: 400,
           })
-          imageData = await addCopyrightToDataUrl(rawScreenshot)
+          // Draw Desmos screenshot onto a temp canvas, apply watermarks, then export
+          const tempCanvas = document.createElement('canvas')
+          tempCanvas.width = 600
+          tempCanvas.height = 400
+          const tempCtx = tempCanvas.getContext('2d')!
+          await new Promise<void>((resolve) => {
+            const desmosImg = new Image()
+            desmosImg.onload = () => { tempCtx.drawImage(desmosImg, 0, 0); resolve() }
+            desmosImg.onerror = () => resolve()
+            desmosImg.src = rawScreenshot
+          })
+          await applyWatermarks(tempCanvas)
+          imageData = tempCanvas.toDataURL('image/png')
         } catch (err) {
           setSaveError(`Screenshot failed: ${err instanceof Error ? err.message : String(err)}`)
           setSaving(false)
