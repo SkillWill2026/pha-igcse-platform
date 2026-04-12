@@ -11,6 +11,7 @@ export default async function UploadPage({ searchParams }: PageProps) {
   const subjectCode = searchParams.subject ?? '0580'
 
   let boards: { id: string; name: string }[] = []
+  let topics: { id: string; ref: string; name: string }[] = []
   let subjectId: string | null = null
   let subjectName = 'Mathematics'
 
@@ -23,6 +24,14 @@ export default async function UploadPage({ searchParams }: PageProps) {
     boards = boardsRes.data ?? []
     subjectId = subjectRes.data?.id ?? null
     subjectName = subjectRes.data?.name ?? 'Mathematics'
+    if (subjectId) {
+      const topicsRes = await supabase
+        .from('topics')
+        .select('id, ref, name')
+        .eq('subject_id', subjectId)
+        .order('sort_order')
+      topics = topicsRes.data ?? []
+    }
   } catch {
     // Env vars not set yet
   }
@@ -33,7 +42,7 @@ export default async function UploadPage({ searchParams }: PageProps) {
       <p className="text-sm text-muted-foreground mb-8">
         Upload a PDF or DOCX past-paper for <strong>{subjectName}</strong> and the AI will extract all questions automatically.
       </p>
-      <UploadClient boards={boards} subjectId={subjectId} subjectName={subjectName} />
+      <UploadClient boards={boards} topics={topics} subjectId={subjectId} subjectName={subjectName} />
     </div>
   )
 }

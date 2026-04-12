@@ -20,6 +20,8 @@ interface ExamBoard {
   name: string
 }
 
+interface Topic { id: string; ref: string; name: string }
+
 type FileStatus = 'queued' | 'processing' | 'done' | 'failed'
 
 interface QueuedFile {
@@ -76,8 +78,9 @@ function FileStatusBadge({ item }: { item: QueuedFile }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamBoard[]; subjectId: string | null; subjectName: string }) {
+export function UploadClient({ boards, topics, subjectId, subjectName }: { boards: ExamBoard[]; topics: Topic[]; subjectId: string | null; subjectName: string }) {
   const [boardId,       setBoardId]       = useState('')
+  const [topicId, setTopicId] = useState('mixed')
 
   const [queue,       setQueue]       = useState<QueuedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
@@ -112,7 +115,7 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
 
   // ── Upload ──────────────────────────────────────────────────────────────────
   const queued = queue.filter((f) => f.status === 'queued')
-  const canStart = queued.length > 0 && !!boardId && !isUploading
+  const canStart = queued.length > 0 && !!boardId && !!topicId && !isUploading
 
   async function handleStartUpload() {
     if (!canStart) return
@@ -152,6 +155,7 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
         fd.append('file',          item.file)
         fd.append('exam_board_id', boardId)
         fd.append('subtopic_id',   'mixed')
+        fd.append('topic_id', topicId)
         if (batchId)       fd.append('batch_id',        batchId)
 
         const res  = await fetch('/api/ingest', { method: 'POST', body: fd })
@@ -234,6 +238,28 @@ export function UploadClient({ boards, subjectId, subjectName }: { boards: ExamB
               )}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Topic</Label>
+          <Select value={topicId} onValueChange={(v) => setTopicId(v ?? 'mixed')}>
+            <SelectTrigger>
+              {topicId === 'mixed'
+                ? <span className="text-muted-foreground">Mix Topics (no auto-classification)</span>
+                : <span>{topics.find((t) => t.id === topicId)?.ref} — {topics.find((t) => t.id === topicId)?.name}</span>}
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mixed">Mix Topics (no auto-classification)</SelectItem>
+              {topics.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.ref} — {t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {topicId !== 'mixed' && (
+            <p className="text-xs text-muted-foreground">
+              AI will auto-assign subtopic per question. You assign sub-subtopic in Review Queue.
+            </p>
+          )}
         </div>
       </div>
 

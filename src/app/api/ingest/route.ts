@@ -364,6 +364,12 @@ export async function POST(request: NextRequest) {
           }
         } else if (data) {
           saved.push(data)
+          // Auto-classify subtopic when topic is known (not MIX)
+          if (!isMixTopic && topic_id_param && data?.id) {
+            classifyQuestion(data.id, topic_id_param).catch((e: Error) =>
+              console.warn('[ingest] auto-classify failed:', e?.message)
+            )
+          }
         }
       } catch (err) {
         console.warn(`[ingest] exception inserting question:`, err instanceof Error ? err.message : String(err))

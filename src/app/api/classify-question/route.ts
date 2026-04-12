@@ -6,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-export async function classifyQuestion(questionId: string): Promise<void> {
+export async function classifyQuestion(questionId: string, restrictToTopicId?: string | null): Promise<void> {
   const supabase = createAdminClient()
 
   // Fetch question
@@ -20,10 +20,14 @@ export async function classifyQuestion(questionId: string): Promise<void> {
     throw new Error('Question not found')
   }
 
+  // Skip classification for MIX topic — tutor assigns manually
+  const effectiveTopicId = restrictToTopicId ?? question.topic_id
+  if (!effectiveTopicId) return
+
   // Fetch all subtopics with their topics
   const [subtopicsRes, subSubtopicsRes, topicsRes] = await Promise.all([
-    supabase.from('subtopics').select('id, title, topic_id').order('sort_order'),
-    supabase.from('sub_subtopics').select('id, outcome, subtopic_id').order('sort_order'),
+    supabase.from('subtopics').select('id, title, topic_id').eq('topic_id', effectiveTopicId).order('sort_order'),
+    Promise.resolve({ data: [] }),
     supabase.from('topics').select('id, name, ref'),
   ])
 
@@ -45,28 +49,19 @@ export async function classifyQuestion(questionId: string): Promise<void> {
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 256,
     system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert.
-Given a question, identify the most appropriate subtopic and sub-subtopic from the provided lists.
+Given a question, identify the most appropriate subtopic from the provided list.
 Respond ONLY with valid JSON in this exact format:
-{"subtopic_id": "uuid-here", "sub_subtopic_id": "uuid-or-null"}
+{"subtopic_id": "uuid-here"}
 No explanation, no markdown, just the JSON object.`,
     messages: [{
       role: 'user',
       content: `QUESTION: ${question.content_text}
 
-AVAILABLE SUBTOPICS:
+AVAILABLE SUBTOPICS (topic: ${effectiveTopicId}):
 ${subtopicList}
 
-AVAILABLE SUB-SUBTOPICS FOR REFERENCE:
-${subSubtopics
-  .filter(s => subtopics.find(st => st.id === s.subtopic_id))
-  .map(s => {
-    const parentSubtopic = subtopics.find(st => st.id === s.subtopic_id)
-    return `ID:${s.id} | subtopic_id:${s.subtopic_id} | ${parentSubtopic?.title ?? ''} → ${s.outcome}`
-  })
-  .join('\n')}
-
-Which subtopic_id and sub_subtopic_id best matches this question?
-Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
+Which subtopic_id best matches this question?
+Return ONLY JSON: {"subtopic_id": "..."}`
     }]
   })
 
@@ -97,21 +92,10 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
   const matchedSubtopic = subtopics.find(s => s.id === classification.subtopic_id)
   const newTopicId = matchedSubtopic?.topic_id ?? question.topic_id
 
-  // Verify sub_subtopic belongs to the matched subtopic
-  let validSubSubtopicId: string | null = null
-  if (classification.sub_subtopic_id) {
-    const matchedSubSub = subSubtopics.find(
-      s => s.id === classification.sub_subtopic_id &&
-           s.subtopic_id === classification.subtopic_id
-    )
-    validSubSubtopicId = matchedSubSub?.id ?? null
-  }
-
   // Update the question
   const updates: Record<string, unknown> = {
     subtopic_id: classification.subtopic_id,
     topic_id: newTopicId,
-    sub_subtopic_id: validSubSubtopicId,
     updated_at: new Date().toISOString(),
   }
 
