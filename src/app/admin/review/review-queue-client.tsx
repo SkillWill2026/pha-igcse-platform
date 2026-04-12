@@ -131,23 +131,28 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
   // Fetch sub-subtopics when subtopic changes
   useEffect(() => {
-    if (!currentQuestion?.subtopic_id) {
+    // Use editSubtopicId when in edit/auto-classify mode, otherwise use question's saved subtopic
+    const activeSubtopicId = editSubtopicId || currentQuestion?.subtopic_id
+    if (!activeSubtopicId) {
       setSubSubtopics([])
+      setSelectedSubSubtopic(null)
+      setSubSubtopicSearch('')
+      setSubSubtopicOpen(false)
       return
     }
 
     setLoadingSubSubtopics(true)
-    fetch(`/api/sub-subtopics?subtopic_id=${currentQuestion.subtopic_id}`)
+    fetch(`/api/sub-subtopics?subtopic_id=${activeSubtopicId}`)
       .then((res) => res.json())
       .then((data) => {
         setSubSubtopics(data)
-        if (currentQuestion.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
+        if (currentQuestion?.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
           setSelectedSubSubtopic(currentQuestion.sub_subtopic_id)
         }
       })
       .catch((err) => console.error('Failed to fetch sub-subtopics:', err))
       .finally(() => setLoadingSubSubtopics(false))
-  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id])
+  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id, editSubtopicId])
 
   // Load last used topic from localStorage when entering edit mode
   useEffect(() => {
