@@ -81,11 +81,12 @@ Return ONLY JSON: {"subtopic_id": "..."}`
     const jsonStr = jsonMatch ? jsonMatch[0] : cleaned
     classification = JSON.parse(jsonStr)
   } catch {
-    throw new Error(`Classification parsing failed: ${responseText}`)
+    // AI couldn't find a match — return gracefully
+    return
   }
 
   if (!classification.subtopic_id) {
-    throw new Error('No subtopic identified')
+    return
   }
 
   // Find the topic_id for the matched subtopic
@@ -122,18 +123,29 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient()
 
+    // Fetch question BEFORE classification to compare after
+    const { data: before } = await supabase
+      .from('questions')
+      .select('subtopic_id, topic_id')
+      .eq('id', question_id)
+      .single()
+
     // Run classification
     await classifyQuestion(question_id, topic_id ?? null)
 
-    // Fetch the updated question to return the result
+    // Fetch updated question to check if classification changed anything
     const { data: updated } = await supabase
       .from('questions')
       .select('subtopic_id, topic_id')
       .eq('id', question_id)
       .single()
 
-    if (!updated?.subtopic_id) {
-      return NextResponse.json({ error: 'No matching subtopic found' }, { status: 422 })
+    // If subtopic unchanged after classification, no match was found
+    if (!updated?.subtopic_id || updated.subtopic_id === before?.subtopic_id) {
+      return NextResponse.json(
+        { error: 'No matching subtopic found for this question within the selected topic. Try selecting a different topic first.' },
+        { status: 422 }
+      )
     }
 
     // Fetch subtopic title for the toast message
