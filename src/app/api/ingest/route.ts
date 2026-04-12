@@ -1,137 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAnthropicClient } from '@/lib/anthropic'
 import { createAdminClient } from '@/lib/supabase'
-import { classifyQuestion } from '../classify-question/route'
 
 export const runtime = 'nodejs'
-export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-const EXTRACTION_SYSTEM_PROMPT = `You are an expert Cambridge IGCSE Mathematics question extractor.
-Your job is to extract individual questions from exam paper text and return them as a JSON array.
-
-CRITICAL EXTRACTION RULES — follow these exactly:
-
-RULE 0 — WORKSHEET FORMAT:
-If the document appears to be a math worksheet with equations grouped
-under question numbers (like "Question 1:", "Question 2:") but WITHOUT
-explicit instruction text, infer the instruction from context:
-- Equations in the form "y = [expression with other variables]" →
-  instruction is "Make y the subject of the formula:"
-- Equations in the form "x = [expression]" →
-  instruction is "Make x the subject of the formula:"
-- Still apply RULE 1: each lettered sub-part becomes a separate question
-- Include the inferred instruction in the content field
-
-EXAMPLE — Input (no explicit instruction):
-"## Question 1:
-(a) $y = c - w$
-(b) $y = m + p$"
-
-EXAMPLE — Output:
-[
-  {"content": "Make $y$ the subject of the formula: $y = c - w$",
-   "part_label": "a", "parent_question_ref": "1",
-   "question_type": "short_answer", "marks": 1, "difficulty": 1},
-  {"content": "Make $y$ the subject of the formula: $y = m + p$",
-   "part_label": "b", "parent_question_ref": "1",
-   "question_type": "short_answer", "marks": 1, "difficulty": 1}
-]
-
-RULE 1 — MULTI-PART QUESTIONS:
-When a question has lettered sub-parts like (a), (b), (c) or (i), (ii), (iii):
-- Create ONE separate question for EACH sub-part
-- The content of each question is ONLY the sub-part expression/text — NOT the parent instruction
-- Do NOT include the parent question number or instruction in the content
-- Set part_label to the letter/roman numeral e.g. "a", "b", "c"
-- Set parent_question_ref to the parent question number e.g. "1", "2"
-
-GOOD EXAMPLE — Input:
-"Question 1: Make y the subject of each formula
-(a) y + w = c
-(b) y − p = m
-(c) m + y = s"
-
-GOOD EXAMPLE — Output:
-[
-  {"content": "Make $y$ the subject: $y + w = c$", "part_label": "a", "parent_question_ref": "1", "question_type": "structured", "marks": 1, "difficulty": 1},
-  {"content": "Make $y$ the subject: $y - p = m$", "part_label": "b", "parent_question_ref": "1", "question_type": "structured", "marks": 1, "difficulty": 1},
-  {"content": "Make $y$ the subject: $m + y = s$", "part_label": "c", "parent_question_ref": "1", "question_type": "structured", "marks": 1, "difficulty": 1}
-]
-
-BAD EXAMPLE — Never do this:
-[{"content": "Make y the subject of each formula: (a) y+w=c (b) y-p=m (c) m+y=s"}]
-
-RULE 2 — IMAGE-TAGGED QUESTIONS (e.g. angles, geometry worksheets):
-When questions are identified by grid tags like A1, A2, A3, B1, B2, C1, C2 etc:
-- Create ONE separate question per tag
-- The content should be the tag + the instruction text
-- Add a note that the diagram must be added manually
-- Set parent_question_ref to the letter group e.g. "A", "B", "C"
-- Set part_label to the number e.g. "1", "2", "3"
-
-GOOD EXAMPLE — Input:
-"A1 Find the value of x
-A2 Find the values of x and y
-B1 Find the values of x and y"
-
-GOOD EXAMPLE — Output:
-[
-  {"content": "A1: Find the value of $x$. [Diagram required — add image manually]", "part_label": "1", "parent_question_ref": "A", "question_type": "structured", "marks": 2, "difficulty": 2},
-  {"content": "A2: Find the values of $x$ and $y$. [Diagram required — add image manually]", "part_label": "2", "parent_question_ref": "A", "question_type": "structured", "marks": 3, "difficulty": 2},
-  {"content": "B1: Find the values of $x$ and $y$. [Diagram required — add image manually]", "part_label": "1", "parent_question_ref": "B", "question_type": "structured", "marks": 3, "difficulty": 3}
-]
-
-RULE 3 — LaTeX FORMATTING:
-- Wrap all mathematical expressions in LaTeX: inline $x^2$ or display $$\\frac{a}{b}$$
-- Convert fractions: "a/b" → $\\frac{a}{b}$
-- Convert powers: "x^2" → $x^2$, "y^3" → $y^3$
-- Convert roots: "√y" → $\\sqrt{y}$
-- Convert Greek letters: "π" → $\\pi$
-
-RULE 4 — WHAT TO SKIP:
-- Skip page headers, footers, copyright notices, website URLs, QR code text
-- Skip answer sections and worked examples
-- Skip instructions that are not questions (e.g. "Click here", "Scan here")
-- Skip blank lines and decorative text
-
-RULE 5 — OUTPUT FORMAT:
-Return ONLY a valid JSON array. No markdown, no code fences, no explanation.
-Each object must have: content (string), part_label (string|null), parent_question_ref (string|null), question_type ("mcq"|"short_answer"|"structured"|"extended"), marks (integer 1-10), difficulty (integer 1-5)
-`
-
-const VALID_QUESTION_TYPES = ['mcq', 'short_answer', 'structured', 'extended'] as const
-type QuestionType = (typeof VALID_QUESTION_TYPES)[number]
-
-interface AIQuestion {
-  content: string
-  parent_question_ref: string | null
-  part_label: string | null
-  question_type: QuestionType
-  difficulty: number
-  marks: number | null
-  subtopic_ref?: string
-}
-
+// ── POST: Phase 1 only — extract text, store PDF, fire Edge Function ──────────
+// Heavy work (OCR + Claude extraction) is done by the Supabase Edge Function.
+// This route must complete in < 10s (Vercel Hobby limit).
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const exam_board_id = formData.get('exam_board_id') as string | null
-    const subtopic_id = formData.get('subtopic_id') as string | null
-    const sub_subtopic_id = (formData.get('sub_subtopic_id') as string | null) || null
-    const topic_id_param  = (formData.get('topic_id')       as string | null) || null
-    const batch_id        = (formData.get('batch_id')        as string | null) || null
-    const isMixTopic      = topic_id_param === 'mixed' || !topic_id_param
+    const topic_id_param = (formData.get('topic_id') as string | null) || null
+    const batch_id_param = (formData.get('batch_id') as string | null) || null
 
-    if (!file || !exam_board_id || !subtopic_id) {
+    if (!file || !exam_board_id) {
       return NextResponse.json(
-        { error: 'Missing required fields: file, exam_board_id, subtopic_id' },
-        { status: 400 },
+        { error: 'Missing required fields: file, exam_board_id' },
+        { status: 400 }
       )
     }
-
-    const isMixed = subtopic_id === 'mixed'
 
     const fileName = file.name.toLowerCase()
     const isPDF = fileName.endsWith('.pdf')
@@ -140,281 +29,147 @@ export async function POST(request: NextRequest) {
     if (!isPDF && !isDOCX) {
       return NextResponse.json(
         { error: 'Only PDF (.pdf) and Word (.docx) files are supported' },
-        { status: 400 },
+        { status: 400 }
       )
     }
 
-    // ── Text extraction ──────────────────────────────────────────────────────
     const buffer = Buffer.from(await file.arrayBuffer())
-    let text = ''
+
+    // ── Fast text extraction (pdf-parse only, no Mistral OCR here) ─────────────
+    let textContent = ''
+    let isImagePdf = false
 
     if (isPDF) {
-      // pdf-parse is a CommonJS module (module.exports = fn), so .default may be undefined
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string; numpages: number }>
-      const parsed = await pdfParse(buffer)
-      text = parsed.text
-      const pageCount = parsed.numpages
-
-      // Debug: log extracted text info
-      console.log('[ingest] PDF text sample (first 500 chars):', text.substring(0, 500))
-      console.log('[ingest] Total chars extracted:', text.trim().length)
-      console.log('[ingest] Page count:', pageCount)
-
-      // If image-based PDF, use Mistral OCR fallback
-      const avgCharsPerPage = text.trim().length / Math.max(pageCount, 1)
-      if (avgCharsPerPage < 30) {
-        console.log('[ingest] Image-based PDF detected, using Mistral OCR')
-        try {
-          const { extractTextWithOCR } = await import('@/lib/ocr')
-          text = await extractTextWithOCR(buffer)
-          console.log('[ingest] Mistral OCR output (first 1000 chars):', text.substring(0, 1000))
-          console.log('[ingest] OCR extracted', text.length, 'chars')
-        } catch (ocrErr) {
-          console.warn('[ingest] OCR failed:', ocrErr)
-        }
+      try {
+        const parsed = await pdfParse(buffer)
+        textContent = parsed.text
+        const avgCharsPerPage = textContent.trim().length / Math.max(parsed.numpages, 1)
+        isImagePdf = avgCharsPerPage < 100
+        console.log('[ingest] PDF chars:', textContent.trim().length, '| image-based:', isImagePdf)
+      } catch (err) {
+        console.warn('[ingest] pdf-parse failed, treating as image PDF:', err)
+        isImagePdf = true
       }
     } else {
       const mammoth = await import('mammoth')
       const result = await mammoth.extractRawText({ buffer })
-      text = result.value
+      textContent = result.value
     }
 
-    if (!text.trim()) {
-      return NextResponse.json(
-        { error: 'Could not extract any text from the uploaded file' },
-        { status: 422 },
-      )
-    }
-
-    // ── Initialize Supabase client ───────────────────────────────────────────
     const supabase = createAdminClient()
 
-    // ── Store the original PDF to Supabase Storage ──────────────────────────
-    let pdfStoragePath: string | null = null
-    if (isPDF && batch_id) {
-      try {
-        console.log('[ingest] Storing PDF to Supabase Storage...', { batchId: batch_id, fileName: file.name, fileSize: buffer.length })
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('pdfs')
-          .upload(`${batch_id}/${file.name}`, buffer, {
-            contentType: 'application/pdf',
-            upsert: false,
-          })
+    // ── Create or reuse batch record ────────────────────────────────────────────
+    let batchId = batch_id_param
 
-        if (uploadErr) {
-          console.error('[ingest] PDF storage failed:', { code: uploadErr.name, message: uploadErr.message })
-        } else if (uploadData?.path) {
-          pdfStoragePath = uploadData.path
-          console.log('[ingest] PDF stored successfully at:', pdfStoragePath)
-        }
-      } catch (err) {
-        console.error('[ingest] PDF storage exception:', err instanceof Error ? err.message : String(err))
-      }
-    } else if (!isPDF) {
-      console.log('[ingest] Not a PDF file, skipping PDF storage')
-    } else if (!batch_id) {
-      console.log('[ingest] No batch_id provided, skipping PDF storage')
-    }
-
-    // ── Fetch subtopic + topic for context (skipped for mixed) ──────────────
-
-    let subtopic: { ref: string; title: string; topic_id: string } | null = null
-    let topic: { ref: string; name: string } | null = null
-
-    if (!isMixed) {
-      const { data: s } = await supabase
-        .from('subtopics')
-        .select('ref, title, topic_id')
-        .eq('id', subtopic_id)
+    if (!batchId) {
+      const isMixTopic = !topic_id_param || topic_id_param === 'mixed'
+      const { data: newBatch, error: batchErr } = await supabase
+        .from('upload_batches')
+        .insert({
+          topic_id: isMixTopic ? null : topic_id_param,
+          subtopic_id: null,
+          sub_subtopic_id: null,
+          total_files: 1,
+          status: 'processing',
+        })
+        .select('id')
         .single()
-      subtopic = s as any
 
-      if (subtopic) {
-        const { data: t } = await supabase
-          .from('topics')
-          .select('ref, name')
-          .eq('id', subtopic.topic_id)
-          .single()
-        topic = t
+      if (batchErr || !newBatch) {
+        console.error('[ingest] batch insert failed:', batchErr)
+        return NextResponse.json({ error: 'Failed to create batch record' }, { status: 500 })
       }
+      batchId = newBatch.id
+    } else {
+      await supabase
+        .from('upload_batches')
+        .update({ status: 'processing' })
+        .eq('id', batchId)
     }
 
-    // ── Anthropic extraction ─────────────────────────────────────────────────
-    const anthropic = createAnthropicClient()
-
-    const systemPrompt = EXTRACTION_SYSTEM_PROMPT
-
-    const contextLine = isMixed
-      ? 'This paper contains mixed topics — extract all questions without assuming a specific subtopic.'
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      : `Context: Topic ${topic?.ref ?? '?'} – ${topic?.name ?? 'Unknown'} | Subtopic ${subtopic?.ref ?? '?'} – ${(subtopic as any)?.title ?? 'Unknown'}`
-
-    // Chunk-based extraction: process up to 3 chunks of 3 000 chars each.
-    // If a chunk fails to parse it is skipped — resilient to garbled PDFs.
-    const CHUNK_SIZE = 3000
-    const sourceText = text.slice(0, 15_000)
-    const chunks: string[] = []
-    for (let i = 0; i < sourceText.length; i += CHUNK_SIZE) {
-      chunks.push(sourceText.slice(i, i + CHUNK_SIZE))
-    }
-    const extractionPrompt = `${systemPrompt}\n\n${contextLine}`
-
-    const allQuestions: AIQuestion[] = []
+    // ── Store file to Supabase Storage ──────────────────────────────────────────
+    let storagePath: string | null = null
     try {
-      console.log('[ingest] Calling Claude for extraction...')
-      for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
-        const chunk = chunks[chunkIdx]
-        try {
-          const response = await anthropic.messages.create({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 4096,
-            messages: [{
-              role: 'user',
-              content: `${extractionPrompt}\n\nDOCUMENT TEXT:\n${chunk}`,
-            }],
-          })
-          const rawContent = response.content[0]
-          const responseText = rawContent?.type === 'text' ? rawContent.text : ''
+      const contentType = isPDF
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('pdfs')
+        .upload(`${batchId}/${file.name}`, buffer, { contentType, upsert: true })
 
-          // Debug: log Claude's raw response immediately after API call
-          console.log('[ingest] Claude raw response:', responseText.substring(0, 500))
-
-          // Extract JSON array from response - handles markdown fences and extra text
-          let questions: Array<{
-            content: string
-            part_label?: string | null
-            parent_question_ref?: string | null
-            question_type?: string
-            marks?: number
-            difficulty?: number
-          }> = []
-
-          try {
-            // Find the first [ and last ] to extract the JSON array
-            const firstBracket = responseText.indexOf('[')
-            const lastBracket = responseText.lastIndexOf(']')
-
-            if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-              const jsonStr = responseText.slice(firstBracket, lastBracket + 1)
-              const parsed = JSON.parse(jsonStr)
-              questions = Array.isArray(parsed) ? parsed : []
-            }
-          } catch (parseErr) {
-            console.warn('[ingest] JSON parse failed:', String(parseErr).slice(0, 100))
-            questions = []
-          }
-
-          allQuestions.push(...(questions as AIQuestion[]))
-        } catch (chunkError: any) {
-          console.error('[ingest] Chunk extraction failed:', chunkError.message)
-          continue
-        }
+      if (uploadErr) {
+        console.error('[ingest] storage upload failed:', uploadErr.message)
+      } else if (uploadData?.path) {
+        storagePath = uploadData.path
+        console.log('[ingest] stored at:', storagePath)
       }
-    } catch (extractionError: any) {
-      console.error('[ingest] EXTRACTION FAILED:', extractionError.message)
-      console.error('[ingest] Stack:', extractionError.stack)
+    } catch (err) {
+      console.error('[ingest] storage exception:', err)
     }
 
-    if (allQuestions.length === 0) {
-      return NextResponse.json(
-        { error: 'No questions could be extracted from this document' },
-        { status: 422 },
-      )
-    }
+    // Update batch with file metadata
+    await supabase
+      .from('upload_batches')
+      .update({
+        source_pdf_path: storagePath,
+        source_file_name: file.name,
+      })
+      .eq('id', batchId)
 
-    // ── Insert into questions table ──────────────────────────────────────────
-    const rows = allQuestions.map((q, idx) => ({
+    // ── Fire Supabase Edge Function (fire-and-forget) ───────────────────────────
+    // The Edge Function does OCR + Claude extraction async — no Vercel timeout applies.
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+    const edgeFnUrl = `${supabaseUrl}/functions/v1/process-upload`
+
+    const isMixTopic = !topic_id_param || topic_id_param === 'mixed'
+    const payload = {
+      batch_id: batchId,
+      is_image_pdf: isImagePdf,
+      text_content: isImagePdf ? '' : textContent.slice(0, 20000),
+      topic_id: isMixTopic ? null : topic_id_param,
       exam_board_id,
-      topic_id: isMixed ? (isMixTopic ? null : topic_id_param) : (subtopic?.topic_id ?? null),
-      subtopic_id: isMixed ? null : subtopic_id,
-      sub_subtopic_id: sub_subtopic_id || null,
-      batch_position: idx,
-      content_text: String(q.content ?? '').trim(),
-      parent_question_ref: q.parent_question_ref ?? null,
-      part_label: q.part_label ?? null,
-      batch_id: batch_id ?? null,
-      difficulty: Math.min(5, Math.max(1, Math.round(Number(q.difficulty) || 2))),
-      question_type: VALID_QUESTION_TYPES.includes(q.question_type)
-        ? q.question_type
-        : ('structured' as QuestionType),
-      marks: q.marks != null ? Math.max(1, Math.round(Number(q.marks))) : 1,
-      status: 'draft' as const,
-      ai_extracted: true,
-    }))
-
-    // Insert with graceful duplicate handling — skip duplicates instead of failing
-    const saved: any[] = []
-    const errors: string[] = []
-
-    for (const row of rows) {
-      try {
-        const { data, error } = await supabase
-          .from('questions')
-          .insert(row)
-          .select('*')
-          .single()
-
-        if (error) {
-          // Log but continue — don't block the entire batch
-          console.warn(`[ingest] insert failed for question:`, error.message)
-          if (error.code !== '23505') {
-            // 23505 = unique violation, expected for duplicates
-            errors.push(`Question skipped: ${error.message}`)
-          }
-        } else if (data) {
-          saved.push(data)
-          // Auto-classify subtopic when topic is known (not MIX)
-          if (!isMixTopic && topic_id_param && data?.id) {
-            classifyQuestion(data.id, topic_id_param).catch((e: Error) =>
-              console.warn('[ingest] auto-classify failed:', e?.message)
-            )
-          }
-        }
-      } catch (err) {
-        console.warn(`[ingest] exception inserting question:`, err instanceof Error ? err.message : String(err))
-      }
+      file_name: file.name,
     }
 
-    if (saved.length === 0 && rows.length > 0) {
-      return NextResponse.json(
-        { error: 'No questions were successfully inserted. All may be duplicates or invalid.', details: errors },
-        { status: 422 },
-      )
-    }
-
-    // ── Update upload_batches with PDF path ──────────────────────────────────
-    if (batch_id && pdfStoragePath) {
-      try {
+    // We await this fetch because the Edge Function returns 200 immediately
+    // (it uses EdgeRuntime.waitUntil for background processing)
+    try {
+      const edgeRes = await fetch(edgeFnUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!edgeRes.ok) {
+        const errText = await edgeRes.text()
+        console.error('[ingest] Edge Function error:', edgeRes.status, errText)
         await supabase
           .from('upload_batches')
-          .update({
-            source_pdf_path: pdfStoragePath,
-            source_file_name: file.name,
-          })
-          .eq('id', batch_id)
-      } catch (err) {
-        console.warn('[ingest] Failed to update upload_batches with PDF path:', err instanceof Error ? err.message : String(err))
+          .update({ status: 'error', error_message: `Edge Function returned ${edgeRes.status}: ${errText.slice(0, 200)}` })
+          .eq('id', batchId)
+      } else {
+        console.log('[ingest] Edge Function accepted job for batch:', batchId)
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[ingest] Edge Function call failed:', msg)
+      await supabase
+        .from('upload_batches')
+        .update({ status: 'error', error_message: `Could not reach processing service: ${msg.slice(0, 200)}` })
+        .eq('id', batchId)
     }
 
-    // Merge subtopic_ref back for the UI (best-effort from AI or context)
-    const questions = saved.map((q) => ({
-      ...q,
-      subtopic_ref: subtopic?.ref ?? '',
-    }))
+    return NextResponse.json({ batch_id: batchId, status: 'processing' })
 
-    return NextResponse.json({
-      questions,
-      count: questions.length,
-      total: rows.length,
-      skipped: rows.length - saved.length,
-      ...(errors.length > 0 && { warnings: errors }),
-    })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    const stack = err instanceof Error ? err.stack : undefined
-    console.error('[POST /api/ingest] FULL ERROR:', err)
-    return NextResponse.json({ error: message, stack }, { status: 500 })
+    console.error('[POST /api/ingest]', err)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

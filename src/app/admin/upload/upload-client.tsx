@@ -6,29 +6,19 @@ import { Upload, X, Loader2, CheckCircle2, AlertCircle, FileText } from 'lucide-
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface ExamBoard {
-  id: string
-  name: string
-}
-
+// ── Types ────────────────────────────────────────────────────────────────────
+interface ExamBoard { id: string; name: string }
 interface Topic { id: string; ref: string; name: string }
-
 type FileStatus = 'queued' | 'processing' | 'done' | 'failed'
 
 interface QueuedFile {
   id: string
   file: File
   status: FileStatus
-  questionsExtracted?: number
+  batchId?: string           // populated after Phase 1 ingest call
+  questionsExtracted?: number // live count from polling
   error?: string
 }
 
@@ -39,8 +29,7 @@ interface Summary {
   questions: number
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -58,7 +47,9 @@ function FileStatusBadge({ item }: { item: QueuedFile }) {
       return (
         <span className="shrink-0 flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
           <Loader2 className="h-3 w-3 animate-spin" />
-          Processing…
+          {(item.questionsExtracted ?? 0) > 0
+            ? `${item.questionsExtracted} found…`
+            : 'Processing…'}
         </span>
       )
     case 'done':
@@ -69,7 +60,10 @@ function FileStatusBadge({ item }: { item: QueuedFile }) {
       )
     case 'failed':
       return (
-        <span className="shrink-0 text-xs text-destructive bg-destructive/10 px-2 py-0.5 rounded-full max-w-[200px] truncate" title={item.error}>
+        <span
+          className="shrink-0 text-xs text-destructive bg-destructive/10 px-2 py-0.5 rounded-full max-w-[200px] truncate"
+          title={item.error}
+        >
           Failed — {item.error ?? 'Unknown error'}
         </span>
       )
@@ -77,22 +71,30 @@ function FileStatusBadge({ item }: { item: QueuedFile }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-
-export function UploadClient({ boards, topics, subjectId, subjectName }: { boards: ExamBoard[]; topics: Topic[]; subjectId: string | null; subjectName: string }) {
-  const [boardId,       setBoardId]       = useState('')
+export function UploadClient({
+  boards,
+  topics,
+  subjectId,
+  subjectName,
+}: {
+  boards: ExamBoard[]
+  topics: Topic[]
+  subjectId: string | null
+  subjectName: string
+}) {
+  const [boardId, setBoardId] = useState('')
   const [topicId, setTopicId] = useState('mixed')
-
-  const [queue,       setQueue]       = useState<QueuedFile[]>([])
+  const [queue, setQueue] = useState<QueuedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
-  const [summary,     setSummary]     = useState<Summary | null>(null)
+  const [summary, setSummary] = useState<Summary | null>(null)
 
-  // ── Drop zone ───────────────────────────────────────────────────────────────
+  // ── Drop zone ────────────────────────────────────────────────────────────────
   const onDrop = useCallback((accepted: File[]) => {
     setQueue((prev) => [
       ...prev,
       ...accepted.map((f) => ({
-        id:     crypto.randomUUID(),
-        file:   f,
+        id: crypto.randomUUID(),
+        file: f,
         status: 'queued' as const,
       })),
     ])
@@ -113,7 +115,7 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
     setQueue((prev) => prev.filter((f) => f.id !== id))
   }
 
-  // ── Upload ──────────────────────────────────────────────────────────────────
+  // ── Upload (2-phase async) ────────────────────────────────────────────────────
   const queued = queue.filter((f) => f.status === 'queued')
   const canStart = queued.length > 0 && !!boardId && !!topicId && !isUploading
 
@@ -122,99 +124,127 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
     setIsUploading(true)
     setSummary(null)
 
-    // Create batch record
-    let batchId: string | null = null
-    try {
-      const batchRes = await fetch('/api/upload-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic_id:        null,
-          subtopic_id:     'mixed',
-          sub_subtopic_id: null,
-          total_files:     queued.length,
-        }),
-      })
-      const batchData = await batchRes.json() as { id?: string }
-      batchId = batchData.id ?? null
-    } catch {
-      // Continue without batch tracking if creation fails
-    }
+    const filesToProcess = queue.filter((f) => f.status === 'queued')
 
-    let done = 0, failed = 0, questions = 0
+    // Process all files — Phase 1 runs sequentially, polling runs in parallel
+    const results = await Promise.all(
+      filesToProcess.map(async (item) => {
+        // Mark as processing
+        setQueue((prev) =>
+          prev.map((f) => (f.id === item.id ? { ...f, status: 'processing' as FileStatus } : f))
+        )
 
-    for (const item of queue) {
-      if (item.status !== 'queued') continue
+        try {
+          // ── Phase 1: Submit file (fast, returns batch_id in ~3s) ──────────────
+          const fd = new FormData()
+          fd.append('file', item.file)
+          fd.append('exam_board_id', boardId)
+          fd.append('topic_id', topicId)
 
-      setQueue((prev) => prev.map((f) =>
-        f.id === item.id ? { ...f, status: 'processing' } : f,
-      ))
+          const res = await fetch('/api/ingest', { method: 'POST', body: fd })
+          const data = (await res.json()) as { batch_id?: string; status?: string; error?: string }
 
-      try {
-        const fd = new FormData()
-        fd.append('file',          item.file)
-        fd.append('exam_board_id', boardId)
-        fd.append('subtopic_id',   'mixed')
-        fd.append('topic_id', topicId)
-        if (batchId)       fd.append('batch_id',        batchId)
+          if (!res.ok || !data.batch_id) {
+            throw new Error(data.error ?? `Server error ${res.status}`)
+          }
 
-        const res  = await fetch('/api/ingest', { method: 'POST', body: fd })
-        const data = await res.json() as { count?: number; questions?: unknown[]; error?: string }
+          const batchId = data.batch_id
 
-        if (!res.ok) {
-          const msg = data.error === 'No questions could be extracted from this document'
-            ? 'no questions extracted'
-            : (data.error ?? `Server error ${res.status}`)
-          throw new Error(msg)
+          // Store batch_id in queue state
+          setQueue((prev) =>
+            prev.map((f) => (f.id === item.id ? { ...f, batchId } : f))
+          )
+
+          // ── Phase 2: Poll until done (background processing by Edge Function) ──
+          const MAX_POLLS = 80 // 80 × 3s = 4 minutes max
+          for (let i = 0; i < MAX_POLLS; i++) {
+            await new Promise((r) => setTimeout(r, 3000))
+
+            try {
+              const statusRes = await fetch(`/api/ingest/status?batch_id=${batchId}`)
+              const statusData = (await statusRes.json()) as {
+                status: string
+                questions_extracted?: number
+                error_message?: string
+              }
+
+              if (statusData.status === 'done') {
+                const count = statusData.questions_extracted ?? 0
+                setQueue((prev) =>
+                  prev.map((f) =>
+                    f.id === item.id
+                      ? { ...f, status: 'done' as FileStatus, questionsExtracted: count }
+                      : f
+                  )
+                )
+                return { success: true, count }
+              }
+
+              if (statusData.status === 'error') {
+                const msg = statusData.error_message ?? 'Processing failed'
+                setQueue((prev) =>
+                  prev.map((f) =>
+                    f.id === item.id ? { ...f, status: 'failed' as FileStatus, error: msg } : f
+                  )
+                )
+                return { success: false, count: 0 }
+              }
+
+              // Still processing — show live question count
+              if ((statusData.questions_extracted ?? 0) > 0) {
+                setQueue((prev) =>
+                  prev.map((f) =>
+                    f.id === item.id
+                      ? { ...f, questionsExtracted: statusData.questions_extracted }
+                      : f
+                  )
+                )
+              }
+            } catch {
+              // Network blip on poll — just retry next cycle
+            }
+          }
+
+          // Timeout after MAX_POLLS
+          setQueue((prev) =>
+            prev.map((f) =>
+              f.id === item.id
+                ? { ...f, status: 'failed' as FileStatus, error: 'Timed out after 4 minutes' }
+                : f
+            )
+          )
+          return { success: false, count: 0 }
+
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error'
+          setQueue((prev) =>
+            prev.map((f) =>
+              f.id === item.id ? { ...f, status: 'failed' as FileStatus, error: msg } : f
+            )
+          )
+          return { success: false, count: 0 }
         }
+      })
+    )
 
-        const count = data.count ?? (data.questions as unknown[])?.length ?? 0
-        setQueue((prev) => prev.map((f) =>
-          f.id === item.id ? { ...f, status: 'done', questionsExtracted: count } : f,
-        ))
-        done++
-        questions += count
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error'
-        setQueue((prev) => prev.map((f) =>
-          f.id === item.id ? { ...f, status: 'failed', error: msg } : f,
-        ))
-        failed++
-      }
-    }
+    const done = results.filter((r) => r.success).length
+    const failed = results.filter((r) => !r.success).length
+    const questions = results.reduce((sum, r) => sum + r.count, 0)
 
-    // Update batch record with final counts
-    if (batchId) {
-      const finalStatus = failed === 0 ? 'completed' : done === 0 ? 'failed' : 'partial'
-      try {
-        await fetch('/api/upload-batch', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            batch_id:                   batchId,
-            completed_files:            done,
-            failed_files:               failed,
-            total_questions_extracted:  questions,
-            status:                     finalStatus,
-          }),
-        })
-      } catch { /* ignore */ }
-    }
-
-    setSummary({ total: queued.length, done, failed, questions })
+    setSummary({ total: filesToProcess.length, done, failed, questions })
     setIsUploading(false)
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 max-w-3xl">
-
-      {/* ── Section 1: Syllabus tagging ──────────────────────────────────── */}
+      {/* ── Section 1: Syllabus tagging ─────────────────────────────────── */}
       <div className="rounded-lg border bg-card p-6 shadow-sm space-y-4">
         <div>
           <h2 className="text-sm font-semibold">Syllabus Tagging</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Select a topic to auto-classify subtopics. Choose Mix Topics to assign classification manually in Review Queue.
+            Select a topic to auto-classify subtopics. Choose Mix Topics to assign classification
+            manually in Review Queue.
           </p>
         </div>
 
@@ -222,9 +252,11 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
           <Label>Exam Board</Label>
           <Select value={boardId} onValueChange={(v) => setBoardId(v ?? '')}>
             <SelectTrigger>
-              {boardId
-                ? <span>{boards.find((b) => b.id === boardId)?.name}</span>
-                : <span className="text-muted-foreground">Select board…</span>}
+              {boardId ? (
+                <span>{boards.find((b) => b.id === boardId)?.name}</span>
+              ) : (
+                <span className="text-muted-foreground">Select board…</span>
+              )}
             </SelectTrigger>
             <SelectContent alignItemWithTrigger={false}>
               {boards.length === 0 ? (
@@ -233,7 +265,9 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
                 </div>
               ) : (
                 boards.map((b) => (
-                  <SelectItem key={b.id} value={b.id} label={b.name}>{b.name}</SelectItem>
+                  <SelectItem key={b.id} value={b.id} label={b.name}>
+                    {b.name}
+                  </SelectItem>
                 ))
               )}
             </SelectContent>
@@ -244,14 +278,21 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
           <Label>Topic</Label>
           <Select value={topicId} onValueChange={(v) => setTopicId(v ?? 'mixed')}>
             <SelectTrigger>
-              {topicId === 'mixed'
-                ? <span className="text-muted-foreground">Mix Topics (no auto-classification)</span>
-                : <span>{topics.find((t) => t.id === topicId)?.ref} — {topics.find((t) => t.id === topicId)?.name}</span>}
+              {topicId === 'mixed' ? (
+                <span className="text-muted-foreground">Mix Topics (no auto-classification)</span>
+              ) : (
+                <span>
+                  {topics.find((t) => t.id === topicId)?.ref} —{' '}
+                  {topics.find((t) => t.id === topicId)?.name}
+                </span>
+              )}
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="mixed">Mix Topics (no auto-classification)</SelectItem>
               {topics.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.ref} — {t.name}</SelectItem>
+                <SelectItem key={t.id} value={t.id}>
+                  {t.ref} — {t.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -281,7 +322,7 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
             'flex flex-col items-center justify-center rounded-lg border-2 border-dashed px-8 py-10 text-center transition-colors cursor-pointer select-none',
             isDragActive
               ? 'border-primary bg-primary/5'
-              : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30',
+              : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30'
           )}
         >
           <input {...getInputProps()} />
@@ -289,7 +330,9 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
           <p className="text-sm font-medium">
             {isDragActive ? 'Release to add files' : 'Drag & drop PDF or DOCX files'}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">or click to browse — multiple files supported</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            or click to browse — multiple files supported
+          </p>
         </div>
 
         {/* File queue */}
@@ -321,9 +364,17 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
             ))}
           </div>
         )}
+
+        {/* Processing note */}
+        {isUploading && (
+          <p className="text-xs text-muted-foreground text-center">
+            Files are being processed in the background. This page will update automatically.
+            Large scanned papers may take 2–3 minutes.
+          </p>
+        )}
       </div>
 
-      {/* ── Section 3: Start + summary ─────────────────────────────────────── */}
+      {/* ── Section 3: Start + summary ──────────────────────────────────────── */}
       <div className="space-y-4">
         <Button
           onClick={handleStartUpload}
@@ -332,24 +383,31 @@ export function UploadClient({ boards, topics, subjectId, subjectName }: { board
           className="w-full"
         >
           {isUploading ? (
-            <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Uploading…</>
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing…
+            </>
           ) : (
             `Start Upload${queued.length > 0 ? ` (${queued.length} file${queued.length !== 1 ? 's' : ''})` : ''}`
           )}
         </Button>
 
         {summary && (
-          <div className={cn(
-            'flex items-start gap-3 rounded-md border px-4 py-3 text-sm',
-            summary.failed === 0
-              ? 'border-green-200 bg-green-50 text-green-800'
-              : summary.done === 0
-                ? 'border-destructive/30 bg-destructive/10 text-destructive'
-                : 'border-yellow-200 bg-yellow-50 text-yellow-800',
-          )}>
-            {summary.failed === 0
-              ? <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
-              : <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />}
+          <div
+            className={cn(
+              'flex items-start gap-3 rounded-md border px-4 py-3 text-sm',
+              summary.failed === 0
+                ? 'border-green-200 bg-green-50 text-green-800'
+                : summary.done === 0
+                  ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                  : 'border-yellow-200 bg-yellow-50 text-yellow-800'
+            )}
+          >
+            {summary.failed === 0 ? (
+              <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+            ) : (
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            )}
             <span>
               Batch complete — {summary.done} file{summary.done !== 1 ? 's' : ''} processed,{' '}
               {summary.questions} question{summary.questions !== 1 ? 's' : ''} extracted
