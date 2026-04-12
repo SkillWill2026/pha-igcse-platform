@@ -54,6 +54,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [subSubtopics, setSubSubtopics] = useState<SubSubtopic[]>([])
   const [selectedSubSubtopic, setSelectedSubSubtopic] = useState<string | null>(null)
   const [loadingSubSubtopics, setLoadingSubSubtopics] = useState(false)
+  const [subSubtopicSearch, setSubSubtopicSearch] = useState('')
+  const [subSubtopicOpen, setSubSubtopicOpen] = useState(false)
   const [bgAnswers, setBgAnswers] = useState<Map<string, AnswerRow>>(new Map())
   const [editTopicId, setEditTopicId] = useState<string | null>(null)
   const [editSubtopicId, setEditSubtopicId] = useState<string | null>(null)
@@ -92,6 +94,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditingAnswer(false)
     setEditedAnswerContent('')
     setSelectedSubSubtopic(null)
+    setSubSubtopicSearch('')
+    setSubSubtopicOpen(false)
     setEditTopicId(null)
     setEditSubtopicId(null)
     setEditSubSubtopicId(null)
@@ -598,24 +602,62 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             {currentQuestion.subtopics?.name}
           </div>
 
-          {/* Sub-subtopic selector */}
+          {/* Sub-subtopic searchable selector */}
           {subSubtopics.length > 0 && (
-            <div className="flex items-center gap-3 py-2">
-              <label className="text-sm font-medium text-muted-foreground">Sub-subtopic:</label>
-              <select
-                value={selectedSubSubtopic || ''}
-                onChange={(e) => handleSelectSubSubtopic(e.target.value)}
-                disabled={loadingSubSubtopics}
-                className="px-2 py-1 text-sm rounded-md border bg-white hover:bg-gray-50 disabled:opacity-50"
-              >
-                <option value="">Select a sub-subtopic...</option>
-                {subSubtopics.map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.ref} – {sub.name}
-                    {sub.e_only ? ' [E-only]' : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-start gap-3 py-2">
+              <label className="text-sm font-medium text-muted-foreground mt-1.5 shrink-0">Sub-subtopic:</label>
+              <div className="relative flex-1 max-w-sm">
+                <input
+                  type="text"
+                  value={subSubtopicSearch !== '' ? subSubtopicSearch : (selectedSubSubtopic ? (subSubtopics.find(s => s.id === selectedSubSubtopic)?.ref + ' – ' + subSubtopics.find(s => s.id === selectedSubSubtopic)?.name) : '')}
+                  onChange={(e) => {
+                    setSubSubtopicSearch(e.target.value)
+                    setSubSubtopicOpen(true)
+                  }}
+                  onFocus={() => {
+                    setSubSubtopicSearch('')
+                    setSubSubtopicOpen(true)
+                  }}
+                  onBlur={() => setTimeout(() => setSubSubtopicOpen(false), 150)}
+                  disabled={loadingSubSubtopics}
+                  placeholder={loadingSubSubtopics ? 'Loading...' : 'Type to search sub-subtopics...'}
+                  className="w-full px-2 py-1 text-sm rounded-md border bg-white hover:bg-gray-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+                {subSubtopicOpen && (
+                  <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border bg-white shadow-lg">
+                    {subSubtopics
+                      .filter(s => {
+                        const q = subSubtopicSearch.toLowerCase()
+                        return !q || s.ref.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
+                      })
+                      .map(sub => (
+                        <button
+                          key={sub.id}
+                          type="button"
+                          onMouseDown={() => {
+                            handleSelectSubSubtopic(sub.id)
+                            setSubSubtopicSearch('')
+                            setSubSubtopicOpen(false)
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${
+                            selectedSubSubtopic === sub.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'
+                          }`}
+                        >
+                          <span className="font-mono text-xs text-gray-500 mr-1.5">{sub.ref}</span>
+                          {sub.name}
+                          {sub.e_only && <span className="ml-1.5 text-[10px] text-purple-600 font-medium">E</span>}
+                        </button>
+                      ))
+                    }
+                    {subSubtopics.filter(s => {
+                      const q = subSubtopicSearch.toLowerCase()
+                      return !q || s.ref.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
+                    }).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-gray-400">No results for "{subSubtopicSearch}"</div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
