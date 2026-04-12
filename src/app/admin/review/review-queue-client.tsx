@@ -45,6 +45,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [editedText, setEditedText] = useState('')
   const [editedDifficulty, setEditedDifficulty] = useState<number>(3)
   const [isClassifying, setIsClassifying] = useState(false)
+  const [autoClassifiedTopicId, setAutoClassifiedTopicId]       = useState<string | null>(null)
+  const [autoClassifiedSubtopicId, setAutoClassifiedSubtopicId] = useState<string | null>(null)
   const [editSaving, setEditSaving] = useState(false)
   const [showDrawing, setShowDrawing] = useState(false)
   const [showCropper, setShowCropper] = useState(false)
@@ -399,7 +401,21 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       if (data.subtopic_id) {
         setEditSubtopicId(data.subtopic_id)
         if (data.sub_subtopic_id) setEditSubSubtopicId(data.sub_subtopic_id)
-        toast.success(`Auto-classified to: ${data.subtopic_title ?? data.subtopic_id}`)
+        // Fetch topic_id for this subtopic to pre-populate SyllabusSelector
+        fetch(`/api/subtopics?id=${data.subtopic_id}`)
+          .then(r => r.json())
+          .then((subtopics: { topic_id?: string }[]) => {
+            const topicId = Array.isArray(subtopics) ? subtopics[0]?.topic_id : null
+            if (topicId) {
+              setAutoClassifiedTopicId(topicId)
+              setEditTopicId(topicId)
+            }
+            setAutoClassifiedSubtopicId(data.subtopic_id!)
+          })
+          .catch(() => {
+            setAutoClassifiedSubtopicId(data.subtopic_id!)
+          })
+        toast.success(`Auto-classified: ${data.subtopic_title ?? data.subtopic_id}`)
       } else {
         toast.warning('Could not classify — no matching subtopic found')
       }
@@ -414,6 +430,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditing(false)
     setEditedText('')
     setEditedDifficulty(3)
+    setAutoClassifiedTopicId(null)
+    setAutoClassifiedSubtopicId(null)
   }
 
   function handleStartEdit() {
@@ -630,11 +648,14 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                     </button>
                   </div>
                   <SyllabusSelector
+                    key={`${autoClassifiedTopicId}-${autoClassifiedSubtopicId}`}
                     onTopicChange={setEditTopicId}
                     onSubtopicChange={setEditSubtopicId}
                     onSubSubtopicChange={setEditSubSubtopicId}
                     showTierBadge={false}
                     subjectId={null}
+                    initialTopicId={autoClassifiedTopicId}
+                    initialSubtopicId={autoClassifiedSubtopicId}
                   />
                 </div>
 

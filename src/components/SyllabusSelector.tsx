@@ -50,6 +50,8 @@ interface Props {
   onTopicChange?: (id: string | null) => void
   showTierBadge?: boolean
   subjectId?: string | null
+  initialTopicId?: string | null
+  initialSubtopicId?: string | null
 }
 
 export function SyllabusSelector({
@@ -58,13 +60,15 @@ export function SyllabusSelector({
   onTopicChange,
   showTierBadge = true,
   subjectId,
+  initialTopicId,
+  initialSubtopicId,
 }: Props) {
   const [topics, setTopics]             = useState<Topic[]>([])
   const [subtopics, setSubtopics]       = useState<Subtopic[]>([])
   const [subSubtopics, setSubSubtopics] = useState<SubSubtopic[]>([])
 
-  const [topicId, setTopicId]             = useState('')
-  const [subtopicId, setSubtopicId]       = useState('')
+  const [topicId, setTopicId]             = useState(initialTopicId ?? '')
+  const [subtopicId, setSubtopicId]       = useState(initialSubtopicId ?? '')
   const [subSubtopicId, setSubSubtopicId] = useState('')
 
   useEffect(() => {
@@ -74,6 +78,16 @@ export function SyllabusSelector({
       .then(setTopics)
       .catch(() => {})
   }, [subjectId])
+
+  // Load subtopics when initial topic is pre-selected
+  useEffect(() => {
+    if (initialTopicId) {
+      fetch(`/api/subtopics?topic_id=${initialTopicId}`)
+        .then((r) => r.json())
+        .then(setSubtopics)
+        .catch(() => {})
+    }
+  }, [initialTopicId])
 
   function handleTopicChange(id: string) {
     setTopicId(id)
