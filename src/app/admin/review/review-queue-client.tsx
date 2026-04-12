@@ -20,9 +20,11 @@ const PDFCropModal = dynamic(() => import('@/components/PDFCropModal'), { ssr: f
 
 interface SubSubtopic {
   id: string
-  ref: string
-  name: string
-  e_only: boolean
+  ext_num: number | null
+  core_num: number | null
+  outcome: string
+  tier: string
+  sort_order: number
 }
 
 interface DraftQuestion extends QuestionWithRelations {
@@ -632,7 +634,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                     if (subSubtopicSearch !== '') return subSubtopicSearch
                     if (selectedSubSubtopic) {
                       const found = subSubtopics.find(s => s.id === selectedSubSubtopic)
-                      return found ? `${found.ref} – ${found.name}` : ''
+                      return found ? found.outcome : ''
                     }
                     return ''
                   })()}
@@ -651,7 +653,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                     {subSubtopics
                       .filter(s => {
                         const q = subSubtopicSearch.toLowerCase()
-                        return !q || s.ref.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
+                        return !q || s.outcome.toLowerCase().includes(q)
                       })
                       .map(sub => (
                         <button
@@ -666,15 +668,16 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                             selectedSubSubtopic === sub.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'
                           }`}
                         >
-                          <span className="font-mono text-xs text-gray-500 mr-1.5">{sub.ref}</span>
-                          {sub.name}
-                          {sub.e_only && <span className="ml-1.5 text-[10px] text-purple-600 font-medium">E</span>}
+                          {sub.tier === 'extended' && (
+                            <span className="mr-1.5 text-[10px] text-purple-600 font-medium bg-purple-50 px-1 py-0.5 rounded">E</span>
+                          )}
+                          {sub.outcome}
                         </button>
                       ))
                     }
                     {subSubtopics.filter(s => {
                       const q = subSubtopicSearch.toLowerCase()
-                      return !q || s.ref.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
+                      return !q || s.outcome.toLowerCase().includes(q)
                     }).length === 0 && (
                       <div className="px-3 py-2 text-sm text-gray-400">No results for "{subSubtopicSearch}"</div>
                     )}
