@@ -281,7 +281,7 @@ async function processUpload(payload: {
     await supabase
       .from("upload_batches")
       .update({
-        status: "done",
+        status: "completed",
         questions_extracted: totalExtracted,
         total_questions_extracted: totalExtracted,
         completed_files: 1,
@@ -297,7 +297,7 @@ async function processUpload(payload: {
 
     await supabase
       .from("upload_batches")
-      .update({ status: "error", error_message: msg.slice(0, 500) })
+      .update({ status: "failed", error_message: msg.slice(0, 500) })
       .eq("id", batch_id);
   }
 }

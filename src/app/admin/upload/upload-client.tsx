@@ -168,7 +168,7 @@ export function UploadClient({
                 error_message?: string
               }
 
-              if (statusData.status === 'done') {
+              if (statusData.status === 'done' || statusData.status === 'completed') {
                 const count = statusData.questions_extracted ?? 0
                 setQueue((prev) =>
                   prev.map((f) =>
@@ -180,7 +180,7 @@ export function UploadClient({
                 return { success: true, count }
               }
 
-              if (statusData.status === 'error') {
+              if (statusData.status === 'error' || statusData.status === 'failed') {
                 const msg = statusData.error_message ?? 'Processing failed'
                 setQueue((prev) =>
                   prev.map((f) =>
