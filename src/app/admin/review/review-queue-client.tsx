@@ -654,11 +654,20 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                   className="w-full px-2 py-1 text-sm rounded-md border bg-white hover:bg-gray-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-blue-300"
                 />
                 {subSubtopicOpen && (
-                  <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border bg-white shadow-lg">
-                    {subSubtopics
+                  <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto rounded-md border bg-white shadow-lg">
+                    {[...subSubtopics]
                       .filter(s => {
                         const q = subSubtopicSearch.toLowerCase()
                         return !q || s.outcome.toLowerCase().includes(q)
+                      })
+                      .sort((a, b) => {
+                        if (!subSubtopicSearch) return 0
+                        const q = subSubtopicSearch.toLowerCase()
+                        const aStarts = a.outcome.toLowerCase().startsWith(q)
+                        const bStarts = b.outcome.toLowerCase().startsWith(q)
+                        if (aStarts && !bStarts) return -1
+                        if (!aStarts && bStarts) return 1
+                        return 0
                       })
                       .map(sub => (
                         <button
@@ -683,7 +692,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                     {subSubtopics.filter(s => {
                       const q = subSubtopicSearch.toLowerCase()
                       return !q || s.outcome.toLowerCase().includes(q)
-                    }).length === 0 && (
+                    }).length === 0 && subSubtopicSearch && (
                       <div className="px-3 py-2 text-sm text-gray-400">No results for "{subSubtopicSearch}"</div>
                     )}
                   </div>
