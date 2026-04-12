@@ -8,10 +8,13 @@ interface SlidePreviewProps {
   totalSlides: number
   subjectCode?: string
   subtopicRef?: string
+  onSectionClick?: (sectionTitle: string) => void
 }
 
 const SLIDE_TYPE_LABELS: Record<string, string> = {
   title:    'TITLE',
+  overview: 'OVERVIEW',
+  section:  'SECTION',
   concept:  'CONCEPT',
   question: 'QUESTION',
   answer:   'ANSWER',
@@ -20,15 +23,17 @@ const SLIDE_TYPE_LABELS: Record<string, string> = {
 
 const SLIDE_TYPE_COLORS: Record<string, string> = {
   title:    'bg-[#145087] text-white',
+  overview: 'bg-[#28A0E1] text-white',
+  section:  'bg-[#145087] text-white',
   concept:  'bg-[#28A0E1] text-white',
   question: 'bg-amber-500 text-white',
   answer:   'bg-green-600 text-white',
   summary:  'bg-[#145087] text-white',
 }
 
-export function SlidePreview({ slide, slideNumber, totalSlides, subjectCode = '0580', subtopicRef = '' }: SlidePreviewProps) {
+export function SlidePreview({ slide, slideNumber, totalSlides, subjectCode = '0580', subtopicRef = '', onSectionClick }: SlidePreviewProps) {
   const youchiSrc = YOUCHI_POSES[slide.youchi_pose] ?? YOUCHI_POSES.neutral
-  const showYouchi = ['title', 'question', 'answer', 'summary'].includes(slide.type)
+  const showYouchi = ['title', 'section', 'question', 'answer', 'summary'].includes(slide.type)
 
   return (
     <div className="w-full rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-[#FEFEFE]" style={{ aspectRatio: '16/9', position: 'relative', fontFamily: 'Montserrat, sans-serif' }}>
@@ -76,6 +81,45 @@ export function SlidePreview({ slide, slideNumber, totalSlides, subjectCode = '0
         {slide.type === 'title' && slide.subtitle && (
           <div className="text-[#28A0E1] font-medium" style={{ fontSize: 'clamp(6px, 1.1vw, 11px)' }}>
             {slide.subtitle}
+          </div>
+        )}
+
+        {/* Overview slide — clickable section links */}
+        {slide.type === 'overview' && slide.bullets && slide.bullets.length > 0 && (
+          <ul className="space-y-1 mt-1">
+            {slide.bullets.slice(0, 6).map((b, i) => (
+              <li key={i} className="flex items-start gap-1.5" style={{ fontSize: 'clamp(5px, 0.9vw, 10px)' }}>
+                <span className="text-[#28A0E1] shrink-0 font-bold mt-0.5">{i + 1}.</span>
+                {onSectionClick ? (
+                  <button
+                    type="button"
+                    onClick={() => onSectionClick(b)}
+                    className="text-left text-[#145087] hover:text-[#28A0E1] hover:underline transition-colors cursor-pointer"
+                    style={{ fontSize: 'clamp(5px, 0.9vw, 10px)', background: 'none', border: 'none', padding: 0 }}
+                  >
+                    {b} →
+                  </button>
+                ) : (
+                  <span className="text-gray-700">{b}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Section divider slide */}
+        {slide.type === 'section' && (
+          <div className="flex flex-col items-center justify-center" style={{ marginTop: '8%' }}>
+            <div className="text-center px-4 py-3 rounded-lg" style={{ background: 'rgba(20,80,135,0.08)', border: '2px solid #145087', maxWidth: '80%' }}>
+              <div className="text-[#145087] font-bold" style={{ fontSize: 'clamp(7px, 1.4vw, 15px)' }}>
+                {slide.title}
+              </div>
+              {slide.subtitle && (
+                <div className="text-[#28A0E1] mt-1" style={{ fontSize: 'clamp(5px, 0.8vw, 9px)' }}>
+                  {slide.subtitle}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

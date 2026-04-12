@@ -1,5 +1,5 @@
 export type YouchiPose = 'excited' | 'thinking' | 'waiting' | 'thumbs_up' | 'laughing' | 'wink' | 'neutral'
-export type SlideType = 'title' | 'concept' | 'question' | 'answer' | 'summary'
+export type SlideType = 'title' | 'overview' | 'section' | 'concept' | 'question' | 'answer' | 'summary'
 export type PptStatus = 'draft' | 'approved'
 
 export interface Slide {
@@ -14,6 +14,7 @@ export interface Slide {
   answer_content?: string
   speaker_notes: string
   youchi_pose: YouchiPose
+  section_number?: number
 }
 
 export interface PptDeck {

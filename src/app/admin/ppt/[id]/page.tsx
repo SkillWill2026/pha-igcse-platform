@@ -13,6 +13,8 @@ import { SlidePreview } from '@/components/admin/SlidePreview'
 
 const SLIDE_TYPE_LABELS: Record<SlideType, string> = {
   title:    'Title',
+  overview: 'Overview',
+  section:  'Section',
   concept:  'Concept',
   question: 'Question',
   answer:   'Answer',
@@ -21,6 +23,8 @@ const SLIDE_TYPE_LABELS: Record<SlideType, string> = {
 
 const SLIDE_TYPE_COLORS: Record<SlideType, string> = {
   title:    'bg-[#145087] text-white',
+  overview: 'bg-[#28A0E1] text-white',
+  section:  'bg-[#145087] text-white',
   concept:  'bg-[#28A0E1] text-white',
   question: 'bg-amber-100 text-amber-800',
   answer:   'bg-green-100 text-green-800',
@@ -61,6 +65,14 @@ export default function PptEditorPage() {
   useEffect(() => { loadDeck() }, [loadDeck])
 
   const currentSlide = slides[currentIdx] ?? null
+
+  // Jump to the section slide matching the clicked overview bullet
+  function handleSectionClick(sectionTitle: string) {
+    const idx = slides.findIndex(
+      s => s.type === 'section' && s.title.trim().toLowerCase() === sectionTitle.trim().toLowerCase()
+    )
+    if (idx !== -1) setCurrentIdx(idx)
+  }
 
   // Update a field on the current slide
   function updateSlide(field: keyof Slide, value: unknown) {
@@ -259,6 +271,7 @@ export default function PptEditorPage() {
                 slide={currentSlide}
                 slideNumber={currentIdx + 1}
                 totalSlides={slides.length}
+                onSectionClick={currentSlide.type === 'overview' ? handleSectionClick : undefined}
               />
 
               {/* Navigation */}

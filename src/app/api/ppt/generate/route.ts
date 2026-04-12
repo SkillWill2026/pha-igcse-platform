@@ -20,7 +20,6 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // 1. Fetch subtopic + topic info
     const [subtopicRes, subjectRes] = await Promise.all([
       supabase.from('subtopics').select('id, ref, title, topic_id').eq('id', subtopic_id).single(),
       supabase.from('subjects').select('id, name, code').eq('id', subject_id).single(),
@@ -38,48 +37,81 @@ export async function POST(request: NextRequest) {
       : { data: null }
     const topic = topicRes.data
 
-    // 2. Fetch approved questions for this subtopic
+    const { data: subSubtopics } = await supabase
+      .from('sub_subtopics')
+      .select('id, outcome, ext_num, core_num, tier')
+      .eq('subtopic_id', subtopic_id)
+      .order('sort_order', { ascending: true })
+      .limit(6)
+
+    const subs = subSubtopics ?? []
+
     const { data: questions } = await supabase
       .from('questions')
-      .select('id, content_text, marks, difficulty')
+      .select('id, content_text, marks, difficulty, sub_subtopic_id')
       .eq('subtopic_id', subtopic_id)
       .eq('status', 'approved')
       .order('difficulty', { ascending: true })
-      .limit(6)
 
-    // 3. RAG search — embed subtopic title and search databank
-    const searchQuery = `${subject.name} ${topic?.name ?? ''} ${subtopic.title}`
-    const [queryEmbedding] = await embedTexts([searchQuery])
+    const questionsBySub: Record<string, { id: string; content_text: string; marks: number }[]> = {}
+    for (const q of questions ?? []) {
+      const key = q.sub_subtopic_id ?? 'unassigned'
+      if (!questionsBySub[key]) questionsBySub[key] = []
+      questionsBySub[key].push(q)
+    }
 
-    const { data: chunks } = await supabase.rpc('search_databank_chunks', {
-      query_embedding: queryEmbedding,
-      match_count: 8,
-      similarity_threshold: 0.25,
-    })
+    const searchQueries = subs.length > 0
+      ? subs.map(s => `${subject.name} ${subtopic.title} ${s.outcome}`)
+      : [`${subject.name} ${topic?.name ?? ''} ${subtopic.title}`]
 
-    // 4. Check if databank has relevant content
-    if (!chunks || chunks.length === 0) {
+    const embeddings = await embedTexts(searchQueries)
+
+    const chunkResults = await Promise.all(
+      embeddings.map(embedding =>
+        supabase.rpc('search_databank_chunks', {
+          query_embedding: embedding,
+          match_count: 4,
+          similarity_threshold: 0.25,
+        })
+      )
+    )
+
+    const seenChunkIds = new Set<string>()
+    const allChunks: { content: string }[] = []
+    for (const res of chunkResults) {
+      for (const chunk of res.data ?? []) {
+        const key = chunk.content.slice(0, 50)
+        if (!seenChunkIds.has(key)) {
+          seenChunkIds.add(key)
+          allChunks.push(chunk)
+        }
+      }
+    }
+
+    if (allChunks.length === 0) {
       return NextResponse.json(
         { error: 'Data not available in Databank', code: 'NO_DATABANK_DATA' },
         { status: 422 }
       )
     }
 
-    const ragContext = chunks.map((c: { content: string }, i: number) => `[Source ${i + 1}]\n${c.content}`).join('\n\n')
-    const questionsContext = questions && questions.length > 0
-      ? questions.map((q, i) => `Q${i + 1} (${q.marks} mark${q.marks !== 1 ? 's' : ''}): ${q.content_text}`).join('\n')
-      : 'No approved questions available yet — create concept slides only.'
+    const ragContext = allChunks.map((c, i) => `[Source ${i + 1}]\n${c.content}`).join('\n\n')
 
-    const tutorNotesSection = tutor_notes
-      ? `\n\nTUTOR FEEDBACK TO INCORPORATE:\n${tutor_notes}`
-      : ''
+    const subsSection = subs.length > 0
+      ? subs.map((s, i) => {
+          const qs = questionsBySub[s.id] ?? questionsBySub['unassigned'] ?? []
+          const qText = qs.slice(0, 2).map((q, qi) => `  Q${qi + 1} (${q.marks}m): ${q.content_text}`).join('\n')
+          return `SUB-SUBTOPIC ${i + 1}: ${s.outcome}\n${qText || '  (no approved questions yet — concept slide only)'}`
+        }).join('\n\n')
+      : 'No sub-subtopics defined — generate general concept slides.'
 
-    // 5. Generate slides with Claude Sonnet
-    const systemPrompt = `You are an expert IGCSE ${subject.name} teacher creating clear, structured lesson slides for students.
-You MUST generate content ONLY from the provided databank sources. Do not invent content not present in the sources.
-Respond with a valid JSON array of slide objects only. No markdown, no explanation, no backticks.`
+    const tutorNotesSection = tutor_notes ? `\n\nTUTOR FEEDBACK:\n${tutor_notes}` : ''
 
-    const userPrompt = `Create a complete lesson slide deck for this subtopic:
+    const systemPrompt = `You are an expert IGCSE ${subject.name} teacher creating structured lesson slides.
+You MUST use content ONLY from the provided databank sources. Do not invent content.
+Respond with a valid JSON array of slide objects only. No markdown, no backticks.`
+
+    const userPrompt = `Create a complete lesson slide deck structured by sub-subtopics.
 
 SUBJECT: ${subject.name} (${subject.code})
 TOPIC: ${topic?.name ?? 'Unknown'}
@@ -88,29 +120,47 @@ SUBTOPIC: ${subtopic.title} (${subtopic.ref ?? ''})
 DATABANK SOURCES (use ONLY this content):
 ${ragContext}
 
-APPROVED EXAM QUESTIONS TO USE AS EXAMPLES:
-${questionsContext}
+SUB-SUBTOPICS WITH EXAM QUESTIONS:
+${subsSection}
 ${tutorNotesSection}
 
-Generate slides in this EXACT JSON structure — an array of slide objects:
+REQUIRED SLIDE STRUCTURE (in this exact order):
 
-Slide types and their required fields:
-1. TITLE slide (1 slide): { "id":"s1", "type":"title", "title":"subtopic name", "subtitle":"subject code + topic ref", "speaker_notes":"warm welcome, overview of what student will learn", "youchi_pose":"excited" }
-2. CONCEPT slides (1-2 slides): { "id":"s2", "type":"concept", "title":"clear heading", "bullets":["point 1","point 2","point 3"], "key_concept":"one essential rule or formula to remember", "speaker_notes":"detailed teacher explanation of each bullet for TTS narration, 3-5 sentences", "youchi_pose":"thinking" }
-3. QUESTION slide (one per approved question, max 4): { "id":"s3", "type":"question", "title":"Try This", "question_content":"full question text with marks", "speaker_notes":"encourage student to pause and attempt, hint without giving away answer", "youchi_pose":"waiting" }
-4. ANSWER slide (immediately after each question): { "id":"s4", "type":"answer", "title":"Solution", "answer_working":["Step 1: ...","Step 2: ..."], "answer_content":"final answer", "speaker_notes":"walk through each step clearly for TTS narration", "youchi_pose":"thumbs_up" }
-5. SUMMARY slide (1 slide): { "id":"sN", "type":"summary", "title":"Key Takeaways", "bullets":["takeaway 1","takeaway 2","takeaway 3"], "speaker_notes":"congratulate student, reinforce the 3 most important points", "youchi_pose":"laughing" }
+1. TITLE slide (1 slide):
+{ "id":"s1", "type":"title", "title":"${subtopic.title}", "subtitle":"${subject.code} · ${topic?.ref ?? ''} ${subtopic.ref ?? ''}", "speaker_notes":"Welcome narration. Explain what the student will learn across all sub-subtopics.", "youchi_pose":"excited" }
+
+2. OVERVIEW slide (1 slide — each bullet MUST exactly match the sub-subtopic outcome text used in section slides):
+{ "id":"s2", "type":"overview", "title":"In This Lesson", "bullets":["exact outcome text 1","exact outcome text 2","exact outcome text 3"], "speaker_notes":"Preview each learning outcome briefly.", "youchi_pose":"thinking" }
+
+3. For EACH sub-subtopic, in order:
+
+  a. SECTION divider:
+  { "id":"sX", "type":"section", "title":"[EXACT same text as the matching overview bullet]", "subtitle":"Part N of ${subs.length || 1}", "section_number":N, "speaker_notes":"Brief intro to this learning outcome.", "youchi_pose":"wink" }
+
+  b. CONCEPT slide:
+  { "id":"sX", "type":"concept", "title":"clear heading", "bullets":["key point 1","key point 2","key point 3"], "key_concept":"the essential rule or formula", "speaker_notes":"Full TTS narration 3-5 sentences from databank.", "youchi_pose":"thinking" }
+
+  c. QUESTION slide (only if question exists):
+  { "id":"sX", "type":"question", "title":"Try This", "question_content":"full question [N marks]", "speaker_notes":"Encourage student to attempt. Hint without revealing answer.", "youchi_pose":"waiting" }
+
+  d. ANSWER slide (immediately after question):
+  { "id":"sX", "type":"answer", "title":"Solution", "answer_working":["Step 1: ...","Step 2: ..."], "answer_content":"final answer", "speaker_notes":"Walk through each step for TTS.", "youchi_pose":"thumbs_up" }
+
+4. SUMMARY slide (1 slide):
+{ "id":"sN", "type":"summary", "title":"Key Takeaways", "bullets":["point 1","point 2","point 3"], "speaker_notes":"Congratulate student. Reinforce 3 most important points.", "youchi_pose":"laughing" }
+
+CRITICAL RULE: The overview bullet text and the section slide title for each sub-subtopic MUST be identical strings so the navigation links work correctly.
 
 RULES:
-- Speaker notes must be full sentences suitable for text-to-speech narration
-- Content must come ONLY from databank sources
-- Keep bullets concise (max 12 words each)
-- Question/answer pairs must be adjacent slides
-- Return ONLY the JSON array, nothing else`
+- Speaker notes full sentences for TTS
+- Content ONLY from databank
+- Bullets max 12 words
+- Question and Answer slides adjacent
+- Return ONLY the JSON array`
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
+      max_tokens: 6000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     })
@@ -127,7 +177,6 @@ RULES:
       return NextResponse.json({ error: 'Failed to parse AI-generated slides' }, { status: 500 })
     }
 
-    // 6. Save to ppt_decks
     const deckTitle = `${subtopic.title} — ${subject.code}`
     const { data: deck, error: insertErr } = await supabase
       .from('ppt_decks')
