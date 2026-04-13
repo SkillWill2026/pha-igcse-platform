@@ -475,15 +475,23 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       }
       if (!res.ok) throw new Error(data.error ?? 'Classification failed')
       if (data.subtopic_id) {
-        // Set topic and subtopic; pending sub-subtopic will be picked up by useEffect when data loads
-        if (data.topic_id) {
-          setAutoClassifiedTopicId(data.topic_id)
-          setEditTopicId(data.topic_id)
-        }
+        if (data.topic_id) setEditTopicId(data.topic_id)
+
         if (data.subtopic_id) {
-          pendingSubSubtopicId.current = data.sub_subtopic_id ?? null
-          setAutoClassifiedSubtopicId(data.subtopic_id)
-          setEditSubtopicId(data.subtopic_id)
+          // If editSubtopicId is already set to the same value (navigation timer already ran),
+          // React won't re-trigger the useEffect — so set sub-subtopic directly
+          if (editSubtopicId === data.subtopic_id) {
+            // Sub-subtopics already loaded — select directly
+            if (data.sub_subtopic_id) {
+              setEditSubSubtopicId(data.sub_subtopic_id)
+              setSelectedSubSubtopic(data.sub_subtopic_id)
+            }
+            pendingSubSubtopicId.current = null
+          } else {
+            // editSubtopicId is different — use ref-based cascade
+            pendingSubSubtopicId.current = data.sub_subtopic_id ?? null
+            setEditSubtopicId(data.subtopic_id)
+          }
         }
 
         // Show toast with both subtopic and sub-subtopic names
