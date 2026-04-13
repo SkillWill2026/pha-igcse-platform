@@ -19,48 +19,50 @@ RULE 0 — WORKSHEET FORMAT:
 If the document appears to be a math worksheet with equations grouped
 under question numbers (like "Question 1:", "Question 2:") but WITHOUT
 explicit instruction text, infer the instruction from context:
-- Equations in the form "y = [expression with other variables]" →
-  instruction is "Make y the subject of the formula:"
-- Equations in the form "x = [expression]" →
-  instruction is "Make x the subject of the formula:"
+- Equations in the form "y = [expression with other variables]" => instruction is "Make y the subject of the formula:"
+- Equations in the form "x = [expression]" => instruction is "Make x the subject of the formula:"
 - Still apply RULE 1: each lettered sub-part becomes a separate question
 - Include the inferred instruction in the content field
 
 RULE 1 — MULTI-PART QUESTIONS:
 When a question has lettered sub-parts like (a), (b), (c) or (i), (ii), (iii):
 - Create ONE separate question for EACH sub-part
-- The content of each question is ONLY the sub-part expression/text — NOT the parent instruction
-- Do NOT include the parent question number or instruction in the content
+- Include the PARENT QUESTION instruction at the start of each sub-part content
+- Format: "[Parent instruction]. [Sub-part text]"
+- Example: "The diagram shows triangle ABC. Calculate: (a) angle BAC"
 - Set part_label to the letter/roman numeral e.g. "a", "b", "c"
 - Set parent_question_ref to the parent question number e.g. "1", "2"
+- DIAGRAM-ONLY SUB-PARTS: When a sub-part has only a diagram with no text, still create a separate question. Use the parent instruction as content and append "[Diagram required - add image manually]". NEVER skip a sub-part because it has no text.
 
-RULE 2 — IMAGE-TAGGED QUESTIONS (e.g. angles, geometry worksheets):
-When questions are identified by grid tags like A1, A2, A3, B1, B2, C1, C2 etc:
+RULE 2 — IMAGE-TAGGED QUESTIONS:
+When questions are identified by grid tags like A1, A2, B1, B2 etc:
 - Create ONE separate question per tag
-- The content should be the tag + the instruction text
-- Add a note that the diagram must be added manually
-- Set parent_question_ref to the letter group e.g. "A", "B", "C"
-- Set part_label to the number e.g. "1", "2", "3"
+- Content = tag + instruction text + "[Diagram required - add image manually]"
+- Set parent_question_ref to the letter group e.g. "A", "B"
+- Set part_label to the number e.g. "1", "2"
 
 RULE 3 — LaTeX FORMATTING:
-- Wrap all mathematical expressions in LaTeX: inline $x^2$ or display $$\\frac{a}{b}$$
-- Convert fractions: "a/b" → $\\frac{a}{b}$
-- Convert powers: "x^2" → $x^2$, "y^3" → $y^3$
-- Convert roots: "√y" → $\\sqrt{y}$
-- Convert Greek letters: "π" → $\\pi$
+- Wrap all mathematical expressions in LaTeX: inline $x^2$ or display $$\frac{a}{b}$$
+- Convert fractions: "a/b" => $\frac{a}{b}$
+- Convert powers: "x^2" => $x^2$
+- Convert roots: "sqrt(y)" => $\sqrt{y}$
+- Convert Greek letters: "pi" => $\pi$
 
 RULE 4 — WHAT TO SKIP:
 - Skip page headers, footers, copyright notices, website URLs, QR code text
 - Skip answer sections and worked examples
-- Skip instructions that are not questions (e.g. "Click here", "Scan here")
-- Skip blank lines and decorative text
+- Skip instructions that are not questions
 
-RULE 5 — OUTPUT FORMAT:
+RULE 5 — VISUAL CONTENT RECOGNITION:
+These visual elements indicate diagram-based questions. Always extract as separate questions with "[Diagram required - add image manually]":
+GRAPHS: linear graphs, quadratic graphs, cubic graphs, bar charts, pie charts, histograms, cumulative frequency, scatter graphs, frequency polygons
+GEOMETRY: triangles, circles, angles, polygons, constructions, loci, perpendicular bisector, bearings, nets of 3D shapes, plans and elevations
+TRANSFORMATIONS: reflection, rotation, translation, enlargement, vectors, coordinate grids
+PROBABILITY: tree diagrams, Venn diagrams, sample space diagrams
+
+RULE 6 — OUTPUT FORMAT:
 Return ONLY a valid JSON array. No markdown, no code fences, no explanation.
-Each object must have:
-content (string), part_label (string|null), parent_question_ref (string|null),
-question_type ("mcq"|"short_answer"|"structured"|"extended"),
-marks (integer 1-10), difficulty (integer 1-5)`;
+Each object must have: content (string), part_label (string|null), parent_question_ref (string|null), question_type ("mcq"|"short_answer"|"structured"|"extended"), marks (integer 1-10), difficulty (integer 1-5)`;
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req: Request) => {
