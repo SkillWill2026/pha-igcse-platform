@@ -150,13 +150,16 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       .then((res) => res.json())
       .then((data) => {
         setSubSubtopics(data)
-        if (currentQuestion?.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
+        // Auto-select sub-subtopic from editSubSubtopicId (auto-classify) or currentQuestion
+        if (editSubSubtopicId && data.some((s: SubSubtopic) => s.id === editSubSubtopicId)) {
+          setSelectedSubSubtopic(editSubSubtopicId)
+        } else if (currentQuestion?.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
           setSelectedSubSubtopic(currentQuestion.sub_subtopic_id)
         }
       })
       .catch((err) => console.error('Failed to fetch sub-subtopics:', err))
       .finally(() => setLoadingSubSubtopics(false))
-  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id, editSubtopicId])
+  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id, editSubtopicId, editSubSubtopicId])
 
   // Load last used topic from localStorage when entering edit mode
   useEffect(() => {
@@ -449,19 +452,38 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         topic_id?: string
         sub_subtopic_id?: string | null
         subtopic_title?: string
+        sub_subtopic_title?: string | null
         error?: string
       }
       if (!res.ok) throw new Error(data.error ?? 'Classification failed')
       if (data.subtopic_id) {
-        setEditSubtopicId(data.subtopic_id)
-        if (data.sub_subtopic_id) setEditSubSubtopicId(data.sub_subtopic_id)
-        // Use topic_id directly from API response — no second fetch needed
+        // CASCADE: Set topic first, then subtopic, then sub-subtopic with delays
+        // to allow useEffect dependencies to load data between each step
+
+        // Step 1: Set topic
         if (data.topic_id) {
           setAutoClassifiedTopicId(data.topic_id)
           setEditTopicId(data.topic_id)
         }
-        setAutoClassifiedSubtopicId(data.subtopic_id)
-        toast.success(`Auto-classified: ${data.subtopic_title ?? data.subtopic_id}`)
+
+        // Step 2: Wait 150ms for subtopics to load, then set subtopic
+        setTimeout(() => {
+          setEditSubtopicId(data.subtopic_id)
+          setAutoClassifiedSubtopicId(data.subtopic_id)
+
+          // Step 3: Wait another 150ms for sub-subtopics to load, then set sub-subtopic
+          if (data.sub_subtopic_id) {
+            setTimeout(() => {
+              setEditSubSubtopicId(data.sub_subtopic_id)
+            }, 150)
+          }
+        }, 150)
+
+        // Show toast with both subtopic and sub-subtopic names
+        const toastMsg = data.sub_subtopic_title
+          ? `Auto-classified: ${data.subtopic_title} → ${data.sub_subtopic_title}`
+          : `Auto-classified: ${data.subtopic_title ?? data.subtopic_id}`
+        toast.success(toastMsg)
       } else {
         toast.warning('Could not classify — no matching subtopic found')
       }
