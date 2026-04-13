@@ -6,6 +6,32 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// Rule-based fallback matcher for sub-subtopic when Claude returns null
+function ruleBasedSubSubtopic(questionText: string, subSubtopics: {id: string, outcome: string}[]): string | null {
+  const text = questionText.toLowerCase()
+
+  const rules = [
+    { keywords: ['draw', 'plot', 'sketch', 'construct', 'grid', 'axes'], outcomeContains: ['drawing', 'draw', 'plot', 'sketch', 'construct'] },
+    { keywords: ['solve', 'solution', 'graphically', 'intersection'], outcomeContains: ['solving', 'graphically'] },
+    { keywords: ['table of values', 'complete the table', 'fill in'], outcomeContains: ['drawing', 'table'] },
+    { keywords: ['reciprocal', '1/x'], outcomeContains: ['reciprocal'] },
+    { keywords: ['exponential', 'growth', 'decay'], outcomeContains: ['exponential'] },
+    { keywords: ['quadratic', 'x^2', 'x²', 'parabola'], outcomeContains: ['quadratic'] },
+    { keywords: ['linear', 'straight line', 'gradient', 'y=mx'], outcomeContains: ['linear'] },
+  ]
+
+  for (const rule of rules) {
+    const questionMatches = rule.keywords.some(kw => text.includes(kw))
+    if (questionMatches) {
+      const match = subSubtopics.find(ss =>
+        rule.outcomeContains.some(oc => ss.outcome.toLowerCase().includes(oc))
+      )
+      if (match) return match.id
+    }
+  }
+  return null
+}
+
 export async function classifyQuestion(questionId: string, restrictToTopicId?: string | null): Promise<void> {
   const supabase = createAdminClient()
 
@@ -129,6 +155,16 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
       } else {
         subSubtopicId = classification.sub_subtopic_id
       }
+    }
+  }
+
+  // Apply rule-based fallback if Claude returned null
+  if (!subSubtopicId && matchedSubtopic) {
+    const subSubsForSubtopic = allSubSubtopics.filter(ss => ss.subtopic_id === matchedSubtopic.id)
+    const fallback = ruleBasedSubSubtopic(question.content_text, subSubsForSubtopic)
+    if (fallback) {
+      console.log(`[classify-question] Used rule-based fallback for sub-subtopic: ${fallback}`)
+      subSubtopicId = fallback
     }
   }
 
