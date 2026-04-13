@@ -69,6 +69,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [editingAnswer, setEditingAnswer] = useState(false)
   const [editedAnswerContent, setEditedAnswerContent] = useState('')
   const [editAnswerSaving, setEditAnswerSaving] = useState(false)
+  const [regeneratingAnswer, setRegeneratingAnswer] = useState(false)
 
   const remaining = drafts.length - currentIdx - 1
 
@@ -498,6 +499,42 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditedAnswerContent('')
   }
 
+  async function handleRegenerateAnswer() {
+    if (!currentQuestion) return
+    setRegeneratingAnswer(true)
+    try {
+      // Get question images (to send to Claude vision)
+      const imageRes = await fetch(`/api/question-images?question_id=${currentQuestion.id}`)
+      const images = await imageRes.json()
+      const imageUrls = images.map((img: any) => img.display_url).filter(Boolean)
+
+      const res = await fetch('/api/generate-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question_id: currentQuestion.id,
+          force_regenerate: true,
+          image_urls: imageUrls,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Failed to regenerate')
+
+      // Update the current question with new answer
+      setCurrentQuestion((q) => (q ? { ...q, answer: data.answer } : q))
+      setDrafts((prev) =>
+        prev.map((q) =>
+          q.id === currentQuestion.id ? { ...q, answer: data.answer } : q
+        )
+      )
+      toast.success('Answer regenerated')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Regeneration failed')
+    } finally {
+      setRegeneratingAnswer(false)
+    }
+  }
+
   async function handleSaveEditAnswer() {
     if (!currentQuestion?.answer || editAnswerSaving || !editedAnswerContent.trim()) return
     setEditAnswerSaving(true)
@@ -887,13 +924,23 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
               <div className="flex items-center justify-between">
                 <div className="text-sm font-semibold">Answer</div>
                 {!editingAnswer && (
-                  <button
-                    onClick={handleStartEditAnswer}
-                    disabled={editAnswerSaving}
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-muted transition-colors disabled:opacity-60"
-                  >
-                    ✏ Edit Answer
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleRegenerateAnswer}
+                      disabled={regeneratingAnswer}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors disabled:opacity-60"
+                    >
+                      {regeneratingAnswer ? <Loader2 className="h-3 w-3 animate-spin" /> : '🔄'}
+                      {regeneratingAnswer ? 'Regenerating...' : 'Regenerate'}
+                    </button>
+                    <button
+                      onClick={handleStartEditAnswer}
+                      disabled={editAnswerSaving}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md hover:bg-muted transition-colors disabled:opacity-60"
+                    >
+                      ✏ Edit Answer
+                    </button>
+                  </div>
                 )}
               </div>
               {editingAnswer ? (
@@ -944,20 +991,36 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
                   ⚡ Generating answers in background...
                 </p>
               )}
-              <button
-                onClick={handleGenerateAnswer}
-                disabled={generatingAnswer}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {generatingAnswer ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  '✨ Generate Answer'
-                )}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleGenerateAnswer}
+                  disabled={generatingAnswer}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {generatingAnswer ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    '✨ Generate Answer'
+                  )}
+                </button>
+                <button
+                  onClick={handleRegenerateAnswer}
+                  disabled={regeneratingAnswer}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-orange-100 text-orange-700 hover:bg-orange-200 disabled:opacity-50"
+                >
+                  {regeneratingAnswer ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Regenerating...
+                    </>
+                  ) : (
+                    '🔄 Regenerate'
+                  )}
+                </button>
+              </div>
             </div>
           )}
 

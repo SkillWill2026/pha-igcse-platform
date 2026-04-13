@@ -11,7 +11,7 @@ const anthropic = new Anthropic({
 
 export async function POST(request: Request) {
   try {
-    const { question_id } = await request.json()
+    const { question_id, image_urls, force_regenerate } = await request.json()
     if (!question_id) {
       return NextResponse.json({ error: 'question_id is required' }, { status: 400 })
     }
@@ -113,18 +113,16 @@ export async function POST(request: Request) {
     const subtopicTitle = subtopic?.title ?? ''
     const hasRAG = ragContext.length > 0
 
-    const systemPrompt = `You are an expert Cambridge IGCSE Mathematics tutor (syllabus 0580).
-Your job is to write a complete, step-by-step model answer for exam questions.
-
-FORMATTING RULES:
-- Use **Working:** for method steps and **Answer:** for the final answer
-- Use LaTeX for all mathematics: inline $x^2$ and display $$\\frac{a}{b}$$
-- Be precise — every mark should be earnable from your answer
-- Match the mark allocation exactly (${question.marks ?? 1} mark${(question.marks ?? 1) !== 1 ? 's' : ''})
-
-IMPORTANT: Never fabricate mark scheme steps. If unsure, show the most rigorous mathematical method.
-
-CRITICAL: Never add any text after the Answer field. Do not add Notes, explanations, caveats, or observations after stating the Answer. Your response must end immediately after the Answer value. No exceptions.`
+    const systemPrompt = `You are an expert Cambridge IGCSE Mathematics teacher creating model answers.
+CRITICAL RULES:
+- Use ONLY the specific data, numbers, and values from the question — never invent or use generic examples
+- If a table is provided, use the exact values from that table in your calculations
+- If a diagram is shown, describe the specific answer for that exact diagram
+- Show full working step by step
+- Use LaTeX for all mathematical expressions: $x^2$, $\\frac{a}{b}$, etc.
+- Format tables using markdown pipe syntax
+- For drawing questions: specify exactly what to draw with the exact values from the question
+- Never give a generic method explanation — always solve the specific question given`
 
     const userPrompt = hasRAG
       ? `Topic: ${topicRef} ${topicName}${subtopicTitle ? ` — ${subtopicTitle}` : ''}
@@ -145,12 +143,43 @@ ${question.content_text}
 
 Write a complete model answer for this question.`
 
-    // 4. Call Claude
+    // 4. Convert image URLs to base64 if provided
+    let imageContent: Array<{ type: 'image'; source: { type: 'base64'; media_type: 'image/png'; data: string } }> = []
+    if (image_urls && Array.isArray(image_urls)) {
+      for (const url of image_urls) {
+        try {
+          let base64Data: string
+          if (url.startsWith('data:image')) {
+            // Already base64
+            base64Data = url.split(',')[1]
+          } else {
+            // Fetch from URL and convert to base64
+            const imgRes = await fetch(url)
+            const buffer = await imgRes.arrayBuffer()
+            base64Data = Buffer.from(buffer).toString('base64')
+          }
+          imageContent.push({
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/png', data: base64Data },
+          })
+        } catch (imgErr) {
+          console.warn('[generate-answer] Failed to process image:', url, imgErr)
+        }
+      }
+    }
+
+    // 5. Build message content with images + text
+    const messageContent: Array<{ type: 'image'; source: { type: 'base64'; media_type: 'image/png'; data: string } } | { type: 'text'; text: string }> = [
+      ...imageContent,
+      { type: 'text', text: userPrompt },
+    ]
+
+    // 6. Call Claude Sonnet with vision
     const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
       system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      messages: [{ role: 'user', content: messageContent }],
     })
 
     const answerContent = message.content[0].type === 'text'
@@ -172,29 +201,20 @@ Write a complete model answer for this question.`
     // Use answer content as-is, no source citations appended
     const finalContent = answerContent
 
-    // 6. Upsert the answer
-    const { data: existingAnswer } = await supabase
-      .from('answers')
-      .select('id')
-      .eq('question_id', question_id)
-      .maybeSingle()
-
+    // 7. Upsert the answer
     let answer
-    if (existingAnswer) {
-      const { data, error } = await supabase
+    if (force_regenerate) {
+      // Delete existing answer and insert new one
+      const { data: existingAnswer } = await supabase
         .from('answers')
-        .update({
-          content: finalContent,
-          confidence_score: confidenceScore,
-          status: 'draft',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingAnswer.id)
-        .select()
-        .single()
-      if (error) throw error
-      answer = data
-    } else {
+        .select('id')
+        .eq('question_id', question_id)
+        .maybeSingle()
+
+      if (existingAnswer) {
+        await supabase.from('answers').delete().eq('id', existingAnswer.id)
+      }
+
       const { data, error } = await supabase
         .from('answers')
         .insert({
@@ -208,6 +228,43 @@ Write a complete model answer for this question.`
         .single()
       if (error) throw error
       answer = data
+    } else {
+      // Normal flow: update if exists, insert if not
+      const { data: existingAnswer } = await supabase
+        .from('answers')
+        .select('id')
+        .eq('question_id', question_id)
+        .maybeSingle()
+
+      if (existingAnswer) {
+        const { data, error } = await supabase
+          .from('answers')
+          .update({
+            content: finalContent,
+            confidence_score: confidenceScore,
+            status: 'draft',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingAnswer.id)
+          .select()
+          .single()
+        if (error) throw error
+        answer = data
+      } else {
+        const { data, error } = await supabase
+          .from('answers')
+          .insert({
+            question_id,
+            content: finalContent,
+            confidence_score: confidenceScore,
+            status: 'draft',
+            ai_generated: true,
+          })
+          .select()
+          .single()
+        if (error) throw error
+        answer = data
+      }
     }
 
     return NextResponse.json({
