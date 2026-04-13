@@ -71,3 +71,31 @@
     text-wrap: balance;
   }
 }
+
+/* Markdown table styles */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: center;
+}
+
+th {
+  background-color: #f5f5f5;
+  font-weight: 600;
+}
+
+.dark th {
+  background-color: #2d2d2d;
+  color: #e5e5e5;
+}
+
+.dark td {
+  border-color: #444;
+  color: #e5e5e5;
+}

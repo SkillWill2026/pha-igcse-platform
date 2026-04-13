@@ -33,7 +33,15 @@
       "Bash(/c/Users/jayou/AppData/Local/npm-cache/_npx/aa8e5c70f9d8d161/node_modules/.bin/supabase --version)",
       "Bash(/c/Users/jayou/AppData/Local/npm-cache/_npx/aa8e5c70f9d8d161/node_modules/.bin/supabase link:*)",
       "Read(//mnt/user-data/uploads/**)",
-      "Bash(find /mnt -name \"SkillWill*.svg\")"
+      "Bash(find /mnt -name \"SkillWill*.svg\")",
+      "Bash(apt-get install:*)",
+      "Bash(PGPASSWORD='Aiducation@2025' psql -h db.zwpptfqccgglqrznrrpd.supabase.co -U postgres -d postgres -c \"SELECT COUNT\\(*\\) FROM information_schema.tables WHERE table_schema='public';\")",
+      "Bash(apt-get update:*)",
+      "Bash(node migrate.js)",
+      "Bash(node enable-pgvector.js)",
+      "Bash(node check-embeddings.js)",
+      "Bash(node enable-pgvector-final.js)",
+      "Bash(grep -n \"remarkPlugins={\" /c/Users/jayou/Desktop/pha-igcse-platform/src/app/admin/answers/[id]/review-client.tsx)"
     ]
   }
 }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
+import remarkGfm from 'remark-gfm'
 import rehypeKatex from 'rehype-katex'
 import { ArrowLeft, ArrowRight, Check, Loader2, X, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -924,7 +925,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
               ) : (
                 <div className="prose prose-sm max-w-none leading-relaxed">
                   <ReactMarkdown
-                    remarkPlugins={[remarkMath]}
+                    remarkPlugins={[remarkMath, remarkGfm]}
                     rehypePlugins={[rehypeKatex]}
                   >
                     {currentQuestion.answer.content ?? ''}
