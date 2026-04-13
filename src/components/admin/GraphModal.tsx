@@ -264,7 +264,7 @@ export default function GraphModal({
       try {
         // Load the Desmos script
         const script = document.createElement('script')
-        script.src = 'https://www.desmos.com/api/v1.7/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6'
+        script.src = 'https://www.desmos.com/api/v1.11/calculator.js?apiKey=bfca35ada33b414caddb2ea45eb84680'
         script.async = true
 
         script.onload = () => {
@@ -447,23 +447,28 @@ export default function GraphModal({
         }
 
         try {
-          const rawScreenshot = await desmosCalculatorRef.current.screenshot({
-            width: 600,
-            height: 400,
+          // Use asyncScreenshot for higher quality with watermarks
+          await new Promise<void>((resolve, reject) => {
+            desmosCalculatorRef.current.asyncScreenshot({ width: 800, height: 600, targetPixelRatio: 2 }, (dataUrl: string) => {
+              // Create canvas for watermarking
+              const tempCanvas = document.createElement('canvas')
+              tempCanvas.width = 800
+              tempCanvas.height = 600
+              const tempCtx = tempCanvas.getContext('2d')!
+
+              // Draw screenshot onto canvas
+              const screenshotImg = new Image()
+              screenshotImg.onload = async () => {
+                tempCtx.drawImage(screenshotImg, 0, 0)
+                // Apply watermarks
+                await applyWatermarks(tempCanvas)
+                imageData = tempCanvas.toDataURL('image/png')
+                resolve()
+              }
+              screenshotImg.onerror = () => reject(new Error('Failed to load screenshot'))
+              screenshotImg.src = dataUrl
+            })
           })
-          // Draw Desmos screenshot onto a temp canvas, apply watermarks, then export
-          const tempCanvas = document.createElement('canvas')
-          tempCanvas.width = 600
-          tempCanvas.height = 400
-          const tempCtx = tempCanvas.getContext('2d')!
-          await new Promise<void>((resolve) => {
-            const desmosImg = new Image()
-            desmosImg.onload = () => { tempCtx.drawImage(desmosImg, 0, 0); resolve() }
-            desmosImg.onerror = () => resolve()
-            desmosImg.src = rawScreenshot
-          })
-          await applyWatermarks(tempCanvas)
-          imageData = tempCanvas.toDataURL('image/png')
         } catch (err) {
           setSaveError(`Screenshot failed: ${err instanceof Error ? err.message : String(err)}`)
           setSaving(false)
@@ -617,7 +622,7 @@ export default function GraphModal({
               )}
               <div
                 ref={desmosRef}
-                style={{ height: '380px', width: '100%' }}
+                style={{ height: '500px', width: '100%' }}
                 className="rounded-md border"
               />
             </div>
