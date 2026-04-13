@@ -15,9 +15,9 @@ async function callClaudeWithRetry(client: any, params: any, maxRetries = 3): Pr
     try {
       return await client.messages.create(params)
     } catch (err: any) {
-      if (err?.error?.type === 'overloaded_error' && attempt < maxRetries) {
+      if ((err?.error?.type === 'overloaded_error' || err?.status === 529) && attempt < maxRetries) {
         console.log(`[generate-answer] Claude overloaded, retry ${attempt}/${maxRetries}`)
-        await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+        await new Promise(resolve => setTimeout(resolve, 3000 * attempt))
         continue
       }
       throw err
@@ -192,7 +192,7 @@ Write a complete model answer for this question.`
 
     // 6. Call Claude Sonnet with vision (with retry on overload)
     const message = await callClaudeWithRetry(anthropic, {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20251001',
       max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: 'user', content: messageContent }],
