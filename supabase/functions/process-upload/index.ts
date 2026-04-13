@@ -123,12 +123,7 @@ async function processUpload(payload: {
       }
 
       const pdfBytes = new Uint8Array(await fileData.arrayBuffer());
-      // Convert to base64 in chunks to avoid stack overflow on large files
-      let base64 = "";
-      const chunkSize = 8192;
-      for (let i = 0; i < pdfBytes.length; i += chunkSize) {
-        base64 += btoa(String.fromCharCode(...pdfBytes.slice(i, i + chunkSize)));
-      }
+      const base64 = btoa(pdfBytes.reduce((data, byte) => data + String.fromCharCode(byte), ''));
 
       const ocrRes = await fetch("https://api.mistral.ai/v1/ocr", {
         method: "POST",
@@ -147,7 +142,8 @@ async function processUpload(payload: {
 
       if (!ocrRes.ok) {
         const errText = await ocrRes.text();
-        throw new Error(`Mistral OCR failed: ${ocrRes.status} ${errText.slice(0, 200)}`);
+        console.error("[process-upload] Mistral error:", errText);
+        throw new Error(`Mistral OCR failed: ${ocrRes.status} ${errText.slice(0, 300)}`);
       }
 
       const ocrData = await ocrRes.json();
