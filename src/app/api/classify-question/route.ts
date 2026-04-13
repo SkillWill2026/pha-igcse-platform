@@ -18,6 +18,7 @@ function ruleBasedSubSubtopic(questionText: string, subSubtopics: {id: string, o
     { keywords: ['exponential', 'growth', 'decay'], outcomeContains: ['exponential'] },
     { keywords: ['quadratic', 'x^2', 'x²', 'parabola'], outcomeContains: ['quadratic'] },
     { keywords: ['linear', 'straight line', 'gradient', 'y=mx'], outcomeContains: ['linear'] },
+    { keywords: ['area', 'perimeter', 'compound', 'shape', 'rectangle', 'triangle', 'circle', 'trapezium'], outcomeContains: ['area', 'perimeter'] },
   ]
 
   for (const rule of rules) {

@@ -470,6 +470,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           setEditTopicId(data.topic_id)
         }
         setAutoClassifiedSubtopicId(data.subtopic_id)
+        // Open sub-subtopic dropdown automatically so user can pick if none auto-selected
+        setSubSubtopicOpen(true)
         toast.success(`Auto-classified: ${data.subtopic_title ?? data.subtopic_id}`)
         if (data.sub_subtopic_title) setSubSubtopicSearch(data.sub_subtopic_title)
       } else {
