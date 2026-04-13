@@ -6,48 +6,6 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// Fuzzy match helper: try exact match, then substring, then word-based
-function fuzzyMatchSubSubtopic(
-  claudeResponse: string,
-  options: Array<{ id: string; title: string }>
-): string | null {
-  const normalize = (s: string) => s.toLowerCase().trim()
-  const claudeNorm = normalize(claudeResponse)
-
-  // 1. Exact match (case-insensitive)
-  const exact = options.find(opt => normalize(opt.title) === claudeNorm)
-  if (exact) return exact.id
-
-  // 2. Substring match (either direction)
-  const substring = options.find(opt => {
-    const optNorm = normalize(opt.title)
-    return claudeNorm.includes(optNorm) || optNorm.includes(claudeNorm)
-  })
-  if (substring) return substring.id
-
-  // 3. Word-based matching (ignore colons, punctuation, match on significant words)
-  const getWords = (s: string) =>
-    normalize(s)
-      .replace(/[:\-,\.]/g, ' ')
-      .split(/\s+/)
-      .filter(w => w.length > 2)
-
-  const claudeWords = getWords(claudeResponse)
-  const wordMatches = options.map(opt => {
-    const optWords = getWords(opt.title)
-    const common = claudeWords.filter(w => optWords.includes(w)).length
-    const score = common / Math.max(claudeWords.length, optWords.length)
-    return { id: opt.id, score }
-  })
-
-  const bestMatch = wordMatches.reduce((best, curr) =>
-    curr.score > best.score ? curr : best,
-    { id: null, score: 0 }
-  )
-
-  return bestMatch.score > 0.5 ? bestMatch.id : null
-}
-
 export async function classifyQuestion(questionId: string, restrictToTopicId?: string | null): Promise<void> {
   const supabase = createAdminClient()
 
@@ -79,15 +37,15 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     (topicsRes.data ?? []).map(t => [t.id, t])
   )
 
-  // Build classification prompt with subtopics
+  // Build classification prompt with subtopics and their UUIDs
   const subtopicList = subtopics
     .map(s => {
       const topic = topicsMap[s.topic_id]
       const subSubs = allSubSubtopics.filter(ss => ss.subtopic_id === s.id)
-      const subSubList = subSubs.length > 0
-        ? '\n    Sub-subtopics: ' + subSubs.map(ss => `"${ss.title}"`).join(', ')
-        : '\n    Sub-subtopics: none'
-      return `ID:${s.id} | ${topic?.ref ?? ''} – ${s.title}${subSubList}`
+      const subSubLines = subSubs.length > 0
+        ? '\n  Sub-subtopics:\n' + subSubs.map(ss => `    - ID:${ss.id} | ${ss.outcome}`).join('\n')
+        : '\n  Sub-subtopics: none'
+      return `ID:${s.id} | ${topic?.ref ?? ''} – ${s.title}${subSubLines}`
     })
     .join('\n')
 
@@ -95,11 +53,12 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 512,
     system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert.
-Given a question, identify the most appropriate subtopic from the provided list.
-Each subtopic has a list of sub-subtopics — pick the most specific one that matches.
-Respond ONLY with valid JSON: {"subtopic_id": "exact-uuid-from-list", "sub_subtopic_title": "exact-title-from-list-or-null"}
-The subtopic_id MUST be one of the UUIDs from the AVAILABLE SUBTOPICS list. Do not invent UUIDs.
-The sub_subtopic_title MUST match exactly one of the listed sub-subtopic titles, or null if none match.`,
+Given a question, identify the most appropriate subtopic and sub-subtopic from the provided lists.
+Respond ONLY with valid JSON: {"subtopic_id": "exact-uuid-from-list", "sub_subtopic_id": "exact-uuid-from-list-or-null"}
+RULES:
+- subtopic_id MUST be one of the UUIDs from AVAILABLE SUBTOPICS. Never invent a UUID.
+- sub_subtopic_id MUST be one of the UUIDs listed under that subtopic, or null if none match.
+- Return ONLY the JSON object. No explanation, no markdown.`,
     messages: [{
       role: 'user',
       content: `QUESTION: ${question.content_text}
@@ -108,9 +67,9 @@ AVAILABLE SUBTOPICS (topic: ${effectiveTopicId}):
 ${subtopicList}
 
 Which subtopic_id best matches this question?
-If you identify a specific sub-subtopic within that subtopic, provide its title exactly as it appears.
-Otherwise return sub_subtopic_title as null.
-Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_title": "..." or null}`
+If you identify a specific sub-subtopic within that subtopic, provide its UUID from the list.
+Otherwise return sub_subtopic_id as null.
+Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
     }]
   })
 
@@ -118,7 +77,7 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_title": "..." or null}`
     ? message.content[0].text.trim()
     : '{}'
 
-  let classification: { subtopic_id?: string; sub_subtopic_title?: string | null }
+  let classification: { subtopic_id?: string; sub_subtopic_id?: string | null }
   try {
     // Strip markdown code fences if Claude wrapped the JSON
     const cleaned = responseText
@@ -140,31 +99,34 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_title": "..." or null}`
     return
   }
 
-  // Find the topic_id for the matched subtopic
+  // Validate that subtopic_id exists in the fetched subtopics
   const matchedSubtopic = subtopics.find(s => s.id === classification.subtopic_id)
-  const newTopicId = matchedSubtopic?.topic_id ?? question.topic_id
+  if (!matchedSubtopic) {
+    console.log(`[classify-question] Claude returned invalid subtopic_id: ${classification.subtopic_id}`)
+    return
+  }
 
-  // Try to match sub-subtopic if Claude provided one
+  const newTopicId = matchedSubtopic.topic_id
+
+  // Validate and use sub_subtopic_id if provided
   let subSubtopicId: string | null = null
-  if (classification.sub_subtopic_title && matchedSubtopic) {
-    const subSubtopicsForSubtopic = allSubSubtopics.filter(
-      ss => ss.subtopic_id === matchedSubtopic.id
-    )
-
-    if (subSubtopicsForSubtopic.length > 0) {
-      console.log(`[classify-question] Attempting to match sub-subtopic for Q:${questionId}`)
-      console.log(`  Claude returned: "${classification.sub_subtopic_title}"`)
-      console.log(`  Available options:`, subSubtopicsForSubtopic.map(ss => ss.title))
-
-      subSubtopicId = fuzzyMatchSubSubtopic(
-        classification.sub_subtopic_title,
-        subSubtopicsForSubtopic
+  if (classification.sub_subtopic_id) {
+    // Validate that sub_subtopic_id is a proper UUID format
+    if (!uuidRegex.test(classification.sub_subtopic_id)) {
+      console.log(`[classify-question] Claude returned invalid sub_subtopic_id format: ${classification.sub_subtopic_id}`)
+      // Set to null instead of failing
+      subSubtopicId = null
+    } else {
+      // Validate that sub_subtopic_id exists in the fetched sub-subtopics for this subtopic
+      const subSubtopicExists = allSubSubtopics.some(
+        ss => ss.id === classification.sub_subtopic_id && ss.subtopic_id === matchedSubtopic.id
       )
-
-      if (subSubtopicId) {
-        console.log(`  ✓ Matched to: ${subSubtopicsForSubtopic.find(ss => ss.id === subSubtopicId)?.title}`)
+      if (!subSubtopicExists) {
+        console.log(`[classify-question] Claude returned non-existent sub_subtopic_id: ${classification.sub_subtopic_id}`)
+        // Set to null instead of failing
+        subSubtopicId = null
       } else {
-        console.log(`  ✗ No match found using fuzzy matching`)
+        subSubtopicId = classification.sub_subtopic_id
       }
     }
   }
