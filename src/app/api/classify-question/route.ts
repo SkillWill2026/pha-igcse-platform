@@ -53,7 +53,7 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
   // Fetch all subtopics with their topics, and ALL sub-subtopics
   const [subtopicsRes, allSubSubtopicsRes, topicsRes] = await Promise.all([
     supabase.from('subtopics').select('id, title, topic_id').eq('topic_id', effectiveTopicId).order('sort_order'),
-    supabase.from('sub_subtopics').select('id, title, subtopic_id').order('sort_order'),
+    supabase.from('sub_subtopics').select('id, outcome, subtopic_id').order('sort_order'),
     supabase.from('topics').select('id, name, ref'),
   ])
 
