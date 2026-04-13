@@ -108,12 +108,16 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   // Pre-populate edit state from new question's existing classification to trigger cascade
   useEffect(() => {
     if (!currentQuestion) return
+    console.log('[CASCADE] Question changed to:', currentQuestion?.id)
     // Always reset first
     setEditTopicId(null)
     setEditSubtopicId(null)
     setEditSubSubtopicId(null)
     // Then pre-populate from question's existing classification after reset renders
     const timer = setTimeout(() => {
+      console.log('[CASCADE] Setting topicId:', currentQuestion.topic_id)
+      console.log('[CASCADE] Setting subtopicId:', currentQuestion.subtopic_id)
+      console.log('[CASCADE] Setting subSubtopicId:', currentQuestion.sub_subtopic_id)
       if (currentQuestion.topic_id) setEditTopicId(currentQuestion.topic_id)
       if (currentQuestion.subtopic_id) setEditSubtopicId(currentQuestion.subtopic_id)
       if (currentQuestion.sub_subtopic_id) setEditSubSubtopicId(currentQuestion.sub_subtopic_id)
@@ -147,6 +151,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   useEffect(() => {
     // Use editSubtopicId when in edit/auto-classify mode, otherwise use question's saved subtopic
     const activeSubtopicId = editSubtopicId || currentQuestion?.subtopic_id
+    console.log('[CASCADE] Sub-subtopics useEffect fired, editSubtopicId:', editSubtopicId)
     if (!activeSubtopicId) {
       setSubSubtopics([])
       setSelectedSubSubtopic(null)
@@ -159,6 +164,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     fetch(`/api/sub-subtopics?subtopic_id=${activeSubtopicId}`)
       .then((res) => res.json())
       .then((data) => {
+        console.log('[CASCADE] Sub-subtopics loaded:', data.length, 'looking for:', editSubSubtopicId)
         setSubSubtopics(data)
         // Auto-select sub-subtopic from editSubSubtopicId (auto-classify) or currentQuestion
         if (editSubSubtopicId && data.some((s: SubSubtopic) => s.id === editSubSubtopicId)) {
