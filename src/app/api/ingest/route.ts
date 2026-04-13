@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { createServerClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -58,6 +59,10 @@ export async function POST(request: NextRequest) {
       textContent = result.value
     }
 
+    // Get authenticated user for created_by attribution
+    const serverClient = createServerClient()
+    const { data: { user: authUser } } = await serverClient.auth.getUser()
+
     const supabase = createAdminClient()
 
     // ── Create or reuse batch record ────────────────────────────────────────────
@@ -73,6 +78,7 @@ export async function POST(request: NextRequest) {
           sub_subtopic_id: null,
           total_files: 1,
           status: 'processing',
+          created_by: authUser?.id ?? null,
         })
         .select('id')
         .single()
