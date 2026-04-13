@@ -21,7 +21,7 @@ export default function GraphModal({
   imageType,
   prefillText = '',
 }: GraphModalProps) {
-  const [activeTab, setActiveTab] = useState<'plotter' | 'desmos'>('plotter')
+  const [activeTab, setActiveTab] = useState<'plotter' | 'desmos' | 'geometry' | '3d'>('plotter')
   const [expression, setExpression] = useState('')
   const [xMin, setXMin] = useState(-10)
   const [xMax, setXMax] = useState(10)
@@ -34,6 +34,10 @@ export default function GraphModal({
   const desmosRef = useRef<HTMLDivElement>(null)
   const desmosCalculatorRef = useRef<any>(null)
   const desmosScriptLoadedRef = useRef(false)
+  const geometryRef = useRef<HTMLDivElement>(null)
+  const calc3dRef = useRef<HTMLDivElement>(null)
+  const geometryInstanceRef = useRef<any>(null)
+  const calc3dInstanceRef = useRef<any>(null)
 
   // Initialize expression from prefillText
   useEffect(() => {
@@ -254,9 +258,41 @@ export default function GraphModal({
     return () => clearTimeout(timer)
   }, [expression, xMin, xMax, renderPlotter])
 
-  // Load Desmos when tab changes
+  // Load Desmos script once, destroy instances on tab switch
   useEffect(() => {
-    if (!isOpen || activeTab !== 'desmos' || desmosScriptLoadedRef.current) {
+    if (!isOpen) {
+      return
+    }
+
+    // Destroy instances when switching away from a tab
+    if (activeTab !== 'desmos' && desmosCalculatorRef.current) {
+      try {
+        desmosCalculatorRef.current.destroy?.()
+      } catch {
+        // Ignore cleanup errors
+      }
+      desmosCalculatorRef.current = null
+    }
+
+    if (activeTab !== 'geometry' && geometryInstanceRef.current) {
+      try {
+        geometryInstanceRef.current.destroy?.()
+      } catch {
+        // Ignore cleanup errors
+      }
+      geometryInstanceRef.current = null
+    }
+
+    if (activeTab !== '3d' && calc3dInstanceRef.current) {
+      try {
+        calc3dInstanceRef.current.destroy?.()
+      } catch {
+        // Ignore cleanup errors
+      }
+      calc3dInstanceRef.current = null
+    }
+
+    if (activeTab !== 'desmos' || desmosScriptLoadedRef.current) {
       return
     }
 
@@ -290,12 +326,70 @@ export default function GraphModal({
     loadDesmos()
   }, [isOpen, activeTab])
 
+  // Load Geometry when tab changes
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'geometry' || !desmosScriptLoadedRef.current) {
+      return
+    }
+
+    if (geometryInstanceRef.current) {
+      return // Already loaded
+    }
+
+    try {
+      if (!geometryRef.current) return
+      const Desmos = (window as any).Desmos
+      const geometry = Desmos.Geometry(geometryRef.current, {
+        border: false,
+      })
+      geometryInstanceRef.current = geometry
+    } catch (err) {
+      console.error('Failed to load Geometry:', err)
+    }
+  }, [isOpen, activeTab])
+
+  // Load 3D when tab changes
+  useEffect(() => {
+    if (!isOpen || activeTab !== '3d' || !desmosScriptLoadedRef.current) {
+      return
+    }
+
+    if (calc3dInstanceRef.current) {
+      return // Already loaded
+    }
+
+    try {
+      if (!calc3dRef.current) return
+      const Desmos = (window as any).Desmos
+      const calc3d = Desmos.Calculator3D(calc3dRef.current, {
+        border: false,
+      })
+      calc3dInstanceRef.current = calc3d
+    } catch (err) {
+      console.error('Failed to load 3D Calculator:', err)
+    }
+  }, [isOpen, activeTab])
+
   // Cleanup on unmount or close
   useEffect(() => {
     return () => {
       if (desmosCalculatorRef.current) {
         try {
           desmosCalculatorRef.current.destroy?.()
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+      if (geometryInstanceRef.current) {
+        try {
+          geometryInstanceRef.current.destroy?.()
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+      if (calc3dInstanceRef.current) {
+        try {
+          calc3dInstanceRef.current.destroy?.()
         } catch {
           // Ignore cleanup errors
         }
@@ -439,7 +533,7 @@ export default function GraphModal({
         }
         await applyWatermarks(canvasRef.current)
         imageData = canvasRef.current.toDataURL('image/png')
-      } else {
+      } else if (activeTab === 'desmos') {
         if (!desmosCalculatorRef.current) {
           setSaveError('Desmos calculator not loaded')
           setSaving(false)
@@ -474,6 +568,72 @@ export default function GraphModal({
           setSaving(false)
           return
         }
+      } else if (activeTab === 'geometry') {
+        if (!geometryInstanceRef.current) {
+          setSaveError('Geometry not loaded')
+          setSaving(false)
+          return
+        }
+
+        try {
+          // Geometry.screenshot() is synchronous
+          const dataUrl = geometryInstanceRef.current.screenshot({ width: 800, height: 600, targetPixelRatio: 1 })
+          const tempCanvas = document.createElement('canvas')
+          tempCanvas.width = 800
+          tempCanvas.height = 600
+          const tempCtx = tempCanvas.getContext('2d')!
+
+          await new Promise<void>((resolve, reject) => {
+            const screenshotImg = new Image()
+            screenshotImg.onload = async () => {
+              tempCtx.drawImage(screenshotImg, 0, 0)
+              await applyWatermarks(tempCanvas)
+              imageData = tempCanvas.toDataURL('image/png')
+              resolve()
+            }
+            screenshotImg.onerror = () => reject(new Error('Failed to load screenshot'))
+            screenshotImg.src = dataUrl
+          })
+        } catch (err) {
+          setSaveError(`Screenshot failed: ${err instanceof Error ? err.message : String(err)}`)
+          setSaving(false)
+          return
+        }
+      } else if (activeTab === '3d') {
+        if (!calc3dInstanceRef.current) {
+          setSaveError('3D Calculator not loaded')
+          setSaving(false)
+          return
+        }
+
+        try {
+          // 3D asyncScreenshot (no mode or mathBounds)
+          await new Promise<void>((resolve, reject) => {
+            calc3dInstanceRef.current.asyncScreenshot(
+              { width: 800, height: 600, targetPixelRatio: 1 },
+              async (dataUrl: string) => {
+                const tempCanvas = document.createElement('canvas')
+                tempCanvas.width = 800
+                tempCanvas.height = 600
+                const tempCtx = tempCanvas.getContext('2d')!
+
+                const screenshotImg = new Image()
+                screenshotImg.onload = async () => {
+                  tempCtx.drawImage(screenshotImg, 0, 0)
+                  await applyWatermarks(tempCanvas)
+                  imageData = tempCanvas.toDataURL('image/png')
+                  resolve()
+                }
+                screenshotImg.onerror = () => reject(new Error('Failed to load screenshot'))
+                screenshotImg.src = dataUrl
+              }
+            )
+          })
+        } catch (err) {
+          setSaveError(`Screenshot failed: ${err instanceof Error ? err.message : String(err)}`)
+          setSaving(false)
+          return
+        }
       }
 
       const res = await fetch('/api/graph/save', {
@@ -483,7 +643,7 @@ export default function GraphModal({
           question_id: questionId,
           image_type: imageType,
           image_data: imageData,
-          source: activeTab === 'plotter' ? 'function_plotter' : 'desmos',
+          source: activeTab === 'plotter' ? 'function_plotter' : activeTab === 'geometry' ? 'geometry' : activeTab === '3d' ? '3d' : 'desmos',
         }),
       })
 
@@ -557,6 +717,26 @@ export default function GraphModal({
           >
             📊 Desmos
           </button>
+          <button
+            onClick={() => setActiveTab('geometry')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'geometry'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            📐 Geometry
+          </button>
+          <button
+            onClick={() => setActiveTab('3d')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === '3d'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            🧊 3D
+          </button>
         </div>
 
         {/* Body */}
@@ -613,7 +793,7 @@ export default function GraphModal({
                 <p className="text-sm text-destructive">{plotterError}</p>
               )}
             </div>
-          ) : (
+          ) : activeTab === 'desmos' ? (
             <div>
               {!desmosScriptLoadedRef.current && (
                 <div className="flex items-center justify-center py-12">
@@ -622,6 +802,32 @@ export default function GraphModal({
               )}
               <div
                 ref={desmosRef}
+                style={{ height: '500px', width: '100%' }}
+                className="rounded-md border"
+              />
+            </div>
+          ) : activeTab === 'geometry' ? (
+            <div>
+              {!desmosScriptLoadedRef.current && (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              <div
+                ref={geometryRef}
+                style={{ height: '500px', width: '100%' }}
+                className="rounded-md border"
+              />
+            </div>
+          ) : (
+            <div>
+              {!desmosScriptLoadedRef.current && (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              <div
+                ref={calc3dRef}
                 style={{ height: '500px', width: '100%' }}
                 className="rounded-md border"
               />
