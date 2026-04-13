@@ -111,6 +111,27 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditSubSubtopicId(null)
   }, [currentIdx, drafts])
 
+  // Pre-populate edit state from new question's existing classification to trigger cascade
+  useEffect(() => {
+    if (!currentQuestion) return
+    // Only pre-populate if edit state is not already set (from auto-classify)
+    if (editTopicId || editSubtopicId || editSubSubtopicId) return
+
+    // Set with 100ms delay to allow the reset to complete and render first
+    const timer = setTimeout(() => {
+      if (currentQuestion.topic_id) {
+        setEditTopicId(currentQuestion.topic_id)
+      }
+      if (currentQuestion.subtopic_id) {
+        setEditSubtopicId(currentQuestion.subtopic_id)
+      }
+      if (currentQuestion.sub_subtopic_id) {
+        setEditSubSubtopicId(currentQuestion.sub_subtopic_id)
+      }
+    }, 100)
+    return () => clearTimeout(timer)
+  }, [currentQuestion?.id])
+
   // Update currentQuestion with background answer (don't reset edit states)
   useEffect(() => {
     const base = drafts[currentIdx] ?? null
