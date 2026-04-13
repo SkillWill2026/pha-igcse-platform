@@ -103,12 +103,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditedText('')
     setEditingAnswer(false)
     setEditedAnswerContent('')
-    setSelectedSubSubtopic(null)
-    setSubSubtopicSearch('')
-    setSubSubtopicOpen(false)
-    setEditTopicId(null)
-    setEditSubtopicId(null)
-    setEditSubSubtopicId(null)
   }, [currentIdx, drafts])
 
   // Pre-populate edit state from new question's existing classification to trigger cascade
@@ -123,7 +117,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       if (currentQuestion.topic_id) setEditTopicId(currentQuestion.topic_id)
       if (currentQuestion.subtopic_id) setEditSubtopicId(currentQuestion.subtopic_id)
       if (currentQuestion.sub_subtopic_id) setEditSubSubtopicId(currentQuestion.sub_subtopic_id)
-    }, 100)
+    }, 300)
     return () => clearTimeout(timer)
   }, [currentQuestion?.id])
 
