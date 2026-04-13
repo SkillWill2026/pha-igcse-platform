@@ -83,7 +83,11 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
   const subtopicList = subtopics
     .map(s => {
       const topic = topicsMap[s.topic_id]
-      return `ID:${s.id} | ${topic?.ref ?? ''} ${topic?.name ?? ''} — ${s.title}`
+      const subSubs = allSubSubtopics.filter(ss => ss.subtopic_id === s.id)
+      const subSubList = subSubs.length > 0
+        ? '\n    Sub-subtopics: ' + subSubs.map(ss => `"${ss.title}"`).join(', ')
+        : '\n    Sub-subtopics: none'
+      return `ID:${s.id} | ${topic?.ref ?? ''} – ${s.title}${subSubList}`
     })
     .join('\n')
 
@@ -91,10 +95,11 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 512,
     system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert.
-Given a question, identify the most appropriate subtopic and sub-subtopic from the provided lists.
-Respond ONLY with valid JSON in this exact format:
-{"subtopic_id": "uuid-here", "sub_subtopic_title": "exact-sub-subtopic-title-or-null"}
-No explanation, no markdown, just the JSON object.`,
+Given a question, identify the most appropriate subtopic from the provided list.
+Each subtopic has a list of sub-subtopics — pick the most specific one that matches.
+Respond ONLY with valid JSON: {"subtopic_id": "exact-uuid-from-list", "sub_subtopic_title": "exact-title-from-list-or-null"}
+The subtopic_id MUST be one of the UUIDs from the AVAILABLE SUBTOPICS list. Do not invent UUIDs.
+The sub_subtopic_title MUST match exactly one of the listed sub-subtopic titles, or null if none match.`,
     messages: [{
       role: 'user',
       content: `QUESTION: ${question.content_text}
