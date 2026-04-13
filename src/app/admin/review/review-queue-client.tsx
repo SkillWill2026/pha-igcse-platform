@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -66,6 +66,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [editTopicId, setEditTopicId] = useState<string | null>(null)
   const [editSubtopicId, setEditSubtopicId] = useState<string | null>(null)
   const [editSubSubtopicId, setEditSubSubtopicId] = useState<string | null>(null)
+  const pendingSubSubtopicId = useRef<string | null>(null)
   const [editingAnswer, setEditingAnswer] = useState(false)
   const [editedAnswerContent, setEditedAnswerContent] = useState('')
   const [editAnswerSaving, setEditAnswerSaving] = useState(false)
@@ -118,9 +119,9 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       console.log('[CASCADE] Setting topicId:', currentQuestion.topic_id)
       console.log('[CASCADE] Setting subtopicId:', currentQuestion.subtopic_id)
       console.log('[CASCADE] Setting subSubtopicId:', currentQuestion.sub_subtopic_id)
+      pendingSubSubtopicId.current = currentQuestion.sub_subtopic_id ?? null
       if (currentQuestion.topic_id) setEditTopicId(currentQuestion.topic_id)
       if (currentQuestion.subtopic_id) setEditSubtopicId(currentQuestion.subtopic_id)
-      if (currentQuestion.sub_subtopic_id) setEditSubSubtopicId(currentQuestion.sub_subtopic_id)
     }, 300)
     return () => clearTimeout(timer)
   }, [currentQuestion?.id])
@@ -164,14 +165,15 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     fetch(`/api/sub-subtopics?subtopic_id=${activeSubtopicId}`)
       .then((res) => res.json())
       .then((data) => {
-        console.log('[CASCADE] Sub-subtopics loaded:', data.length, 'looking for:', editSubSubtopicId)
+        console.log('[CASCADE] Sub-subtopics loaded:', data.length, 'looking for:', pendingSubSubtopicId.current)
         setSubSubtopics(data)
-        // Auto-select sub-subtopic from editSubSubtopicId (auto-classify) or currentQuestion
-        if (editSubSubtopicId && data.some((s: SubSubtopic) => s.id === editSubSubtopicId)) {
-          setSelectedSubSubtopic(editSubSubtopicId)
-        } else if (currentQuestion?.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
-          setSelectedSubSubtopic(currentQuestion.sub_subtopic_id)
+        // Auto-select sub-subtopic from pending (auto-classify) or currentQuestion
+        const idToSelect = pendingSubSubtopicId.current || currentQuestion?.sub_subtopic_id || null
+        if (idToSelect && data.some((s: SubSubtopic) => s.id === idToSelect)) {
+          setSelectedSubSubtopic(idToSelect)
+          setEditSubSubtopicId(idToSelect)
         }
+        pendingSubSubtopicId.current = null
       })
       .catch((err) => console.error('Failed to fetch sub-subtopics:', err))
       .finally(() => setLoadingSubSubtopics(false))
@@ -473,27 +475,16 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       }
       if (!res.ok) throw new Error(data.error ?? 'Classification failed')
       if (data.subtopic_id) {
-        // CASCADE: Set topic first, then subtopic, then sub-subtopic with delays
-        // to allow useEffect dependencies to load data between each step
-
-        // Step 1: Set topic
+        // Set topic and subtopic; pending sub-subtopic will be picked up by useEffect when data loads
         if (data.topic_id) {
           setAutoClassifiedTopicId(data.topic_id)
           setEditTopicId(data.topic_id)
         }
-
-        // Step 2: Wait 500ms for subtopics to load, then set subtopic
-        setTimeout(() => {
-          setEditSubtopicId(data.subtopic_id)
+        if (data.subtopic_id) {
+          pendingSubSubtopicId.current = data.sub_subtopic_id ?? null
           setAutoClassifiedSubtopicId(data.subtopic_id)
-
-          // Step 3: Wait another 500ms for sub-subtopics to load, then set sub-subtopic
-          if (data.sub_subtopic_id) {
-            setTimeout(() => {
-              setEditSubSubtopicId(data.sub_subtopic_id)
-            }, 500)
-          }
-        }, 500)
+          setEditSubtopicId(data.subtopic_id)
+        }
 
         // Show toast with both subtopic and sub-subtopic names
         const toastMsg = data.sub_subtopic_title
