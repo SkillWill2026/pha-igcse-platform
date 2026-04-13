@@ -607,27 +607,23 @@ export default function GraphModal({
         }
 
         try {
-          // 3D asyncScreenshot (no mode or mathBounds)
-          await new Promise<void>((resolve, reject) => {
-            calc3dInstanceRef.current.asyncScreenshot(
-              { width: 800, height: 600, targetPixelRatio: 1 },
-              async (dataUrl: string) => {
-                const tempCanvas = document.createElement('canvas')
-                tempCanvas.width = 800
-                tempCanvas.height = 600
-                const tempCtx = tempCanvas.getContext('2d')!
+          // 3D.screenshot() is synchronous
+          const dataUrl = calc3dInstanceRef.current.screenshot({ width: 800, height: 600, targetPixelRatio: 1 })
+          const tempCanvas = document.createElement('canvas')
+          tempCanvas.width = 800
+          tempCanvas.height = 600
+          const tempCtx = tempCanvas.getContext('2d')!
 
-                const screenshotImg = new Image()
-                screenshotImg.onload = async () => {
-                  tempCtx.drawImage(screenshotImg, 0, 0)
-                  await applyWatermarks(tempCanvas)
-                  imageData = tempCanvas.toDataURL('image/png')
-                  resolve()
-                }
-                screenshotImg.onerror = () => reject(new Error('Failed to load screenshot'))
-                screenshotImg.src = dataUrl
-              }
-            )
+          await new Promise<void>((resolve, reject) => {
+            const screenshotImg = new Image()
+            screenshotImg.onload = async () => {
+              tempCtx.drawImage(screenshotImg, 0, 0)
+              await applyWatermarks(tempCanvas)
+              imageData = tempCanvas.toDataURL('image/png')
+              resolve()
+            }
+            screenshotImg.onerror = () => reject(new Error('Failed to load screenshot'))
+            screenshotImg.src = dataUrl
           })
         } catch (err) {
           setSaveError(`Screenshot failed: ${err instanceof Error ? err.message : String(err)}`)
