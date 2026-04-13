@@ -258,41 +258,9 @@ export default function GraphModal({
     return () => clearTimeout(timer)
   }, [expression, xMin, xMax, renderPlotter])
 
-  // Load Desmos script once, destroy instances on tab switch
+  // Load Desmos script once when modal opens
   useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-
-    // Destroy instances when switching away from a tab
-    if (activeTab !== 'desmos' && desmosCalculatorRef.current) {
-      try {
-        desmosCalculatorRef.current.destroy?.()
-      } catch {
-        // Ignore cleanup errors
-      }
-      desmosCalculatorRef.current = null
-    }
-
-    if (activeTab !== 'geometry' && geometryInstanceRef.current) {
-      try {
-        geometryInstanceRef.current.destroy?.()
-      } catch {
-        // Ignore cleanup errors
-      }
-      geometryInstanceRef.current = null
-    }
-
-    if (activeTab !== '3d' && calc3dInstanceRef.current) {
-      try {
-        calc3dInstanceRef.current.destroy?.()
-      } catch {
-        // Ignore cleanup errors
-      }
-      calc3dInstanceRef.current = null
-    }
-
-    if (activeTab !== 'desmos' || desmosScriptLoadedRef.current) {
+    if (!isOpen || desmosScriptLoadedRef.current) {
       return
     }
 
@@ -315,13 +283,6 @@ export default function GraphModal({
 
           desmosCalculatorRef.current = calculator
           desmosScriptLoadedRef.current = true
-
-          // Force resize after tab switch to restore expression panel
-          setTimeout(() => {
-            if (desmosCalculatorRef.current) {
-              desmosCalculatorRef.current.resize()
-            }
-          }, 100)
         }
 
         document.head.appendChild(script)
@@ -331,16 +292,12 @@ export default function GraphModal({
     }
 
     loadDesmos()
-  }, [isOpen, activeTab])
+  }, [isOpen])
 
-  // Load Geometry when tab changes
+  // Initialize Geometry once when script is loaded
   useEffect(() => {
-    if (!isOpen || activeTab !== 'geometry' || !desmosScriptLoadedRef.current) {
+    if (!isOpen || !desmosScriptLoadedRef.current || geometryInstanceRef.current) {
       return
-    }
-
-    if (geometryInstanceRef.current) {
-      return // Already loaded
     }
 
     try {
@@ -353,16 +310,12 @@ export default function GraphModal({
     } catch (err) {
       console.error('Failed to load Geometry:', err)
     }
-  }, [isOpen, activeTab])
+  }, [isOpen])
 
-  // Load 3D when tab changes
+  // Initialize 3D Calculator once when script is loaded
   useEffect(() => {
-    if (!isOpen || activeTab !== '3d' || !desmosScriptLoadedRef.current) {
+    if (!isOpen || !desmosScriptLoadedRef.current || calc3dInstanceRef.current) {
       return
-    }
-
-    if (calc3dInstanceRef.current) {
-      return // Already loaded
     }
 
     try {
@@ -375,7 +328,7 @@ export default function GraphModal({
     } catch (err) {
       console.error('Failed to load 3D Calculator:', err)
     }
-  }, [isOpen, activeTab])
+  }, [isOpen])
 
   // Cleanup on unmount or close
   useEffect(() => {
@@ -796,46 +749,34 @@ export default function GraphModal({
                 <p className="text-sm text-destructive">{plotterError}</p>
               )}
             </div>
-          ) : activeTab === 'desmos' ? (
-            <div>
-              {!desmosScriptLoadedRef.current && (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              )}
-              <div
-                ref={desmosRef}
-                style={{ height: '500px', width: '100%' }}
-                className="rounded-md border"
-              />
-            </div>
-          ) : activeTab === 'geometry' ? (
-            <div>
-              {!desmosScriptLoadedRef.current && (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              )}
-              <div
-                ref={geometryRef}
-                style={{ height: '500px', width: '100%' }}
-                className="rounded-md border"
-              />
-            </div>
-          ) : (
-            <div>
-              {!desmosScriptLoadedRef.current && (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              )}
-              <div
-                ref={calc3dRef}
-                style={{ height: '500px', width: '100%' }}
-                className="rounded-md border"
-              />
-            </div>
-          )}
+          ) : null}
+
+          {/* Desmos — always mounted, toggle display */}
+          <div style={{ display: activeTab === 'desmos' ? 'block' : 'none' }}>
+            <div
+              ref={desmosRef}
+              style={{ height: '500px', width: '100%' }}
+              className="rounded-md border"
+            />
+          </div>
+
+          {/* Geometry — always mounted, toggle display */}
+          <div style={{ display: activeTab === 'geometry' ? 'block' : 'none' }}>
+            <div
+              ref={geometryRef}
+              style={{ height: '500px', width: '100%' }}
+              className="rounded-md border"
+            />
+          </div>
+
+          {/* 3D — always mounted, toggle display */}
+          <div style={{ display: activeTab === '3d' ? 'block' : 'none' }}>
+            <div
+              ref={calc3dRef}
+              style={{ height: '500px', width: '100%' }}
+              className="rounded-md border"
+            />
+          </div>
         </div>
 
         {/* Footer */}
