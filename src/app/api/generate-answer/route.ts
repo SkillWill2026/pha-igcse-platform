@@ -9,6 +9,22 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+// Retry logic for Claude API overloaded errors
+async function callClaudeWithRetry(client: any, params: any, maxRetries = 3): Promise<any> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await client.messages.create(params)
+    } catch (err: any) {
+      if (err?.error?.type === 'overloaded_error' && attempt < maxRetries) {
+        console.log(`[generate-answer] Claude overloaded, retry ${attempt}/${maxRetries}`)
+        await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+        continue
+      }
+      throw err
+    }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const { question_id, image_urls, force_regenerate } = await request.json()
@@ -174,8 +190,8 @@ Write a complete model answer for this question.`
       { type: 'text', text: userPrompt },
     ]
 
-    // 6. Call Claude Sonnet with vision
-    const message = await anthropic.messages.create({
+    // 6. Call Claude Sonnet with vision (with retry on overload)
+    const message = await callClaudeWithRetry(anthropic, {
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2048,
       system: systemPrompt,
