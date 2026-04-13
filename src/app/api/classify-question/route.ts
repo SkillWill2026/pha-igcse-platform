@@ -129,7 +129,6 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
   // Validate that subtopic_id exists in the fetched subtopics
   const matchedSubtopic = subtopics.find(s => s.id === classification.subtopic_id)
   if (!matchedSubtopic) {
-    console.log(`[classify-question] Claude returned invalid subtopic_id: ${classification.subtopic_id}`)
     return
   }
 
@@ -140,7 +139,6 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
   if (classification.sub_subtopic_id) {
     // Validate that sub_subtopic_id is a proper UUID format
     if (!uuidRegex.test(classification.sub_subtopic_id)) {
-      console.log(`[classify-question] Claude returned invalid sub_subtopic_id format: ${classification.sub_subtopic_id}`)
       // Set to null instead of failing
       subSubtopicId = null
     } else {
@@ -149,7 +147,6 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
         ss => ss.id === classification.sub_subtopic_id && ss.subtopic_id === matchedSubtopic.id
       )
       if (!subSubtopicExists) {
-        console.log(`[classify-question] Claude returned non-existent sub_subtopic_id: ${classification.sub_subtopic_id}`)
         // Set to null instead of failing
         subSubtopicId = null
       } else {
@@ -163,7 +160,6 @@ Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
     const subSubsForSubtopic = allSubSubtopics.filter(ss => ss.subtopic_id === matchedSubtopic.id)
     const fallback = ruleBasedSubSubtopic(question.content_text, subSubsForSubtopic)
     if (fallback) {
-      console.log(`[classify-question] Used rule-based fallback for sub-subtopic: ${fallback}`)
       subSubtopicId = fallback
     }
   }
@@ -250,7 +246,6 @@ export async function POST(request: Request) {
       sub_subtopic_title: subSubtopicTitle,
     })
   } catch (error) {
-    console.error('[classify-question] Error:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Classification failed' },
       { status: 500 }
