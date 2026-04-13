@@ -53,12 +53,14 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 512,
     system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert.
-Given a question, identify the most appropriate subtopic and sub-subtopic from the provided lists.
-Respond ONLY with valid JSON: {"subtopic_id": "exact-uuid-from-list", "sub_subtopic_id": "exact-uuid-from-list-or-null"}
-RULES:
+Given a question, identify the MOST SPECIFIC subtopic and sub-subtopic from the provided lists.
+You MUST select a sub-subtopic if any of the listed ones are relevant — do not return null unless truly none apply.
+Respond ONLY with valid JSON: {"subtopic_id": "exact-uuid", "sub_subtopic_id": "exact-uuid-or-null"}
+STRICT RULES:
 - subtopic_id MUST be one of the UUIDs from AVAILABLE SUBTOPICS. Never invent a UUID.
-- sub_subtopic_id MUST be one of the UUIDs listed under that subtopic, or null if none match.
-- Return ONLY the JSON object. No explanation, no markdown.`,
+- sub_subtopic_id MUST be one of the UUIDs listed under the chosen subtopic, or null ONLY if none are relevant.
+- When in doubt between sub-subtopics, choose the most specific match.
+- Return ONLY the JSON object. No explanation, no markdown, no code blocks.`,
     messages: [{
       role: 'user',
       content: `QUESTION: ${question.content_text}
@@ -67,8 +69,7 @@ AVAILABLE SUBTOPICS (topic: ${effectiveTopicId}):
 ${subtopicList}
 
 Which subtopic_id best matches this question?
-If you identify a specific sub-subtopic within that subtopic, provide its UUID from the list.
-Otherwise return sub_subtopic_id as null.
+Select the most specific sub-subtopic that applies. If the question involves drawing, plotting, or constructing a specific type of graph, select the corresponding drawing sub-subtopic.
 Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
     }]
   })
