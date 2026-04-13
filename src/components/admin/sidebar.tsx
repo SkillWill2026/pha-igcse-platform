@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { AlertTriangle, BookOpen, CalendarDays, CheckCircle2, Database, FileText, LayoutDashboard, Loader2, LogOut, Presentation, Upload, Users } from 'lucide-react'
+import { AlertTriangle, BarChart2, BookOpen, CalendarDays, CheckCircle2, Database, FileText, LayoutDashboard, Loader2, LogOut, Presentation, Upload, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface NavLink {
@@ -62,6 +62,7 @@ const NAV_LINKS: NavLink[] = [
   { href: '/admin/schedule',  label: 'Schedule',          icon: CalendarDays,   adminOnly: false },
   { href: '/admin/ppt', label: 'PPT Slides', icon: Presentation, adminOnly: false },
   { href: '/admin/users',     label: 'Users',             icon: Users,          adminOnly: true  },
+  { href: '/admin/activity-report', label: 'Activity Report', icon: BarChart2, adminOnly: true },
 ]
 
 interface SidebarProps {
