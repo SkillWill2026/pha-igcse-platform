@@ -310,49 +310,65 @@ export default function GraphModal({
     }
   }, [activeTab])
 
-  // Initialize Geometry when tab is active
+  // Initialize Geometry when tab is active (retry until div has dimensions)
   useEffect(() => {
-    if (!isOpen || activeTab !== 'geometry' || !desmosScriptLoadedRef.current) {
-      return
+    if (activeTab !== 'geometry') return
+    if (geometryInstanceRef.current) return
+    if (typeof window === 'undefined') return
+
+    const initGeometry = () => {
+      const el = geometryRef.current
+      if (!el) return false
+      if (typeof (window as any).Desmos === 'undefined') return false
+      if (!(window as any).Desmos.Geometry) return false
+      if (el.offsetWidth === 0 || el.offsetHeight === 0) return false
+
+      geometryInstanceRef.current = (window as any).Desmos.Geometry(el, { border: false })
+      return true
     }
 
-    if (geometryInstanceRef.current) {
-      return // Already loaded
+    // Try immediately, then retry every 100ms up to 10 times
+    if (!initGeometry()) {
+      let attempts = 0
+      const interval = setInterval(() => {
+        attempts++
+        if (initGeometry() || attempts >= 10) {
+          clearInterval(interval)
+        }
+      }, 100)
+      return () => clearInterval(interval)
     }
+  }, [activeTab])
 
-    try {
-      if (!geometryRef.current) return
-      const Desmos = (window as any).Desmos
-      const geometry = Desmos.Geometry(geometryRef.current, {
-        border: false,
-      })
-      geometryInstanceRef.current = geometry
-    } catch (err) {
-      console.error('Failed to load Geometry:', err)
-    }
-  }, [isOpen, activeTab])
-
-  // Initialize 3D Calculator when tab is active
+  // Initialize 3D Calculator when tab is active (retry until div has dimensions)
   useEffect(() => {
-    if (!isOpen || activeTab !== '3d' || !desmosScriptLoadedRef.current) {
-      return
+    if (activeTab !== '3d') return
+    if (calc3dInstanceRef.current) return
+    if (typeof window === 'undefined') return
+
+    const initCalc3D = () => {
+      const el = calc3dRef.current
+      if (!el) return false
+      if (typeof (window as any).Desmos === 'undefined') return false
+      if (!(window as any).Desmos.Calculator3D) return false
+      if (el.offsetWidth === 0 || el.offsetHeight === 0) return false
+
+      calc3dInstanceRef.current = (window as any).Desmos.Calculator3D(el, { border: false })
+      return true
     }
 
-    if (calc3dInstanceRef.current) {
-      return // Already loaded
+    // Try immediately, then retry every 100ms up to 10 times
+    if (!initCalc3D()) {
+      let attempts = 0
+      const interval = setInterval(() => {
+        attempts++
+        if (initCalc3D() || attempts >= 10) {
+          clearInterval(interval)
+        }
+      }, 100)
+      return () => clearInterval(interval)
     }
-
-    try {
-      if (!calc3dRef.current) return
-      const Desmos = (window as any).Desmos
-      const calc3d = Desmos.Calculator3D(calc3dRef.current, {
-        border: false,
-      })
-      calc3dInstanceRef.current = calc3d
-    } catch (err) {
-      console.error('Failed to load 3D Calculator:', err)
-    }
-  }, [isOpen, activeTab])
+  }, [activeTab])
 
   // Cleanup on unmount or close
   useEffect(() => {
