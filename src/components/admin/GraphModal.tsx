@@ -315,6 +315,13 @@ export default function GraphModal({
 
           desmosCalculatorRef.current = calculator
           desmosScriptLoadedRef.current = true
+
+          // Force resize after tab switch to restore expression panel
+          setTimeout(() => {
+            if (desmosCalculatorRef.current) {
+              desmosCalculatorRef.current.resize()
+            }
+          }, 100)
         }
 
         document.head.appendChild(script)
