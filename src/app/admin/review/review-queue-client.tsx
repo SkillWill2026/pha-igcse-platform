@@ -114,20 +114,15 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   // Pre-populate edit state from new question's existing classification to trigger cascade
   useEffect(() => {
     if (!currentQuestion) return
-    // Only pre-populate if edit state is not already set (from auto-classify)
-    if (editTopicId || editSubtopicId || editSubSubtopicId) return
-
-    // Set with 100ms delay to allow the reset to complete and render first
+    // Always reset first
+    setEditTopicId(null)
+    setEditSubtopicId(null)
+    setEditSubSubtopicId(null)
+    // Then pre-populate from question's existing classification after reset renders
     const timer = setTimeout(() => {
-      if (currentQuestion.topic_id) {
-        setEditTopicId(currentQuestion.topic_id)
-      }
-      if (currentQuestion.subtopic_id) {
-        setEditSubtopicId(currentQuestion.subtopic_id)
-      }
-      if (currentQuestion.sub_subtopic_id) {
-        setEditSubSubtopicId(currentQuestion.sub_subtopic_id)
-      }
+      if (currentQuestion.topic_id) setEditTopicId(currentQuestion.topic_id)
+      if (currentQuestion.subtopic_id) setEditSubtopicId(currentQuestion.subtopic_id)
+      if (currentQuestion.sub_subtopic_id) setEditSubSubtopicId(currentQuestion.sub_subtopic_id)
     }, 100)
     return () => clearTimeout(timer)
   }, [currentQuestion?.id])
@@ -180,7 +175,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       })
       .catch((err) => console.error('Failed to fetch sub-subtopics:', err))
       .finally(() => setLoadingSubSubtopics(false))
-  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id, editSubtopicId, editSubSubtopicId])
+  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id, editSubtopicId])
 
   // Load last used topic from localStorage when entering edit mode
   useEffect(() => {
