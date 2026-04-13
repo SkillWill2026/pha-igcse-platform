@@ -37,11 +37,11 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.desmos.com",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.supabase.co",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.supabase.co https://api.anthropic.com",
+              "connect-src 'self' https://*.supabase.co https://api.anthropic.com https://www.desmos.com",
               "worker-src 'self' blob:",
               "frame-ancestors 'self'",
               "frame-src 'self'",
