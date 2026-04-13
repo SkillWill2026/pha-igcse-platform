@@ -175,7 +175,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       })
       .catch((err) => console.error('Failed to fetch sub-subtopics:', err))
       .finally(() => setLoadingSubSubtopics(false))
-  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id, editSubtopicId])
+  }, [editSubtopicId])
 
   // Load last used topic from localStorage when entering edit mode
   useEffect(() => {
@@ -482,18 +482,18 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
           setEditTopicId(data.topic_id)
         }
 
-        // Step 2: Wait 150ms for subtopics to load, then set subtopic
+        // Step 2: Wait 500ms for subtopics to load, then set subtopic
         setTimeout(() => {
           setEditSubtopicId(data.subtopic_id)
           setAutoClassifiedSubtopicId(data.subtopic_id)
 
-          // Step 3: Wait another 150ms for sub-subtopics to load, then set sub-subtopic
+          // Step 3: Wait another 500ms for sub-subtopics to load, then set sub-subtopic
           if (data.sub_subtopic_id) {
             setTimeout(() => {
               setEditSubSubtopicId(data.sub_subtopic_id)
-            }, 150)
+            }, 500)
           }
-        }, 150)
+        }, 500)
 
         // Show toast with both subtopic and sub-subtopic names
         const toastMsg = data.sub_subtopic_title
