@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -66,7 +66,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [editTopicId, setEditTopicId] = useState<string | null>(null)
   const [editSubtopicId, setEditSubtopicId] = useState<string | null>(null)
   const [editSubSubtopicId, setEditSubSubtopicId] = useState<string | null>(null)
-  const pendingSubSubtopicId = useRef<string | null>(null)
   const [editingAnswer, setEditingAnswer] = useState(false)
   const [editedAnswerContent, setEditedAnswerContent] = useState('')
   const [editAnswerSaving, setEditAnswerSaving] = useState(false)
@@ -104,27 +103,13 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditedText('')
     setEditingAnswer(false)
     setEditedAnswerContent('')
-  }, [currentIdx, drafts])
-
-  // Pre-populate edit state from new question's existing classification to trigger cascade
-  useEffect(() => {
-    if (!currentQuestion) return
-    console.log('[CASCADE] Question changed to:', currentQuestion?.id)
-    // Always reset first
+    setSelectedSubSubtopic(null)
+    setSubSubtopicSearch('')
+    setSubSubtopicOpen(false)
     setEditTopicId(null)
     setEditSubtopicId(null)
     setEditSubSubtopicId(null)
-    // Then pre-populate from question's existing classification after reset renders
-    const timer = setTimeout(() => {
-      console.log('[CASCADE] Setting topicId:', currentQuestion.topic_id)
-      console.log('[CASCADE] Setting subtopicId:', currentQuestion.subtopic_id)
-      console.log('[CASCADE] Setting subSubtopicId:', currentQuestion.sub_subtopic_id)
-      pendingSubSubtopicId.current = currentQuestion.sub_subtopic_id ?? null
-      if (currentQuestion.topic_id) setEditTopicId(currentQuestion.topic_id)
-      if (currentQuestion.subtopic_id) setEditSubtopicId(currentQuestion.subtopic_id)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [currentQuestion?.id])
+  }, [currentIdx, drafts])
 
   // Update currentQuestion with background answer (don't reset edit states)
   useEffect(() => {
@@ -152,7 +137,6 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   useEffect(() => {
     // Use editSubtopicId when in edit/auto-classify mode, otherwise use question's saved subtopic
     const activeSubtopicId = editSubtopicId || currentQuestion?.subtopic_id
-    console.log('[CASCADE] Sub-subtopics useEffect fired, editSubtopicId:', editSubtopicId)
     if (!activeSubtopicId) {
       setSubSubtopics([])
       setSelectedSubSubtopic(null)
@@ -165,19 +149,14 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     fetch(`/api/sub-subtopics?subtopic_id=${activeSubtopicId}`)
       .then((res) => res.json())
       .then((data) => {
-        console.log('[CASCADE] Sub-subtopics loaded:', data.length, 'looking for:', pendingSubSubtopicId.current)
         setSubSubtopics(data)
-        // Auto-select sub-subtopic from pending (auto-classify) or currentQuestion
-        const idToSelect = pendingSubSubtopicId.current || currentQuestion?.sub_subtopic_id || null
-        if (idToSelect && data.some((s: SubSubtopic) => s.id === idToSelect)) {
-          setSelectedSubSubtopic(idToSelect)
-          setEditSubSubtopicId(idToSelect)
+        if (currentQuestion?.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
+          setSelectedSubSubtopic(currentQuestion.sub_subtopic_id)
         }
-        pendingSubSubtopicId.current = null
       })
       .catch((err) => console.error('Failed to fetch sub-subtopics:', err))
       .finally(() => setLoadingSubSubtopics(false))
-  }, [editSubtopicId])
+  }, [currentQuestion?.subtopic_id, currentQuestion?.sub_subtopic_id, editSubtopicId])
 
   // Load last used topic from localStorage when entering edit mode
   useEffect(() => {
@@ -470,35 +449,19 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         topic_id?: string
         sub_subtopic_id?: string | null
         subtopic_title?: string
-        sub_subtopic_title?: string | null
         error?: string
       }
       if (!res.ok) throw new Error(data.error ?? 'Classification failed')
       if (data.subtopic_id) {
-        if (data.topic_id) setEditTopicId(data.topic_id)
-
-        if (data.subtopic_id) {
-          // If editSubtopicId is already set to the same value (navigation timer already ran),
-          // React won't re-trigger the useEffect — so set sub-subtopic directly
-          if (editSubtopicId === data.subtopic_id) {
-            // Sub-subtopics already loaded — select directly
-            if (data.sub_subtopic_id) {
-              setEditSubSubtopicId(data.sub_subtopic_id)
-              setSelectedSubSubtopic(data.sub_subtopic_id)
-            }
-            pendingSubSubtopicId.current = null
-          } else {
-            // editSubtopicId is different — use ref-based cascade
-            pendingSubSubtopicId.current = data.sub_subtopic_id ?? null
-            setEditSubtopicId(data.subtopic_id)
-          }
+        setEditSubtopicId(data.subtopic_id)
+        if (data.sub_subtopic_id) setEditSubSubtopicId(data.sub_subtopic_id)
+        // Use topic_id directly from API response — no second fetch needed
+        if (data.topic_id) {
+          setAutoClassifiedTopicId(data.topic_id)
+          setEditTopicId(data.topic_id)
         }
-
-        // Show toast with both subtopic and sub-subtopic names
-        const toastMsg = data.sub_subtopic_title
-          ? `Auto-classified: ${data.subtopic_title} → ${data.sub_subtopic_title}`
-          : `Auto-classified: ${data.subtopic_title ?? data.subtopic_id}`
-        toast.success(toastMsg)
+        setAutoClassifiedSubtopicId(data.subtopic_id)
+        toast.success(`Auto-classified: ${data.subtopic_title ?? data.subtopic_id}`)
       } else {
         toast.warning('Could not classify — no matching subtopic found')
       }
