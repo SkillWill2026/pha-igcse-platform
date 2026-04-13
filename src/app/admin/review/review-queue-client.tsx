@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
@@ -70,6 +70,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   const [editedAnswerContent, setEditedAnswerContent] = useState('')
   const [editAnswerSaving, setEditAnswerSaving] = useState(false)
   const [regeneratingAnswer, setRegeneratingAnswer] = useState(false)
+
+  const pendingAutoSubSubId = useRef<string | null>(null)
 
   const remaining = drafts.length - currentIdx - 1
 
@@ -151,7 +153,10 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       .then((res) => res.json())
       .then((data) => {
         setSubSubtopics(data)
-        if (currentQuestion?.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
+        if (pendingAutoSubSubId.current && data.some((s: SubSubtopic) => s.id === pendingAutoSubSubId.current)) {
+          setEditSubSubtopicId(pendingAutoSubSubId.current)
+          pendingAutoSubSubId.current = null
+        } else if (currentQuestion?.sub_subtopic_id && data.some((s: SubSubtopic) => s.id === currentQuestion.sub_subtopic_id)) {
           setSelectedSubSubtopic(currentQuestion.sub_subtopic_id)
         }
       })
@@ -455,7 +460,10 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       if (!res.ok) throw new Error(data.error ?? 'Classification failed')
       if (data.subtopic_id) {
         setEditSubtopicId(data.subtopic_id)
-        if (data.sub_subtopic_id) setEditSubSubtopicId(data.sub_subtopic_id)
+        if (data.sub_subtopic_id) {
+          pendingAutoSubSubId.current = data.sub_subtopic_id
+          setEditSubSubtopicId(data.sub_subtopic_id)
+        }
         // Use topic_id directly from API response — no second fetch needed
         if (data.topic_id) {
           setAutoClassifiedTopicId(data.topic_id)
@@ -463,6 +471,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         }
         setAutoClassifiedSubtopicId(data.subtopic_id)
         toast.success(`Auto-classified: ${data.subtopic_title ?? data.subtopic_id}`)
+        if (data.sub_subtopic_title) setSubSubtopicSearch(data.sub_subtopic_title)
       } else {
         toast.warning('Could not classify — no matching subtopic found')
       }
