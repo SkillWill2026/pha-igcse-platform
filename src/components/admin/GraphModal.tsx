@@ -449,7 +449,7 @@ export default function GraphModal({
         try {
           // Use asyncScreenshot for higher quality with watermarks
           await new Promise<void>((resolve, reject) => {
-            desmosCalculatorRef.current.asyncScreenshot({ width: 800, height: 600, targetPixelRatio: 2 }, (dataUrl: string) => {
+            desmosCalculatorRef.current.asyncScreenshot({ width: 800, height: 600, targetPixelRatio: 1, mode: 'contain', mathBounds: { left: -10, right: 10, bottom: -10, top: 10 } }, (dataUrl: string) => {
               // Create canvas for watermarking
               const tempCanvas = document.createElement('canvas')
               tempCanvas.width = 800
