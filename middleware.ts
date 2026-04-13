@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr'
+——import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function middleware(request: NextRequest) {
@@ -48,6 +48,13 @@ export async function middleware(request: NextRequest) {
     if (role === 'tutor' && tutorBlocked.some(p => pathname.startsWith(p))) {
       const url = request.nextUrl.clone()
       url.pathname = '/admin/dashboard'
+      return NextResponse.redirect(url)
+    }
+    // Uploader role — can only access upload page and dashboard
+    const uploaderAllowed = ['/admin/upload', '/admin/dashboard']
+    if (role === 'uploader' && !uploaderAllowed.some(p => pathname.startsWith(p))) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/admin/upload'
       return NextResponse.redirect(url)
     }
 
