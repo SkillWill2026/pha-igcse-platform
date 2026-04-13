@@ -202,7 +202,7 @@ export async function POST(request: Request) {
     // Fetch question BEFORE classification to compare after
     const { data: before } = await supabase
       .from('questions')
-      .select('subtopic_id, topic_id')
+      .select('subtopic_id, topic_id, sub_subtopic_id')
       .eq('id', question_id)
       .single()
 
@@ -212,7 +212,7 @@ export async function POST(request: Request) {
     // Fetch updated question to check if classification changed anything
     const { data: updated } = await supabase
       .from('questions')
-      .select('subtopic_id, topic_id')
+      .select('subtopic_id, topic_id, sub_subtopic_id')
       .eq('id', question_id)
       .single()
 
@@ -236,10 +236,10 @@ export async function POST(request: Request) {
     if (updated.sub_subtopic_id) {
       const { data: subSubtopicData } = await supabase
         .from('sub_subtopics')
-        .select('title')
+        .select('outcome')
         .eq('id', updated.sub_subtopic_id)
         .single()
-      subSubtopicTitle = subSubtopicData?.title ?? null
+      subSubtopicTitle = subSubtopicData?.outcome ?? null
     }
 
     return NextResponse.json({
