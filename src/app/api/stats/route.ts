@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
 import { createServerClient } from '@/lib/supabase-server'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -13,17 +13,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = createAdminClient()
     const subjectId = request.nextUrl.searchParams.get('subject_id')
 
     let topicIds: string[] = []
 
     if (subjectId) {
-      const { data: topicsData } = await supabase
-        .from('topics')
-        .select('id')
-        .eq('subject_id', subjectId)
-      topicIds = (topicsData ?? []).map((t) => t.id)
+      const topics = await prisma.topics.findMany({
+        where: { subject_id: subjectId },
+        select: { id: true },
+      })
+      topicIds = topics.map(t => t.id)
 
       // Subject has no topics — return zeros immediately
       if (topicIds.length === 0) {
@@ -31,54 +30,48 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Question counts
     const topicFilter = topicIds.length > 0 ? topicIds : null
 
-    const [qApprovedRes, qPendingRes] = await Promise.all([
-      topicFilter
-        ? supabase.from('questions').select('id', { count: 'exact', head: true }).eq('status', 'approved').in('topic_id', topicFilter)
-        : supabase.from('questions').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
-      topicFilter
-        ? supabase.from('questions').select('id', { count: 'exact', head: true }).eq('status', 'draft').in('topic_id', topicFilter)
-        : supabase.from('questions').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
+    // Question counts
+    const [qApproved, qPending] = await Promise.all([
+      prisma.questions.count({
+        where: { status: 'approved', ...(topicFilter ? { topic_id: { in: topicFilter } } : {}) },
+      }),
+      prisma.questions.count({
+        where: { status: 'draft', ...(topicFilter ? { topic_id: { in: topicFilter } } : {}) },
+      }),
     ])
 
-    // Answer counts — need question IDs for subject
+    // Answer counts
     let aApproved = 0
-    let aPending = 0
+    let aPending  = 0
 
     if (topicFilter) {
       // Get question IDs for this subject's topics
-      const { data: subjectQs } = await supabase
-        .from('questions')
-        .select('id')
-        .in('topic_id', topicFilter)
-
-      const questionIds = (subjectQs ?? []).map((q) => q.id)
+      const subjectQs = await prisma.questions.findMany({
+        where: { topic_id: { in: topicFilter } },
+        select: { id: true },
+      })
+      const questionIds = subjectQs.map(q => q.id)
 
       if (questionIds.length > 0) {
-        const [aApprovedRes, aPendingRes] = await Promise.all([
-          supabase.from('answers').select('id', { count: 'exact', head: true }).eq('status', 'approved').in('question_id', questionIds),
-          supabase.from('answers').select('id', { count: 'exact', head: true }).eq('status', 'draft').in('question_id', questionIds),
+        const [aApprovedCount, aPendingCount] = await Promise.all([
+          prisma.answers.count({ where: { status: 'approved', question_id: { in: questionIds } } }),
+          prisma.answers.count({ where: { status: 'draft',    question_id: { in: questionIds } } }),
         ])
-        aApproved = aApprovedRes.count ?? 0
-        aPending = aPendingRes.count ?? 0
+        aApproved = aApprovedCount
+        aPending  = aPendingCount
       }
     } else {
-      const [aApprovedRes, aPendingRes] = await Promise.all([
-        supabase.from('answers').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
-        supabase.from('answers').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
+      const [aApprovedCount, aPendingCount] = await Promise.all([
+        prisma.answers.count({ where: { status: 'approved' } }),
+        prisma.answers.count({ where: { status: 'draft'    } }),
       ])
-      aApproved = aApprovedRes.count ?? 0
-      aPending = aPendingRes.count ?? 0
+      aApproved = aApprovedCount
+      aPending  = aPendingCount
     }
 
-    return NextResponse.json({
-      qApproved: qApprovedRes.count ?? 0,
-      qPending: qPendingRes.count ?? 0,
-      aApproved,
-      aPending,
-    })
+    return NextResponse.json({ qApproved, qPending, aApproved, aPending })
   } catch (err) {
     console.error('[GET /api/stats]', err)
     return NextResponse.json({ qApproved: 0, qPending: 0, aApproved: 0, aPending: 0 })

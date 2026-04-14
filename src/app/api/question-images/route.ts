@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -16,19 +17,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const rows = await prisma.question_images.findMany({
+      where: {
+        question_id: questionId,
+        ...(imageType ? { image_type: imageType } : {}),
+      },
+      orderBy: { sort_order: 'asc' },
+    })
+
+    // Generate signed URLs — Supabase Storage (unchanged)
     const supabase = createAdminClient()
-    let query = supabase
-      .from('question_images')
-      .select('*')
-      .eq('question_id', questionId)
-      .order('sort_order', { ascending: true })
-
-    if (imageType) query = query.eq('image_type', imageType)
-
-    const { data, error } = await query
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    const rows = data ?? []
     const withSignedUrls = await Promise.all(
       rows.map(async (image) => {
         const { data: signedUrl } = await supabase.storage
@@ -48,7 +46,7 @@ export async function GET(request: NextRequest) {
 // ── POST (multipart: question_id, image_type?, file(s)) ──────────────────────
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData()
+    const formData  = await request.formData()
     const questionId = formData.get('question_id') as string | null
     const imageType  = (formData.get('image_type') as string | null) ?? 'question'
 
@@ -65,13 +63,14 @@ export async function POST(request: NextRequest) {
     const created = []
 
     for (let index = 0; index < files.length; index++) {
-      const file = files[index]
+      const file      = files[index]
       const timestamp = Date.now()
       const safeName  = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
       const storagePath = `${questionId}/${timestamp}_${safeName}`
 
       const buffer = Buffer.from(await file.arrayBuffer())
 
+      // Upload to Supabase Storage (unchanged)
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
         .upload(storagePath, buffer, { contentType: file.type, upsert: false })
@@ -84,22 +83,16 @@ export async function POST(request: NextRequest) {
       const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(storagePath)
       const publicUrl = urlData?.publicUrl ?? null
 
-      const { data: row, error: dbError } = await supabase
-        .from('question_images')
-        .insert({
+      const row = await prisma.question_images.create({
+        data: {
+          id:           crypto.randomUUID(),
           question_id:  questionId,
           storage_path: storagePath,
           public_url:   publicUrl,
           image_type:   imageType,
           sort_order:   index,
-        })
-        .select()
-        .single()
-
-      if (dbError) {
-        console.error('[POST /api/question-images] db insert error:', dbError)
-        return NextResponse.json({ error: dbError.message }, { status: 500 })
-      }
+        },
+      })
 
       created.push(row)
     }
@@ -119,18 +112,17 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const supabase = createAdminClient()
+    const row = await prisma.question_images.findUnique({
+      where: { id },
+      select: { storage_path: true },
+    })
 
-    const { data: row, error: fetchError } = await supabase
-      .from('question_images')
-      .select('storage_path')
-      .eq('id', id)
-      .single()
-
-    if (fetchError || !row) {
+    if (!row) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 })
     }
 
+    // Remove from Supabase Storage (unchanged)
+    const supabase = createAdminClient()
     const { error: storageError } = await supabase.storage
       .from(BUCKET)
       .remove([row.storage_path])
@@ -140,12 +132,7 @@ export async function DELETE(request: NextRequest) {
       // Continue to delete DB row even if storage fails
     }
 
-    const { error: dbError } = await supabase
-      .from('question_images')
-      .delete()
-      .eq('id', id)
-
-    if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 })
+    await prisma.question_images.delete({ where: { id } })
 
     return NextResponse.json({ deleted: id })
   } catch (err) {

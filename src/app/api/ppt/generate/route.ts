@@ -4,7 +4,9 @@ export const maxDuration = 60
 
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 import { embedTexts } from '@/lib/voyage'
 import type { Slide } from '@/types/ppt'
 
@@ -18,43 +20,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'subtopic_id and subject_id are required' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-
-    const [subtopicRes, subjectRes] = await Promise.all([
-      supabase.from('subtopics').select('id, ref, title, topic_id').eq('id', subtopic_id).single(),
-      supabase.from('subjects').select('id, name, code').eq('id', subject_id).single(),
+    // Fetch subtopic and subject in parallel
+    const [subtopic, subject] = await Promise.all([
+      prisma.subtopics.findUnique({
+        where: { id: subtopic_id },
+        select: { id: true, ref: true, title: true, topic_id: true },
+      }),
+      prisma.subjects.findUnique({
+        where: { id: subject_id },
+        select: { id: true, name: true, code: true },
+      }),
     ])
 
-    if (!subtopicRes.data || !subjectRes.data) {
+    if (!subtopic || !subject) {
       return NextResponse.json({ error: 'Subtopic or subject not found' }, { status: 404 })
     }
 
-    const subtopic = subtopicRes.data
-    const subject = subjectRes.data
+    const topic = subtopic.topic_id
+      ? await prisma.topics.findUnique({
+          where: { id: subtopic.topic_id },
+          select: { name: true, ref: true },
+        })
+      : null
 
-    const topicRes = subtopic.topic_id
-      ? await supabase.from('topics').select('name, ref').eq('id', subtopic.topic_id).single()
-      : { data: null }
-    const topic = topicRes.data
+    const [subSubtopics, questions] = await Promise.all([
+      prisma.sub_subtopics.findMany({
+        where: { subtopic_id },
+        select: { id: true, outcome: true, ext_num: true, core_num: true, tier: true },
+        orderBy: { sort_order: 'asc' },
+        take: 6,
+      }),
+      prisma.questions.findMany({
+        where: { subtopic_id, status: 'approved' },
+        select: { id: true, content_text: true, marks: true, difficulty: true, sub_subtopic_id: true },
+        orderBy: { difficulty: 'asc' },
+      }),
+    ])
 
-    const { data: subSubtopics } = await supabase
-      .from('sub_subtopics')
-      .select('id, outcome, ext_num, core_num, tier')
-      .eq('subtopic_id', subtopic_id)
-      .order('sort_order', { ascending: true })
-      .limit(6)
+    const subs = subSubtopics
 
-    const subs = subSubtopics ?? []
-
-    const { data: questions } = await supabase
-      .from('questions')
-      .select('id, content_text, marks, difficulty, sub_subtopic_id')
-      .eq('subtopic_id', subtopic_id)
-      .eq('status', 'approved')
-      .order('difficulty', { ascending: true })
-
-    const questionsBySub: Record<string, { id: string; content_text: string; marks: number }[]> = {}
-    for (const q of questions ?? []) {
+    const questionsBySub: Record<string, { id: string; content_text: string | null; marks: number | null }[]> = {}
+    for (const q of questions) {
       const key = q.sub_subtopic_id ?? 'unassigned'
       if (!questionsBySub[key]) questionsBySub[key] = []
       questionsBySub[key].push(q)
@@ -66,11 +72,13 @@ export async function POST(request: NextRequest) {
 
     const embeddings = await embedTexts(searchQueries)
 
+    // ── RPC: vector similarity search — keep on Supabase (Postgres function) ──
+    const supabase = createAdminClient()
     const chunkResults = await Promise.all(
       embeddings.map(embedding =>
         supabase.rpc('search_databank_chunks', {
-          query_embedding: embedding,
-          match_count: 4,
+          query_embedding:      embedding,
+          match_count:          4,
           similarity_threshold: 0.25,
         })
       )
@@ -99,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     const subsSection = subs.length > 0
       ? subs.map((s, i) => {
-          const qs = questionsBySub[s.id] ?? questionsBySub['unassigned'] ?? []
+          const qs    = questionsBySub[s.id] ?? questionsBySub['unassigned'] ?? []
           const qText = qs.slice(0, 2).map((q, qi) => `  Q${qi + 1} (${q.marks}m): ${q.content_text}`).join('\n')
           return `SUB-SUBTOPIC ${i + 1}: ${s.outcome}\n${qText || '  (no approved questions yet — concept slide only)'}`
         }).join('\n\n')
@@ -159,10 +167,10 @@ RULES:
 - Return ONLY the JSON array`
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model:      'claude-sonnet-4-20250514',
       max_tokens: 6000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      system:     systemPrompt,
+      messages:   [{ role: 'user', content: userPrompt }],
     })
 
     const rawText = response.content.find(b => b.type === 'text')?.text ?? ''
@@ -178,22 +186,16 @@ RULES:
     }
 
     const deckTitle = `${subtopic.title} — ${subject.code}`
-    const { data: deck, error: insertErr } = await supabase
-      .from('ppt_decks')
-      .insert({
+    const deck = await prisma.ppt_decks.create({
+      data: {
         subtopic_id,
         subject_id,
-        title: deckTitle,
-        slides,
-        status: 'draft',
+        title:       deckTitle,
+        slides:      slides as Prisma.InputJsonValue,
+        status:      'draft',
         tutor_notes: tutor_notes ?? null,
-      })
-      .select()
-      .single()
-
-    if (insertErr) {
-      return NextResponse.json({ error: insertErr.message }, { status: 500 })
-    }
+      },
+    })
 
     return NextResponse.json({ deck })
   } catch (err) {

@@ -7,14 +7,18 @@ datasource db {
 }
 
 model answers {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  question_id   String?   @db.Uuid
-  content_text  String?
-  status        String?   @default("draft")
-  created_by    String?   @db.Uuid
-  created_at    DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
-  serial_number String?
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  question_id      String?   @db.Uuid
+  content_text     String?
+  status           String?   @default("draft")
+  created_by       String?   @db.Uuid
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime? @default(now()) @db.Timestamptz(6)
+  serial_number    String?
+  content          String?
+  step_by_step     String?
+  mark_scheme      String?
+  confidence_score Float?
 }
 
 model databank_chunks {
@@ -78,6 +82,7 @@ model ppt_decks {
   subject_id    String?   @db.Uuid
   topic_id      String?   @db.Uuid
   exam_board_id String?   @db.Uuid
+  tutor_notes   String?
 }
 
 model production_targets {
