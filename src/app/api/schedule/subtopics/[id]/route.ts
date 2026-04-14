@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -10,17 +10,31 @@ export async function PATCH(
   { params }: { params: { id: string } },
 ) {
   try {
-    const body = await request.json()
-    const supabase = createAdminClient()
+    const body = await request.json() as Record<string, unknown>
 
-    const { data, error } = await supabase
-      .from('subtopics')
-      .update(body)
-      .eq('id', params.id)
-      .select()
-      .single()
+    // Pick only fields that exist on the subtopics model
+    const allowed = [
+      'ref', 'title', 'due_date', 'sprint_week', 'qs_total', 'mcq_count',
+      'short_ans_count', 'structured_count', 'extended_count', 'status',
+      'sort_order', 'ppt_required', 'examples_required', 'tier',
+    ]
+    const updates: Record<string, unknown> = {}
+    for (const key of allowed) {
+      if (key in body) {
+        if (key === 'due_date') {
+          updates[key] = body[key] ? new Date(body[key] as string) : null
+        } else if (key === 'sprint_week') {
+          updates[key] = body[key] != null ? String(body[key]) : null
+        } else {
+          updates[key] = body[key]
+        }
+      }
+    }
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    const data = await prisma.subtopics.update({
+      where: { id: params.id },
+      data:  updates,
+    })
 
     return NextResponse.json({ subtopic: data })
   } catch (err) {
@@ -34,12 +48,7 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    const supabase = createAdminClient()
-
-    const { error } = await supabase.from('subtopics').delete().eq('id', params.id)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-
+    await prisma.subtopics.delete({ where: { id: params.id } })
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[DELETE /api/schedule/subtopics/[id]]', err)

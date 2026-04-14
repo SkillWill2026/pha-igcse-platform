@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
-import { createAdminClient } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 
 export async function GET(request: Request) {
   try {
@@ -12,26 +12,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'subtopic_id is required' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-
-    const { data, error } = await supabase
-      .from('sub_subtopics')
-      .select('id, ext_num, core_num, outcome, tier, sort_order')
-      .eq('subtopic_id', subtopicId)
-      .order('sort_order', { ascending: true })
-
-    if (error) {
-      console.error('[sub-subtopics] Supabase error:', JSON.stringify(error))
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      }, { status: 500 })
-    }
+    const data = await prisma.sub_subtopics.findMany({
+      select: { id: true, ext_num: true, core_num: true, outcome: true, tier: true, sort_order: true },
+      where: { subtopic_id: subtopicId },
+      orderBy: { sort_order: 'asc' },
+    })
 
     return NextResponse.json(data ?? [])
-
   } catch (err) {
     console.error('[sub-subtopics] Caught error:', err)
     return NextResponse.json({

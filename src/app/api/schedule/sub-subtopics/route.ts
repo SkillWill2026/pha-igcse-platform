@@ -1,27 +1,20 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createAdminClient()
     const { searchParams } = new URL(request.url)
     const subtopicId = searchParams.get('subtopic_id')
 
-    let query = supabase
-      .from('sub_subtopics')
-      .select('*')
-      .order('sort_order')
+    const data = await prisma.sub_subtopics.findMany({
+      where: subtopicId ? { subtopic_id: subtopicId } : undefined,
+      orderBy: { sort_order: 'asc' },
+    })
 
-    if (subtopicId) {
-      query = query.eq('subtopic_id', subtopicId)
-    }
-
-    const { data, error } = await query
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ sub_subtopics: data ?? [] })
   } catch (err) {
     console.error('[GET /api/schedule/sub-subtopics]', err)
@@ -31,7 +24,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createAdminClient()
     const body = await request.json() as Record<string, unknown>
 
     const { subtopic_id, ext_num, core_num, outcome, tier, notes } = body as {
@@ -40,7 +32,7 @@ export async function POST(request: NextRequest) {
       core_num?: number | null
       outcome: string
       tier?: string
-      notes?: string[] | null
+      notes?: string | null
     }
 
     if (!subtopic_id || !ext_num || !outcome) {
@@ -50,29 +42,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Auto-assign sort_order as count+1 within the subtopic
-    const { count } = await supabase
-      .from('sub_subtopics')
-      .select('*', { count: 'exact', head: true })
-      .eq('subtopic_id', subtopic_id)
+    const sort_order = await prisma.sub_subtopics.count({
+      where: { subtopic_id },
+    }) + 1
 
-    const sort_order = (count ?? 0) + 1
-
-    const { data, error } = await supabase
-      .from('sub_subtopics')
-      .insert({
+    const data = await prisma.sub_subtopics.create({
+      data: {
         subtopic_id,
-        ext_num: Number(ext_num),
-        core_num: core_num != null ? Number(core_num) : null,
+        ext_num:    Number(ext_num),
+        core_num:   core_num != null ? Number(core_num) : null,
         outcome,
-        tier: tier ?? 'both',
-        notes: notes ?? null,
+        tier:       tier ?? 'both',
+        notes:      notes ?? null,
         sort_order,
-      })
-      .select()
-      .single()
+      },
+    })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ sub_subtopic: data })
   } catch (err) {
     console.error('[POST /api/schedule/sub-subtopics]', err)

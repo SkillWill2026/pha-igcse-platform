@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic'
+
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
 import { createServerClient } from '@/lib/supabase-server'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -12,17 +13,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const supabase = createAdminClient()
   const subjectId = request.nextUrl.searchParams.get('subject_id')
 
-  let query = supabase
-    .from('topics')
-    .select('id, ref, name, subject_id')
-    .order('sort_order')
-
-  if (subjectId) query = query.eq('subject_id', subjectId)
-
-  const { data, error } = await query
-  if (error) return NextResponse.json([], { status: 500 })
-  return NextResponse.json(data)
+  try {
+    const data = await prisma.topics.findMany({
+      select: { id: true, ref: true, name: true, subject_id: true },
+      where: subjectId ? { subject_id: subjectId } : undefined,
+      orderBy: { sort_order: 'asc' },
+    })
+    return NextResponse.json(data)
+  } catch {
+    return NextResponse.json([], { status: 500 })
+  }
 }
