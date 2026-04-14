@@ -33,7 +33,7 @@ function ruleBasedSubSubtopic(questionText: string, subSubtopics: {id: string, o
   return null
 }
 
-export async function classifyQuestion(questionId: string, restrictToTopicId?: string | null): Promise<void> {
+export async function classifyQuestion(questionId: string, restrictToTopicId?: string | null, searchAllTopics = false): Promise<void> {
   const supabase = createAdminClient()
 
   // Fetch question
@@ -55,13 +55,14 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     .replace(/\\[a-zA-Z]+/g, '')
     .trim()
 
-  // Skip classification for MIX topic — tutor assigns manually
-  const effectiveTopicId = restrictToTopicId ?? question.topic_id
-  if (!effectiveTopicId) return
+  // Allow searching all topics if searchAllTopics is true, otherwise fall back to question's current topic
+  const effectiveTopicId = searchAllTopics ? null : (restrictToTopicId ?? question.topic_id)
 
   // Fetch all subtopics with their topics, and ALL sub-subtopics
   const [subtopicsRes, allSubSubtopicsRes, topicsRes] = await Promise.all([
-    supabase.from('subtopics').select('id, title, topic_id').eq('topic_id', effectiveTopicId).order('sort_order'),
+    effectiveTopicId
+      ? supabase.from('subtopics').select('id, title, topic_id').eq('topic_id', effectiveTopicId).order('sort_order')
+      : supabase.from('subtopics').select('id, title, topic_id').order('sort_order'),
     supabase.from('sub_subtopics').select('id, outcome, subtopic_id').order('sort_order'),
     supabase.from('topics').select('id, name, ref'),
   ])
@@ -212,7 +213,7 @@ export async function POST(request: Request) {
       .single()
 
     // Run classification
-    await classifyQuestion(question_id, topic_id ?? null)
+    await classifyQuestion(question_id, topic_id ?? null, topic_id === null || topic_id === undefined ? true : false)
 
     // Fetch updated question to check if classification changed anything
     const { data: updated } = await supabase
