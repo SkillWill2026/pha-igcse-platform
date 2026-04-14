@@ -90,8 +90,17 @@ function detectMensurationSubtopic(text: string, subtopics: { id: string; title:
   // Arc/sector (circles)
   if (/\b(arc length|sector area|arc|sector)\b/.test(t) && /\b(area|length|perimeter)\b/.test(t)) return find('arc') ?? find('circle')
   // Compound shapes: area of walls, floors, rooms, fields, painted surfaces
-  if (/\b(area|compound|wall|floor|field|garden|path|frame|shaded|total area|work out the area)\b/.test(t)) {
-    return find('compound') ?? find('area')
+  if (
+    /\b(area|compound|wall|floor|field|garden|path|frame|shaded|square)\b/.test(t) ||
+    /paint(ing|ed|s)?\b/.test(t) ||
+    /\bcovers?\b/.test(t) ||
+    /\blitres?\b/.test(t) ||
+    /\benough\b/.test(t) ||
+    /how\s+much/.test(t) ||
+    /m\s*[\^2²]/.test(t) ||
+    /cm\s*[\^2²]/.test(t)
+  ) {
+    return find('compound') ?? find('area') ?? find('mensuration')
   }
   // Perimeter
   if (/\bperimeter\b/.test(t)) return find('perimeter') ?? find('compound')
@@ -131,10 +140,10 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     if (keywordTopicId) {
       effectiveTopicId = keywordTopicId
     } else {
-      // Fall back to Haiku only if keywords didn't match
+      // Fall back to Sonnet for higher accuracy if keywords didn't match
       const topicList = topics.map(t => `ID:${t.id} | ${t.ref} – ${t.name}`).join('\n')
       const topicMsg = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-6',
         max_tokens: 256,
         system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert. Identify which topic a question belongs to. KEY RULES: Mensuration = CALCULATE area/volume/perimeter. Geometry = angle properties/constructions/shape names. Algebra = equations/formulae/rearranging. Respond ONLY with JSON: {"topic_id": "exact-uuid"}`,
         messages: [{ role: 'user', content: `QUESTION: ${cleanText}\n\nTOPICS:\n${topicList}\n\nReturn ONLY JSON: {"topic_id": "..."}` }]
