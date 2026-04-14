@@ -150,7 +150,6 @@ model sub_subtopics {
   created_at  DateTime? @db.Timestamptz(6)
 }
 
-/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model subjects {
   id         String    @id @db.Uuid
   name       String
@@ -159,8 +158,6 @@ model subjects {
   active     Boolean
   sort_order Int
   created_at DateTime? @db.Timestamptz(6)
-
-  @@ignore
 }
 
 model subtopics {
@@ -197,7 +194,6 @@ model topics {
   subject_id      String?   @db.Uuid
 }
 
-/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model tutor_topic_assignments {
   id           String    @id @db.Uuid
   user_id      String    @db.Uuid
@@ -205,8 +201,6 @@ model tutor_topic_assignments {
   subject_id   String    @db.Uuid
   daily_target Int?
   created_at   DateTime? @db.Timestamptz(6)
-
-  @@ignore
 }
 
 model upload_batches {

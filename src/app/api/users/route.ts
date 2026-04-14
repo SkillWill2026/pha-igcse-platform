@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase'
 import { createServerClient } from '@/lib/supabase-server'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -11,8 +12,7 @@ async function requireAdmin(): Promise<{ error: NextResponse } | { error: null }
   const serverClient = createServerClient()
   const { data: { user } } = await serverClient.auth.getUser()
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const adminClient = createAdminClient()
-  const { data: profile } = await adminClient.from('profiles').select('role').eq('id', user.id).single()
+  const profile = await prisma.profiles.findUnique({ where: { id: user.id }, select: { role: true } })
   if (profile?.role !== 'admin') return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) }
   return { error: null }
 }
@@ -49,14 +49,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert matching profile row
-    const { error: profileErr } = await adminClient
-      .from('profiles')
-      .insert({ id: user.id, full_name: full_name ?? '', role })
-
-    if (profileErr) {
+    try {
+      await prisma.profiles.create({
+        data: { id: user.id, full_name: full_name ?? '', role },
+      })
+    } catch (profileErr) {
       // Roll back auth user so we don't leave orphans
       await adminClient.auth.admin.deleteUser(user.id)
-      return NextResponse.json({ error: profileErr.message }, { status: 500 })
+      console.error('[POST /api/users] profile create failed:', profileErr)
+      return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 })
     }
 
     revalidatePath('/admin/users')
