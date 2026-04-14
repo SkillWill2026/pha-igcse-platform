@@ -12,6 +12,7 @@ interface NavLink {
   icon:      React.ElementType
   adminOnly: boolean
   tutorOnly?: boolean
+  uploaderVisible?: boolean
 }
 
 type Subject = {
@@ -52,21 +53,22 @@ const SUBJECT_THEMES: Record<string, {
 }
 
 const NAV_LINKS: NavLink[] = [
-  { href: '/admin/dashboard', label: 'My Dashboard', icon: LayoutDashboard, adminOnly: false, tutorOnly: true },
-  { href: '/admin/upload',    label: 'Upload',            icon: Upload,         adminOnly: false },
-  { href: '/admin/review',        label: 'Review Queue',      icon: CheckCircle2,   adminOnly: false },
-  { href: '/admin/answer-queue',       label: 'Answer Queue',      icon: AlertTriangle,  adminOnly: true  },
-  { href: '/admin/databank/dashboard', label: 'Databank',          icon: Database,       adminOnly: true  },
-  { href: '/admin/questions',          label: 'Questions Library', icon: BookOpen,       adminOnly: false },
-  { href: '/admin/answers',   label: 'Answers Library',   icon: FileText,       adminOnly: false },
-  { href: '/admin/schedule',  label: 'Schedule',          icon: CalendarDays,   adminOnly: false },
-  { href: '/admin/ppt', label: 'PPT Slides', icon: Presentation, adminOnly: false },
-  { href: '/admin/users',     label: 'Users',             icon: Users,          adminOnly: true  },
-  { href: '/admin/activity-report', label: 'Activity Report', icon: BarChart2, adminOnly: true },
+  { href: '/admin/dashboard', label: 'My Dashboard', icon: LayoutDashboard, adminOnly: false, tutorOnly: true, uploaderVisible: false },
+  { href: '/admin/upload', label: 'Upload', icon: Upload, adminOnly: false, uploaderVisible: true },
+  { href: '/admin/review', label: 'Review Queue', icon: CheckCircle2, adminOnly: false, uploaderVisible: false },
+  { href: '/admin/answer-queue', label: 'Answer Queue', icon: AlertTriangle, adminOnly: true, uploaderVisible: false },
+  { href: '/admin/databank/dashboard', label: 'Databank', icon: Database, adminOnly: true, uploaderVisible: false },
+  { href: '/admin/databank/documents', label: 'Databank Upload', icon: Database, adminOnly: false, uploaderVisible: true },
+  { href: '/admin/questions', label: 'Questions Library', icon: BookOpen, adminOnly: false, uploaderVisible: false },
+  { href: '/admin/answers', label: 'Answers Library', icon: FileText, adminOnly: false, uploaderVisible: false },
+  { href: '/admin/schedule', label: 'Schedule', icon: CalendarDays, adminOnly: false, uploaderVisible: false },
+  { href: '/admin/ppt', label: 'PPT Slides', icon: Presentation, adminOnly: false, uploaderVisible: false },
+  { href: '/admin/users', label: 'Users', icon: Users, adminOnly: true, uploaderVisible: false },
+  { href: '/admin/activity-report', label: 'Activity Report', icon: BarChart2, adminOnly: true, uploaderVisible: false },
 ]
 
 interface SidebarProps {
-  role:     'admin' | 'tutor'
+  role:     'admin' | 'tutor' | 'uploader'
   fullName: string
 }
 
@@ -80,6 +82,7 @@ export function Sidebar({ role, fullName }: SidebarProps) {
   const [subjects, setSubjects] = useState<Subject[]>([])
 
   const visibleLinks = NAV_LINKS.filter((l) => {
+    if (role === 'uploader') return l.uploaderVisible === true
     if (l.tutorOnly && role !== 'tutor') return false
     if (l.adminOnly && role !== 'admin') return false
     return true

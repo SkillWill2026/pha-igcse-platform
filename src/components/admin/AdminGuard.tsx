@@ -9,7 +9,7 @@ const TUTOR_BLOCKED_PATHS = [
   '/admin/answer-queue',
 ]
 
-export function AdminGuard({ role }: { role: string }) {
+export function AdminGuard({ role }: { role: 'admin' | 'tutor' | 'uploader' }) {
   const router = useRouter()
   const pathname = usePathname()
 

@@ -50,8 +50,8 @@ export async function middleware(request: NextRequest) {
       url.pathname = '/admin/dashboard'
       return NextResponse.redirect(url)
     }
-    // Uploader role — can only access upload page and dashboard
-    const uploaderAllowed = ['/admin/upload', '/admin/dashboard']
+    // Uploader role — can only access upload page, dashboard, and databank documents
+    const uploaderAllowed = ['/admin/upload', '/admin/dashboard', '/admin/databank/documents']
     if (role === 'uploader' && !uploaderAllowed.some(p => pathname.startsWith(p))) {
       const url = request.nextUrl.clone()
       url.pathname = '/admin/upload'

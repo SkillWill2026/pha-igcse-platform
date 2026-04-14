@@ -22,7 +22,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     .eq('id', user.id)
     .single()
 
-  const role = (profile?.role as 'admin' | 'tutor') ?? 'tutor'
+  const role = (profile?.role as 'admin' | 'tutor' | 'uploader') ?? 'tutor'
 
   return (
     <div className="flex min-h-screen">
