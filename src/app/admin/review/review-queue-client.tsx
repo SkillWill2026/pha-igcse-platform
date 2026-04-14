@@ -402,6 +402,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
       if (editSubtopicId) updates.subtopic_id = editSubtopicId
       if (editSubSubtopicId) updates.sub_subtopic_id = editSubSubtopicId
 
+      console.log('[Save] updates being sent:', JSON.stringify(updates))
       const res = await fetch(`/api/questions/${currentQuestion.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

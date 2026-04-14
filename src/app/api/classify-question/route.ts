@@ -62,7 +62,17 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     const topicMsg = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 256,
-      system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert. Given a question, identify which topic it belongs to. Respond ONLY with valid JSON: {"topic_id": "exact-uuid"} Return ONLY the JSON object. No explanation, no markdown.`,
+      system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert. Classify which topic a question belongs to.
+
+KEY DISTINCTIONS:
+- Mensuration = questions asking you to CALCULATE area, volume, perimeter, surface area of any shape (even if about painting, fencing, filling, covering)
+- Geometry = questions about angle properties, constructions, symmetry, transformations, shape names/properties (NOT calculating area/volume)
+- Algebra = equations, formulae, sequences, functions, graphs of functions
+- Number = fractions, percentages, ratio, standard form, arithmetic
+- Probability = chance, likelihood, tree diagrams
+- Statistics = averages, charts, data handling
+
+Respond ONLY with valid JSON: {"topic_id": "exact-uuid"} No explanation, no markdown.`,
       messages: [{ role: 'user', content: `QUESTION: ${cleanText}\n\nAVAILABLE TOPICS:\n${topicList}\n\nWhich topic_id best matches this question? Return ONLY JSON: {"topic_id": "..."}` }]
     })
     const topicText = topicMsg.content[0].type === 'text' ? topicMsg.content[0].text.trim() : '{}'
