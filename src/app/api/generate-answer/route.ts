@@ -192,7 +192,7 @@ Write a complete model answer for this question.`
 
     // 6. Call Claude Sonnet with vision (with retry on overload)
     const message = await callClaudeWithRetry(anthropic, {
-      model: 'claude-sonnet-4-5-20251001',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: 'user', content: messageContent }],
