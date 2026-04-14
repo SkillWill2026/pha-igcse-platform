@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -10,17 +10,11 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    const supabase = createAdminClient()
-
     // Set is_example = false — does not delete the question itself
-    const { error } = await supabase
-      .from('questions')
-      .update({ is_example: false })
-      .eq('id', params.id)
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    await prisma.questions.update({
+      where: { id: params.id },
+      data:  { is_example: false },
+    })
 
     return NextResponse.json({ ok: true })
   } catch (err) {

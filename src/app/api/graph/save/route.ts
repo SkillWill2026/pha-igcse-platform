@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -35,10 +36,9 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(base64Data, 'base64')
     console.log('[graph/save] Processing image:', { question_id, image_type, source, size: buffer.length })
 
+    // ── Upload to Supabase Storage (unchanged) ────────────────────────────────
     const supabase = createAdminClient()
-
-    // Upload to storage
-    const fileName = `${Date.now()}.png`
+    const fileName    = `${Date.now()}.png`
     const storagePath = `graph-images/${question_id}/${image_type}/${fileName}`
 
     try {
@@ -63,72 +63,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Storage error: ${msg}` }, { status: 500 })
     }
 
-    // Get public URL
-    const { data: publicUrlData } = supabase.storage
-      .from('question-images')
-      .getPublicUrl(storagePath)
-
+    // Get public URL — Supabase Storage (unchanged)
+    const { data: publicUrlData } = supabase.storage.from('question-images').getPublicUrl(storagePath)
     const imageUrl = publicUrlData?.publicUrl ?? ''
-    console.log('[graph/save] Public URL:', imageUrl)
 
-    // Generate a signed URL so the thumbnail appears immediately
+    // Generate signed URL — Supabase Storage (unchanged)
     const { data: signedUrlData } = await supabase.storage
       .from('question-images')
-      .createSignedUrl(storagePath, 3600 * 24)  // 24h signed URL
-
+      .createSignedUrl(storagePath, 3600 * 24)
     const displayUrl = signedUrlData?.signedUrl ?? publicUrlData?.publicUrl ?? ''
-    console.log('[graph/save] Display URL:', displayUrl)
 
     // Get max sort_order for this question + image_type
     try {
-      const { data: existing, error: queryErr } = await supabase
-        .from('question_images')
-        .select('sort_order')
-        .eq('question_id', question_id)
-        .eq('image_type', image_type)
-        .order('sort_order', { ascending: false })
-        .limit(1)
+      const existing = await prisma.question_images.findFirst({
+        where:   { question_id, image_type },
+        select:  { sort_order: true },
+        orderBy: { sort_order: 'desc' },
+      })
 
-      if (queryErr) {
-        console.error('[graph/save] Query existing images failed:', queryErr.message)
-        return NextResponse.json({ error: `Query failed: ${queryErr.message}` }, { status: 500 })
-      }
-
-      const maxSortOrder = existing && existing.length > 0 ? existing[0].sort_order : 0
-      const newSortOrder = maxSortOrder + 1
-
+      const newSortOrder = (existing?.sort_order ?? 0) + 1
       console.log('[graph/save] Next sort_order:', newSortOrder)
 
       // Insert into question_images table
-      const { data: insertData, error: insertErr } = await supabase
-        .from('question_images')
-        .insert({
+      const insertData = await prisma.question_images.create({
+        data: {
+          id:           crypto.randomUUID(),
           question_id,
           storage_path: storagePath,
           image_type,
-          sort_order: newSortOrder,
-          display_url: displayUrl,
-        })
-        .select('id')
-        .single()
-
-      if (insertErr) {
-        console.error('[graph/save] Insert failed:', insertErr.message)
-        return NextResponse.json({ error: `Insert failed: ${insertErr.message}` }, { status: 500 })
-      }
-
-      const imageId = insertData?.id
-
-      console.log('[graph/save] Success — image_id:', imageId)
-
-      return NextResponse.json({
-        success: true,
-        image_url: imageUrl,
-        display_url: displayUrl,
-        storage_path: storagePath,
-        image_id: imageId,
+          sort_order:   newSortOrder,
+          display_url:  displayUrl,
+        },
+        select: { id: true },
       })
 
+      console.log('[graph/save] Success — image_id:', insertData.id)
+
+      return NextResponse.json({
+        success:      true,
+        image_url:    imageUrl,
+        display_url:  displayUrl,
+        storage_path: storagePath,
+        image_id:     insertData.id,
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[graph/save] Database exception:', msg)

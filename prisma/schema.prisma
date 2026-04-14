@@ -19,6 +19,7 @@ model answers {
   step_by_step     String?
   mark_scheme      String?
   confidence_score Float?
+  ai_generated     Boolean?  @default(false)
 }
 
 model databank_chunks {
@@ -49,16 +50,13 @@ model databank_documents {
   subject_id        String?   @db.Uuid
 }
 
-/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model error_logs {
-  id         String    @id @db.Uuid
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   message    String?
   stack      String?
   url        String?
   user_agent String?
   created_at DateTime? @db.Timestamptz(6)
-
-  @@ignore
 }
 
 model exam_boards {
@@ -150,6 +148,7 @@ model questions {
   question_type      String?
   source_question_id String?   @db.Uuid
   ai_extracted       Boolean?  @default(false)
+  is_example         Boolean?  @default(false)
 }
 
 model sub_subtopics {

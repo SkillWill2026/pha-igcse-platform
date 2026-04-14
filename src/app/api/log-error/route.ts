@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createAdminClient()
-    const body = await request.json()
+    const body = await request.json() as { message?: string; stack?: string; url?: string }
 
-    await supabase.from('error_logs').insert({
-      message: body.message,
-      stack: body.stack,
-      url: body.url,
-      user_agent: request.headers.get('user-agent'),
-      created_at: new Date().toISOString(),
+    await prisma.error_logs.create({
+      data: {
+        message:    body.message ?? null,
+        stack:      body.stack ?? null,
+        url:        body.url ?? null,
+        user_agent: request.headers.get('user-agent') ?? null,
+        created_at: new Date(),
+      },
     })
 
     return NextResponse.json({ ok: true })

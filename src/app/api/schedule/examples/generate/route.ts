@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 import { createAnthropicClient } from '@/lib/anthropic'
 
 export const runtime = 'nodejs'
@@ -27,66 +27,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'subtopic_id is required' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-
     // Count existing examples
-    const { count: existingCount, error: countErr } = await supabase
-      .from('questions')
-      .select('*', { count: 'exact', head: true })
-      .eq('subtopic_id', subtopic_id)
-      .eq('is_example', true)
+    const existingCount = await prisma.questions.count({
+      where: { subtopic_id, is_example: true },
+    })
 
-    if (countErr) {
-      return NextResponse.json({ error: countErr.message }, { status: 500 })
-    }
-
-    if ((existingCount ?? 0) >= 3) {
+    if (existingCount >= 3) {
       return NextResponse.json({ error: 'Maximum examples already generated' }, { status: 400 })
     }
 
-    const needed = 3 - (existingCount ?? 0)
+    const needed = 3 - existingCount
 
-    // Fetch approved non-example questions (flat — no embedded join)
-    const { data: questionsRaw, error: qErr } = await supabase
-      .from('questions')
-      .select('id, content_text, marks, question_type')
-      .eq('subtopic_id', subtopic_id)
-      .eq('status', 'approved')
-      .eq('is_example', false)
-      .limit(20)
+    // Fetch approved non-example questions
+    const questionsRaw = await prisma.questions.findMany({
+      where:  { subtopic_id, status: 'approved', is_example: false },
+      select: { id: true, content_text: true, marks: true, question_type: true },
+      take:   20,
+    })
 
-    if (qErr) {
-      return NextResponse.json({ error: qErr.message }, { status: 500 })
-    }
-
-    const questionIds = (questionsRaw ?? []).map((q) => q.id)
+    const questionIds = questionsRaw.map(q => q.id)
 
     // Fetch answers for those questions separately
-    let answersRaw: { question_id: string; content: string; step_by_step: string[]; mark_scheme: string; status: string }[] = []
-    if (questionIds.length > 0) {
-      const { data: aData } = await supabase
-        .from('answers')
-        .select('question_id, content, step_by_step, mark_scheme, status')
-        .in('question_id', questionIds)
-      answersRaw = (aData ?? []) as typeof answersRaw
-    }
+    const answersRaw = questionIds.length > 0
+      ? await prisma.answers.findMany({
+          where:  { question_id: { in: questionIds } },
+          select: { question_id: true, content: true, step_by_step: true, mark_scheme: true, status: true },
+        })
+      : []
 
     // Group answers by question_id
     const answersMap = new Map<string, typeof answersRaw>()
     for (const a of answersRaw) {
+      if (!a.question_id) continue
       const arr = answersMap.get(a.question_id) ?? []
       arr.push(a)
       answersMap.set(a.question_id, arr)
     }
 
     // Stitch questions with answers
-    const questions = (questionsRaw ?? []).map((q) => ({
+    const questions = questionsRaw.map(q => ({
       ...q,
       answers: answersMap.get(q.id) ?? [],
     }))
 
     const available = questions.filter(
-      (q) => Array.isArray(q.answers) && q.answers.some((a) => a.status === 'approved'),
+      q => Array.isArray(q.answers) && q.answers.some(a => a.status === 'approved'),
     )
 
     if (available.length === 0) {
@@ -97,16 +82,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Build context for Claude
-    const qContext = available.map((q) => {
-      const ans = q.answers.find((a) => a.status === 'approved') ?? q.answers[0]
+    const qContext = available.map(q => {
+      const ans = q.answers.find(a => a.status === 'approved') ?? q.answers[0]
       return {
-        id:           q.id,
-        question:     q.content_text,
-        marks:        q.marks,
-        type:         q.question_type,
-        answer:       ans?.content ?? '',
-        steps:        (ans?.step_by_step ?? []).join('\n'),
-        mark_scheme:  ans?.mark_scheme ?? '',
+        id:          q.id,
+        question:    q.content_text,
+        marks:       q.marks,
+        type:        q.question_type,
+        answer:      ans?.content ?? '',
+        steps:       (Array.isArray(ans?.step_by_step) ? (ans.step_by_step as string[]) : []).join('\n'),
+        mark_scheme: ans?.mark_scheme ?? '',
       }
     })
 
@@ -146,64 +131,59 @@ ${JSON.stringify(qContext, null, 2)}`
       return NextResponse.json({ error: 'AI returned malformed JSON', raw }, { status: 502 })
     }
 
-    // Mark selected questions as examples
-    const updatedIds: string[] = []
+    // Mark selected questions as examples and prepend explanation to answer
     for (const ex of parsed.examples) {
-      const { error: updateErr } = await supabase
-        .from('questions')
-        .update({ is_example: true })
-        .eq('id', ex.question_id)
-        .eq('subtopic_id', subtopic_id) // safety check
+      try {
+        await prisma.questions.update({
+          where: { id: ex.question_id, subtopic_id },   // safety: must belong to this subtopic
+          data:  { is_example: true },
+        })
 
-      if (!updateErr) {
-        updatedIds.push(ex.question_id)
-
-        // Prepend explanation to the approved answer's content_text
-        const { data: ans } = await supabase
-          .from('answers')
-          .select('id, content')
-          .eq('question_id', ex.question_id)
-          .eq('status', 'approved')
-          .single()
+        // Prepend explanation to the approved answer's content
+        const ans = await prisma.answers.findFirst({
+          where:  { question_id: ex.question_id, status: 'approved' },
+          select: { id: true, content: true },
+        })
 
         if (ans) {
           const newText = ex.explanation
             ? `${ex.explanation}\n\n---\n\n${ans.content}`
             : ans.content
-          await supabase
-            .from('answers')
-            .update({ content: newText })
-            .eq('id', ans.id)
+          await prisma.answers.update({
+            where: { id: ans.id },
+            data:  { content: newText },
+          })
         }
+      } catch {
+        // Skip if update fails (e.g. question doesn't belong to subtopic)
       }
     }
 
-    // Return updated examples list (flat fetch, no embedded join)
-    const { data: exampleQs } = await supabase
-      .from('questions')
-      .select('id, content')
-      .eq('subtopic_id', subtopic_id)
-      .eq('is_example', true)
+    // Return updated examples list
+    const exampleQs = await prisma.questions.findMany({
+      where:  { subtopic_id, is_example: true },
+      select: { id: true, content_text: true },
+    })
 
-    const exampleIds = (exampleQs ?? []).map((q) => q.id)
-    let exampleAnswers: { question_id: string; id: string; content: string; step_by_step: string[]; status: string }[] = []
-    if (exampleIds.length > 0) {
-      const { data: eaData } = await supabase
-        .from('answers')
-        .select('question_id, id, content, step_by_step, status')
-        .in('question_id', exampleIds)
-      exampleAnswers = (eaData ?? []) as typeof exampleAnswers
-    }
+    const exampleIds = exampleQs.map(q => q.id)
+    const exampleAnswersRaw = exampleIds.length > 0
+      ? await prisma.answers.findMany({
+          where:  { question_id: { in: exampleIds } },
+          select: { question_id: true, id: true, content: true, step_by_step: true, status: true },
+        })
+      : []
 
-    const exAnswersMap = new Map<string, typeof exampleAnswers>()
-    for (const a of exampleAnswers) {
+    const exAnswersMap = new Map<string, typeof exampleAnswersRaw>()
+    for (const a of exampleAnswersRaw) {
+      if (!a.question_id) continue
       const arr = exAnswersMap.get(a.question_id) ?? []
       arr.push(a)
       exAnswersMap.set(a.question_id, arr)
     }
 
-    const newExamples = (exampleQs ?? []).map((q) => ({
-      ...q,
+    const newExamples = exampleQs.map(q => ({
+      id:      q.id,
+      content: q.content_text,   // maintain response shape expected by frontend
       answers: exAnswersMap.get(q.id) ?? [],
     }))
 

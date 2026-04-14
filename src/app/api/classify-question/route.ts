@@ -1,8 +1,8 @@
 export const dynamic = 'force-dynamic'
 
-import { createAdminClient } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { prisma } from '@/lib/prisma'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -111,25 +111,24 @@ function detectMensurationSubtopic(text: string, subtopics: { id: string; title:
 }
 
 export async function classifyQuestion(questionId: string, restrictToTopicId?: string | null, searchAllTopics = false): Promise<void> {
-  const supabase = createAdminClient()
+  const question = await prisma.questions.findUnique({
+    where:  { id: questionId },
+    select: { id: true, content_text: true, topic_id: true },
+  })
 
-  const { data: question, error: qError } = await supabase
-    .from('questions')
-    .select('id, content_text, topic_id')
-    .eq('id', questionId)
-    .single()
+  if (!question) throw new Error('Question not found')
 
-  if (qError || !question) throw new Error('Question not found')
-
-  const cleanText = question.content_text
+  const cleanText = (question.content_text ?? '')
     .replace(/\$\$[\s\S]*?\$\$/g, '[math expression]')
     .replace(/\$([^$]+)\$/g, '$1')
     .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
     .replace(/\\[a-zA-Z]+/g, '')
     .trim()
 
-  const { data: allTopics } = await supabase.from('topics').select('id, name, ref').order('ref')
-  const topics = allTopics ?? []
+  const topics = await prisma.topics.findMany({
+    select:  { id: true, name: true, ref: true },
+    orderBy: { ref: 'asc' },
+  })
 
   // STEP 1: Identify topic (only if searchAllTopics and no topic pre-selected)
   let effectiveTopicId: string | null = searchAllTopics ? null : (restrictToTopicId ?? question.topic_id ?? null)
@@ -164,32 +163,33 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
   if (!effectiveTopicId) return
 
   // STEP 2: Identify subtopic + sub-subtopic within the chosen topic
-  const [subtopicsRes, allSubSubtopicsRes] = await Promise.all([
-    supabase.from('subtopics').select('id, title, topic_id, ref').eq('topic_id', effectiveTopicId).order('sort_order'),
-    supabase.from('sub_subtopics').select('id, outcome, subtopic_id').order('sort_order'),
+  const [subtopics, allSubSubtopics] = await Promise.all([
+    prisma.subtopics.findMany({
+      where:   { topic_id: effectiveTopicId },
+      select:  { id: true, title: true, topic_id: true, ref: true },
+      orderBy: { sort_order: 'asc' },
+    }),
+    prisma.sub_subtopics.findMany({
+      select:  { id: true, outcome: true, subtopic_id: true },
+      orderBy: { sort_order: 'asc' },
+    }),
   ])
 
-  const subtopics = subtopicsRes.data ?? []
-  const allSubSubtopics = allSubSubtopicsRes.data ?? []
-
-  // Try subtopic keyword detection first for Mensuration (Haiku often picks Units of Measure wrongly)
+  // Try subtopic keyword detection first for Mensuration
   const isMensuration = topics.find(t => t.id === effectiveTopicId)?.name?.toLowerCase().includes('mensuration')
   if (isMensuration) {
     const keywordSubtopicId = detectMensurationSubtopic(cleanText, subtopics)
     if (keywordSubtopicId) {
       const matchedSub = subtopics.find(s => s.id === keywordSubtopicId)
       if (matchedSub) {
-        // Still let Haiku pick the sub-subtopic within this subtopic
         const subSubsForSubtopic = allSubSubtopics.filter(ss => ss.subtopic_id === keywordSubtopicId)
-        const subSubtopicId = ruleBasedSubSubtopic(question.content_text, subSubsForSubtopic) ??
+        const subSubtopicId = ruleBasedSubSubtopic(question.content_text ?? '', subSubsForSubtopic) ??
           (subSubsForSubtopic.length > 0 ? subSubsForSubtopic[0].id : null)
 
-        await supabase.from('questions').update({
-          subtopic_id: keywordSubtopicId,
-          sub_subtopic_id: subSubtopicId,
-          topic_id: effectiveTopicId,
-          updated_at: new Date().toISOString(),
-        }).eq('id', questionId).select().single()
+        await prisma.questions.update({
+          where: { id: questionId },
+          data:  { subtopic_id: keywordSubtopicId, sub_subtopic_id: subSubtopicId, topic_id: effectiveTopicId, updated_at: new Date() },
+        })
         return
       }
     }
@@ -234,16 +234,14 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
 
   if (!subSubtopicId) {
     const subSubsForSubtopic = allSubSubtopics.filter(ss => ss.subtopic_id === matchedSubtopic.id)
-    const fallback = ruleBasedSubSubtopic(question.content_text, subSubsForSubtopic)
+    const fallback = ruleBasedSubSubtopic(question.content_text ?? '', subSubsForSubtopic)
     if (fallback) subSubtopicId = fallback
   }
 
-  await supabase.from('questions').update({
-    subtopic_id: classification.subtopic_id,
-    sub_subtopic_id: subSubtopicId,
-    topic_id: newTopicId,
-    updated_at: new Date().toISOString(),
-  }).eq('id', questionId).select().single()
+  await prisma.questions.update({
+    where: { id: questionId },
+    data:  { subtopic_id: classification.subtopic_id, sub_subtopic_id: subSubtopicId, topic_id: newTopicId, updated_at: new Date() },
+  })
 }
 
 export async function POST(request: Request) {
@@ -255,24 +253,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'question_id is required' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-
     // Fetch question BEFORE classification to compare after
-    const { data: before } = await supabase
-      .from('questions')
-      .select('subtopic_id, topic_id, sub_subtopic_id')
-      .eq('id', question_id)
-      .single()
+    const before = await prisma.questions.findUnique({
+      where:  { id: question_id },
+      select: { subtopic_id: true, topic_id: true, sub_subtopic_id: true },
+    })
 
     // Run classification
     await classifyQuestion(question_id, topic_id ?? null, topic_id === null || topic_id === undefined ? true : false)
 
     // Fetch updated question to check if classification changed anything
-    const { data: updated } = await supabase
-      .from('questions')
-      .select('subtopic_id, topic_id, sub_subtopic_id')
-      .eq('id', question_id)
-      .single()
+    const updated = await prisma.questions.findUnique({
+      where:  { id: question_id },
+      select: { subtopic_id: true, topic_id: true, sub_subtopic_id: true },
+    })
+
+    // Suppress unused variable warning
+    void before
 
     // If no subtopic assigned after classification attempt, no match was found
     if (!updated?.subtopic_id) {
@@ -283,28 +280,26 @@ export async function POST(request: Request) {
     }
 
     // Fetch subtopic title for the toast message
-    const { data: subtopicData } = await supabase
-      .from('subtopics')
-      .select('title, ref')
-      .eq('id', updated.subtopic_id)
-      .single()
+    const subtopicData = await prisma.subtopics.findUnique({
+      where:  { id: updated.subtopic_id },
+      select: { title: true, ref: true },
+    })
 
     // Fetch sub-subtopic title if one was assigned
     let subSubtopicTitle: string | null = null
     if (updated.sub_subtopic_id) {
-      const { data: subSubtopicData } = await supabase
-        .from('sub_subtopics')
-        .select('outcome')
-        .eq('id', updated.sub_subtopic_id)
-        .single()
+      const subSubtopicData = await prisma.sub_subtopics.findUnique({
+        where:  { id: updated.sub_subtopic_id },
+        select: { outcome: true },
+      })
       subSubtopicTitle = subSubtopicData?.outcome ?? null
     }
 
     return NextResponse.json({
-      subtopic_id: updated.subtopic_id,
-      topic_id: updated.topic_id,
-      sub_subtopic_id: updated.sub_subtopic_id ?? null,
-      subtopic_title: subtopicData ? `${subtopicData.ref} – ${subtopicData.title}` : updated.subtopic_id,
+      subtopic_id:        updated.subtopic_id,
+      topic_id:           updated.topic_id,
+      sub_subtopic_id:    updated.sub_subtopic_id ?? null,
+      subtopic_title:     subtopicData ? `${subtopicData.ref} – ${subtopicData.title}` : updated.subtopic_id,
       sub_subtopic_title: subSubtopicTitle,
     })
   } catch (error) {

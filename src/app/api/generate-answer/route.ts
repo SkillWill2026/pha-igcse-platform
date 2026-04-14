@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 import { embedTexts } from '@/lib/voyage'
 
 const anthropic = new Anthropic({
@@ -10,12 +11,13 @@ const anthropic = new Anthropic({
 })
 
 // Retry logic for Claude API overloaded errors
-async function callClaudeWithRetry(client: any, params: any, maxRetries = 3): Promise<any> {
+async function callClaudeWithRetry(client: Anthropic, params: Parameters<Anthropic['messages']['create']>[0], maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await client.messages.create(params)
-    } catch (err: any) {
-      if ((err?.error?.type === 'overloaded_error' || err?.status === 529) && attempt < maxRetries) {
+    } catch (err: unknown) {
+      const e = err as { error?: { type?: string }; status?: number }
+      if ((e?.error?.type === 'overloaded_error' || e?.status === 529) && attempt < maxRetries) {
         console.log(`[generate-answer] Claude overloaded, retry ${attempt}/${maxRetries}`)
         await new Promise(resolve => setTimeout(resolve, 3000 * attempt))
         continue
@@ -32,64 +34,58 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'question_id is required' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-
     // 1. Fetch the question
-    const { data: question, error: questionError } = await supabase
-      .from('questions')
-      .select('id, content_text, marks, difficulty, topic_id, subtopic_id')
-      .eq('id', question_id)
-      .single()
+    let question = await prisma.questions.findUnique({
+      where:  { id: question_id },
+      select: { id: true, content_text: true, marks: true, difficulty: true, topic_id: true, subtopic_id: true },
+    })
 
-    if (questionError || !question) {
+    if (!question) {
       return NextResponse.json({ error: 'Question not found' }, { status: 404 })
     }
 
     // Auto-classify subtopic + sub-subtopic
     try {
       await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/classify-question`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question_id }),
+        body:    JSON.stringify({ question_id }),
       })
-      const { data: reclassified } = await supabase
-        .from('questions')
-        .select('id, content_text, marks, difficulty, topic_id, subtopic_id, sub_subtopic_id')
-        .eq('id', question_id)
-        .single()
+      const reclassified = await prisma.questions.findUnique({
+        where:  { id: question_id },
+        select: { id: true, content_text: true, marks: true, difficulty: true, topic_id: true, subtopic_id: true, sub_subtopic_id: true },
+      })
       if (reclassified) {
-        Object.assign(question, reclassified)
+        question = { ...question, ...reclassified }
       }
     } catch (classifyErr) {
       console.warn('[generate-answer] Auto-classification failed, continuing:', classifyErr)
     }
 
-    // Fetch topic and subtopic separately
-    const [topicRes, subtopicRes] = await Promise.all([
+    // Fetch topic and subtopic
+    const [topic, subtopic] = await Promise.all([
       question.topic_id
-        ? supabase.from('topics').select('name, ref').eq('id', question.topic_id).single()
-        : Promise.resolve({ data: null }),
+        ? prisma.topics.findUnique({ where: { id: question.topic_id }, select: { name: true, ref: true } })
+        : Promise.resolve(null),
       question.subtopic_id
-        ? supabase.from('subtopics').select('title').eq('id', question.subtopic_id).single()
-        : Promise.resolve({ data: null }),
+        ? prisma.subtopics.findUnique({ where: { id: question.subtopic_id }, select: { title: true } })
+        : Promise.resolve(null),
     ])
 
-    const topic = topicRes.data
-    const subtopic = subtopicRes.data
-
-    // 2. RAG: embed the question and search the databank
+    // 2. RAG: embed the question and search the databank — RPC stays on Supabase
     let ragContext = ''
     let ragSources: string[] = []
     let bestSimilarity = 0
 
     try {
-      const [queryEmbedding] = await embedTexts([question.content_text])
+      const [queryEmbedding] = await embedTexts([question.content_text ?? ''])
 
+      const supabase = createAdminClient()
       const { data: chunks, error: searchError } = await supabase.rpc(
         'search_databank_chunks',
         {
-          query_embedding: queryEmbedding,
-          match_count: 5,
+          query_embedding:      queryEmbedding,
+          match_count:          5,
           similarity_threshold: 0.3,
         }
       )
@@ -112,11 +108,8 @@ export async function POST(request: Request) {
 
         ragSources = chunks
           .filter((c: { similarity: number }) => c.similarity > 0.4)
-          .map((c: {
-            document_title: string
-            doc_type: string
-            page_number: number | null
-          }) => `${c.document_title}${c.page_number ? `, p.${c.page_number}` : ''}`)
+          .map((c: { document_title: string; doc_type: string; page_number: number | null }) =>
+            `${c.document_title}${c.page_number ? `, p.${c.page_number}` : ''}`)
           .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i)
       }
     } catch (ragError) {
@@ -124,8 +117,8 @@ export async function POST(request: Request) {
     }
 
     // 3. Build the prompt
-    const topicName = topic?.name ?? 'Mathematics'
-    const topicRef = topic?.ref ?? ''
+    const topicName    = topic?.name  ?? 'Mathematics'
+    const topicRef     = topic?.ref   ?? ''
     const subtopicTitle = subtopic?.title ?? ''
     const hasRAG = ragContext.length > 0
 
@@ -167,22 +160,20 @@ ${question.content_text}
 Write a complete model answer for this question.`
 
     // 4. Convert image URLs to base64 if provided
-    let imageContent: Array<{ type: 'image'; source: { type: 'base64'; media_type: 'image/png'; data: string } }> = []
+    const imageContent: Array<{ type: 'image'; source: { type: 'base64'; media_type: 'image/png'; data: string } }> = []
     if (image_urls && Array.isArray(image_urls)) {
       for (const url of image_urls) {
         try {
           let base64Data: string
           if (url.startsWith('data:image')) {
-            // Already base64
             base64Data = url.split(',')[1]
           } else {
-            // Fetch from URL and convert to base64
             const imgRes = await fetch(url)
             const buffer = await imgRes.arrayBuffer()
             base64Data = Buffer.from(buffer).toString('base64')
           }
           imageContent.push({
-            type: 'image',
+            type:   'image',
             source: { type: 'base64', media_type: 'image/png', data: base64Data },
           })
         } catch (imgErr) {
@@ -192,107 +183,76 @@ Write a complete model answer for this question.`
     }
 
     // 5. Build message content with images + text
-    const messageContent: Array<{ type: 'image'; source: { type: 'base64'; media_type: 'image/png'; data: string } } | { type: 'text'; text: string }> = [
+    const messageContent = [
       ...imageContent,
-      { type: 'text', text: userPrompt },
+      { type: 'text' as const, text: userPrompt },
     ]
 
     // 6. Call Claude Sonnet with vision (with retry on overload)
     const message = await callClaudeWithRetry(anthropic, {
-      model: 'claude-sonnet-4-6',
+      model:     'claude-sonnet-4-6',
       max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: messageContent }],
+      system:     systemPrompt,
+      messages:   [{ role: 'user', content: messageContent }],
     })
 
-    const answerContent = message.content[0].type === 'text'
-      ? message.content[0].text
-      : ''
+    const answerContent = message!.content[0].type === 'text' ? message!.content[0].text : ''
 
     // 5. Calculate confidence score
     let confidenceScore: number
-    if (hasRAG && bestSimilarity > 0.7) {
-      confidenceScore = 0.92
-    } else if (hasRAG && bestSimilarity > 0.5) {
-      confidenceScore = 0.82
-    } else if (hasRAG && bestSimilarity > 0.3) {
-      confidenceScore = 0.72
-    } else {
-      confidenceScore = 0.55
-    }
+    if (hasRAG && bestSimilarity > 0.7)      { confidenceScore = 0.92 }
+    else if (hasRAG && bestSimilarity > 0.5) { confidenceScore = 0.82 }
+    else if (hasRAG && bestSimilarity > 0.3) { confidenceScore = 0.72 }
+    else                                     { confidenceScore = 0.55 }
 
-    // Use answer content as-is, no source citations appended
     const finalContent = answerContent
 
     // 7. Upsert the answer
     let answer
+    const existingAnswer = await prisma.answers.findFirst({
+      where:  { question_id },
+      select: { id: true },
+    })
+
     if (force_regenerate) {
       // Delete existing answer and insert new one
-      const { data: existingAnswer } = await supabase
-        .from('answers')
-        .select('id')
-        .eq('question_id', question_id)
-        .maybeSingle()
-
       if (existingAnswer) {
-        await supabase.from('answers').delete().eq('id', existingAnswer.id)
+        await prisma.answers.delete({ where: { id: existingAnswer.id } })
       }
-
-      const { data, error } = await supabase
-        .from('answers')
-        .insert({
+      answer = await prisma.answers.create({
+        data: {
           question_id,
-          content: finalContent,
+          content:          finalContent,
           confidence_score: confidenceScore,
-          status: 'draft',
-          ai_generated: true,
-        })
-        .select()
-        .single()
-      if (error) throw error
-      answer = data
+          status:           'draft',
+          ai_generated:     true,
+        },
+      })
+    } else if (existingAnswer) {
+      answer = await prisma.answers.update({
+        where: { id: existingAnswer.id },
+        data:  {
+          content:          finalContent,
+          confidence_score: confidenceScore,
+          status:           'draft',
+          updated_at:       new Date(),
+        },
+      })
     } else {
-      // Normal flow: update if exists, insert if not
-      const { data: existingAnswer } = await supabase
-        .from('answers')
-        .select('id')
-        .eq('question_id', question_id)
-        .maybeSingle()
-
-      if (existingAnswer) {
-        const { data, error } = await supabase
-          .from('answers')
-          .update({
-            content: finalContent,
-            confidence_score: confidenceScore,
-            status: 'draft',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existingAnswer.id)
-          .select()
-          .single()
-        if (error) throw error
-        answer = data
-      } else {
-        const { data, error } = await supabase
-          .from('answers')
-          .insert({
-            question_id,
-            content: finalContent,
-            confidence_score: confidenceScore,
-            status: 'draft',
-            ai_generated: true,
-          })
-          .select()
-          .single()
-        if (error) throw error
-        answer = data
-      }
+      answer = await prisma.answers.create({
+        data: {
+          question_id,
+          content:          finalContent,
+          confidence_score: confidenceScore,
+          status:           'draft',
+          ai_generated:     true,
+        },
+      })
     }
 
     return NextResponse.json({
       answer,
-      rag_used: hasRAG,
+      rag_used:   hasRAG,
       rag_sources: ragSources,
       similarity: bestSimilarity,
     })

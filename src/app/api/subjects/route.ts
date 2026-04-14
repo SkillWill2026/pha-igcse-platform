@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic'
 
-import { createAdminClient } from '@/lib/supabase'
-import { createServerClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase-server'
+import { prisma } from '@/lib/prisma'
+
+export const runtime = 'nodejs'
 
 export async function GET() {
   const serverSupabase = createServerClient()
@@ -11,17 +13,16 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const supabase = createAdminClient()
+  try {
+    const subjects = await prisma.subjects.findMany({
+      where: { active: true },
+      select: { id: true, name: true, code: true, color: true, active: true, sort_order: true },
+      orderBy: { sort_order: 'asc' },
+    })
 
-  const { data, error } = await supabase
-    .from('subjects')
-    .select('id, name, code, color, active, sort_order')
-    .eq('active', true)
-    .order('sort_order')
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ subjects })
+  } catch (err) {
+    console.error('[GET /api/subjects]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  return NextResponse.json({ subjects: data })
 }
