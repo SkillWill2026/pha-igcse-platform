@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
@@ -33,7 +34,7 @@ export async function PATCH(
 
     const data = await prisma.subtopics.update({
       where: { id: params.id },
-      data:  updates,
+      data:  updates as Prisma.subtopicsUpdateInput,
     })
 
     return NextResponse.json({ subtopic: data })
