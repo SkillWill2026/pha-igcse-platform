@@ -36,18 +36,14 @@ function ruleBasedSubSubtopic(questionText: string, subSubtopics: {id: string, o
 export async function classifyQuestion(questionId: string, restrictToTopicId?: string | null, searchAllTopics = false): Promise<void> {
   const supabase = createAdminClient()
 
-  // Fetch question
   const { data: question, error: qError } = await supabase
     .from('questions')
     .select('id, content_text, topic_id')
     .eq('id', questionId)
     .single()
 
-  if (qError || !question) {
-    throw new Error('Question not found')
-  }
+  if (qError || !question) throw new Error('Question not found')
 
-  // Strip LaTeX delimiters from question text for cleaner classification
   const cleanText = question.content_text
     .replace(/\$\$[\s\S]*?\$\$/g, '[math expression]')
     .replace(/\$([^$]+)\$/g, '$1')
@@ -55,143 +51,92 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     .replace(/\\[a-zA-Z]+/g, '')
     .trim()
 
-  // Allow searching all topics if searchAllTopics is true, otherwise fall back to question's current topic
-  const effectiveTopicId = searchAllTopics ? null : (restrictToTopicId ?? question.topic_id)
+  const { data: allTopics } = await supabase.from('topics').select('id, name, ref').order('ref')
+  const topics = allTopics ?? []
 
-  // Fetch all subtopics with their topics, and ALL sub-subtopics
-  const [subtopicsRes, allSubSubtopicsRes, topicsRes] = await Promise.all([
-    effectiveTopicId
-      ? supabase.from('subtopics').select('id, title, topic_id').eq('topic_id', effectiveTopicId).order('sort_order')
-      : supabase.from('subtopics').select('id, title, topic_id').order('sort_order'),
+  // STEP 1: Identify topic (only if searchAllTopics and no topic pre-selected)
+  let effectiveTopicId: string | null = searchAllTopics ? null : (restrictToTopicId ?? question.topic_id ?? null)
+
+  if (searchAllTopics && topics.length > 0) {
+    const topicList = topics.map(t => `ID:${t.id} | ${t.ref} – ${t.name}`).join('\n')
+    const topicMsg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 256,
+      system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert. Given a question, identify which topic it belongs to. Respond ONLY with valid JSON: {"topic_id": "exact-uuid"} Return ONLY the JSON object. No explanation, no markdown.`,
+      messages: [{ role: 'user', content: `QUESTION: ${cleanText}\n\nAVAILABLE TOPICS:\n${topicList}\n\nWhich topic_id best matches this question? Return ONLY JSON: {"topic_id": "..."}` }]
+    })
+    const topicText = topicMsg.content[0].type === 'text' ? topicMsg.content[0].text.trim() : '{}'
+    try {
+      const cleaned = topicText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (parsed.topic_id && uuidRegex.test(parsed.topic_id) && topics.find(t => t.id === parsed.topic_id)) {
+        effectiveTopicId = parsed.topic_id
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (!effectiveTopicId) return
+
+  // STEP 2: Identify subtopic + sub-subtopic within the chosen topic
+  const [subtopicsRes, allSubSubtopicsRes] = await Promise.all([
+    supabase.from('subtopics').select('id, title, topic_id, ref').eq('topic_id', effectiveTopicId).order('sort_order'),
     supabase.from('sub_subtopics').select('id, outcome, subtopic_id').order('sort_order'),
-    supabase.from('topics').select('id, name, ref'),
   ])
 
   const subtopics = subtopicsRes.data ?? []
   const allSubSubtopics = allSubSubtopicsRes.data ?? []
-  const topicsMap = Object.fromEntries(
-    (topicsRes.data ?? []).map(t => [t.id, t])
-  )
 
-  // Build classification prompt with subtopics and their UUIDs
-  const subtopicList = subtopics
-    .map(s => {
-      const topic = topicsMap[s.topic_id]
-      const subSubs = allSubSubtopics.filter(ss => ss.subtopic_id === s.id)
-      const subSubLines = subSubs.length > 0
-        ? '\n  Sub-subtopics:\n' + subSubs.map(ss => `    - ID:${ss.id} | ${ss.outcome}`).join('\n')
-        : '\n  Sub-subtopics: none'
-      return `ID:${s.id} | ${topic?.ref ?? ''} – ${s.title}${subSubLines}`
-    })
-    .join('\n')
+  const subtopicList = subtopics.map(s => {
+    const subSubs = allSubSubtopics.filter(ss => ss.subtopic_id === s.id)
+    const subSubLines = subSubs.length > 0
+      ? '\n  Sub-subtopics:\n' + subSubs.map(ss => `    - ID:${ss.id} | ${ss.outcome}`).join('\n')
+      : '\n  Sub-subtopics: none'
+    return `ID:${s.id} | ${s.ref ?? ''} – ${s.title}${subSubLines}`
+  }).join('\n')
 
   const message = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 512,
-    system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert.
-Given a question, identify the MOST SPECIFIC subtopic and sub-subtopic from the provided lists.
-You MUST select a sub-subtopic if any of the listed ones are relevant — do not return null unless truly none apply.
-Respond ONLY with valid JSON: {"subtopic_id": "exact-uuid", "sub_subtopic_id": "exact-uuid-or-null"}
-STRICT RULES:
-- subtopic_id MUST be one of the UUIDs from AVAILABLE SUBTOPICS. Never invent a UUID.
-- sub_subtopic_id MUST be one of the UUIDs listed under the chosen subtopic, or null ONLY if none are relevant.
-- When in doubt between sub-subtopics, choose the most specific match.
-- Return ONLY the JSON object. No explanation, no markdown, no code blocks.`,
-    messages: [{
-      role: 'user',
-      content: `QUESTION: ${cleanText}
-
-AVAILABLE SUBTOPICS (topic: ${effectiveTopicId}):
-${subtopicList}
-
-Which subtopic_id best matches this question?
-Select the most specific sub-subtopic that applies. If the question involves drawing, plotting, or constructing a specific type of graph, select the corresponding drawing sub-subtopic.
-Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..." or null}`
-    }]
+    system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert. Given a question, identify the MOST SPECIFIC subtopic and sub-subtopic from the provided lists. You MUST select a sub-subtopic if any are relevant. Respond ONLY with valid JSON: {"subtopic_id": "exact-uuid", "sub_subtopic_id": "exact-uuid-or-null"} STRICT RULES: - subtopic_id MUST be one of the UUIDs listed. Never invent a UUID. - sub_subtopic_id MUST be one of the UUIDs listed under the chosen subtopic, or null if none apply. - Return ONLY the JSON object. No explanation, no markdown.`,
+    messages: [{ role: 'user', content: `QUESTION: ${cleanText}\n\nAVAILABLE SUBTOPICS:\n${subtopicList}\n\nWhich subtopic_id and sub_subtopic_id best match this question? Return ONLY JSON: {"subtopic_id": "...", "sub_subtopic_id": "..."}` }]
   })
 
-  const responseText = message.content[0].type === 'text'
-    ? message.content[0].text.trim()
-    : '{}'
-
-  let classification: { subtopic_id?: string; sub_subtopic_id?: string | null }
+  const responseText = message.content[0].type === 'text' ? message.content[0].text.trim() : '{}'
+  let classification: { subtopic_id?: string; sub_subtopic_id?: string | null } = {}
   try {
-    // Strip markdown code fences if Claude wrapped the JSON
-    const cleaned = responseText
-      .replace(/```json\s*/gi, '')
-      .replace(/```\s*/gi, '')
-      .trim()
-    // Extract JSON object if there's surrounding text
+    const cleaned = responseText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-    const jsonStr = jsonMatch ? jsonMatch[0] : cleaned
-    classification = JSON.parse(jsonStr)
-  } catch {
-    // AI couldn't find a match — return gracefully
-    return
-  }
+    classification = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned)
+  } catch { return }
 
-  // Validate that subtopic_id is a proper UUID format
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-  if (!classification.subtopic_id || !uuidRegex.test(classification.subtopic_id)) {
-    return
-  }
+  if (!classification.subtopic_id || !uuidRegex.test(classification.subtopic_id)) return
 
-  // Validate that subtopic_id exists in the fetched subtopics
   const matchedSubtopic = subtopics.find(s => s.id === classification.subtopic_id)
-  if (!matchedSubtopic) {
-    return
-  }
+  if (!matchedSubtopic) return
 
   const newTopicId = matchedSubtopic.topic_id
-
-  // Validate and use sub_subtopic_id if provided
   let subSubtopicId: string | null = null
-  if (classification.sub_subtopic_id) {
-    // Validate that sub_subtopic_id is a proper UUID format
-    if (!uuidRegex.test(classification.sub_subtopic_id)) {
-      // Set to null instead of failing
-      subSubtopicId = null
-    } else {
-      // Validate that sub_subtopic_id exists in the fetched sub-subtopics for this subtopic
-      const subSubtopicExists = allSubSubtopics.some(
-        ss => ss.id === classification.sub_subtopic_id && ss.subtopic_id === matchedSubtopic.id
-      )
-      if (!subSubtopicExists) {
-        // Set to null instead of failing
-        subSubtopicId = null
-      } else {
-        subSubtopicId = classification.sub_subtopic_id
-      }
-    }
+
+  if (classification.sub_subtopic_id && uuidRegex.test(classification.sub_subtopic_id)) {
+    const exists = allSubSubtopics.some(ss => ss.id === classification.sub_subtopic_id && ss.subtopic_id === matchedSubtopic.id)
+    if (exists) subSubtopicId = classification.sub_subtopic_id
   }
 
-  // Apply rule-based fallback if Claude returned null
-  if (!subSubtopicId && matchedSubtopic) {
+  if (!subSubtopicId) {
     const subSubsForSubtopic = allSubSubtopics.filter(ss => ss.subtopic_id === matchedSubtopic.id)
     const fallback = ruleBasedSubSubtopic(question.content_text, subSubsForSubtopic)
-    if (fallback) {
-      subSubtopicId = fallback
-    }
+    if (fallback) subSubtopicId = fallback
   }
 
-  // Update the question
-  const updates: Record<string, unknown> = {
+  await supabase.from('questions').update({
     subtopic_id: classification.subtopic_id,
     sub_subtopic_id: subSubtopicId,
     topic_id: newTopicId,
     updated_at: new Date().toISOString(),
-  }
-
-  const { data: updated, error: updateError } = await supabase
-    .from('questions')
-    .update(updates)
-    .eq('id', questionId)
-    .select()
-    .single()
-
-  if (updateError) {
-    throw new Error(updateError.message)
-  }
+  }).eq('id', questionId).select().single()
 }
 
 export async function POST(request: Request) {

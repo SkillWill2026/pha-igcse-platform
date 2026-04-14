@@ -391,7 +391,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     try {
       const textToSave = editedText.trim() || currentQuestion.content_text
       const updates: Record<string, unknown> = {
-        content: textToSave,
+        content_text: textToSave,
         difficulty: editedDifficulty,
       }
       if (editTopicId) {

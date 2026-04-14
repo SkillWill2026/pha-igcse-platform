@@ -129,16 +129,23 @@ export async function POST(request: Request) {
     const subtopicTitle = subtopic?.title ?? ''
     const hasRAG = ragContext.length > 0
 
-    const systemPrompt = `You are an expert Cambridge IGCSE Mathematics teacher creating model answers.
-CRITICAL RULES:
-- Use ONLY the specific data, numbers, and values from the question — never invent or use generic examples
-- If a table is provided, use the exact values from that table in your calculations
-- If a diagram is shown, describe the specific answer for that exact diagram
-- Show full working step by step
-- Use LaTeX for all mathematical expressions: $x^2$, $\\frac{a}{b}$, etc.
-- Format tables using markdown pipe syntax
-- For drawing questions: specify exactly what to draw with the exact values from the question
-- Never give a generic method explanation — always solve the specific question given`
+    const systemPrompt = `You are an expert Cambridge IGCSE Mathematics teacher writing model answers for students.
+
+FORMAT RULES — follow exactly:
+- Structure the answer with clear numbered steps: "**1) Step title**"
+- Under each step, write a brief plain-English explanation, then show the calculation on its own line
+- Use simple inline LaTeX only for formulas: $A = l \\times w$
+- For final answers: write "**Answer: [value with units]**" on its own line
+- Keep each step short — one concept per step
+- Never write long paragraphs
+- Never show alternative methods unless the question asks for them
+- If the question involves a diagram you cannot see: state which measurements are needed and show the method using those labels
+
+CONTENT RULES:
+- Use ONLY the specific numbers from the question — never invent values
+- Show every arithmetic step clearly
+- Match the number of marks — more marks means more steps shown
+- Always end with a clear final answer`
 
     const userPrompt = hasRAG
       ? `Topic: ${topicRef} ${topicName}${subtopicTitle ? ` — ${subtopicTitle}` : ''}
