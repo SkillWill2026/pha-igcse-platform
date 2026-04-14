@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -25,13 +26,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File exceeds 50 MB limit' }, { status: 400 })
     }
 
-    const supabase   = createAdminClient()
-    const safeName   = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const folderRef  = subtopicRef ? `${topicRef}/${subtopicRef}` : topicRef
-    const filePath   = `${folderRef}/${safeName}`
+    const supabase  = createAdminClient()
+    const safeName  = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const folderRef = subtopicRef ? `${topicRef}/${subtopicRef}` : topicRef
+    const filePath  = `${folderRef}/${safeName}`
 
     const buffer = Buffer.from(await file.arrayBuffer())
 
+    // Storage stays on Supabase
     const { error: storageErr } = await supabase.storage
       .from('pptx-decks')
       .upload(filePath, buffer, {
@@ -43,21 +45,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: storageErr.message }, { status: 500 })
     }
 
-    const { data: record, error: dbErr } = await supabase
-      .from('ppt_decks')
-      .insert({
-        subtopic_id: subtopicId,
-        filename:    file.name,
-        file_path:   filePath,
-        file_size:   file.size,
+    // DB record → Prisma/Azure
+    let record
+    try {
+      record = await prisma.ppt_decks.create({
+        data: {
+          subtopic_id: subtopicId,
+          filename:    file.name,
+          file_path:   filePath,
+          file_size:   file.size,
+        },
       })
-      .select()
-      .single()
-
-    if (dbErr) {
+    } catch (dbErr) {
       // Clean up storage on DB failure
       await supabase.storage.from('pptx-decks').remove([filePath])
-      return NextResponse.json({ error: dbErr.message }, { status: 500 })
+      console.error('[POST /api/schedule/ppt] DB insert failed:', dbErr)
+      return NextResponse.json({ error: 'Failed to save record' }, { status: 500 })
     }
 
     return NextResponse.json({ ppt_deck: record })

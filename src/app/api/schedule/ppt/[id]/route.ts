@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -10,18 +11,17 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
-    const supabase = createAdminClient()
+    const record = await prisma.ppt_decks.findUnique({
+      where: { id: params.id },
+      select: { file_path: true, filename: true },
+    })
 
-    const { data: record, error: fetchErr } = await supabase
-      .from('ppt_decks')
-      .select('file_path, filename')
-      .eq('id', params.id)
-      .single()
-
-    if (fetchErr || !record) {
+    if (!record || !record.file_path) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
+    // Signed URL from Supabase Storage
+    const supabase = createAdminClient()
     const { data: signedData, error: signErr } = await supabase.storage
       .from('pptx-decks')
       .createSignedUrl(record.file_path, 60 * 60) // 1 hour
@@ -42,28 +42,22 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    const supabase = createAdminClient()
+    const record = await prisma.ppt_decks.findUnique({
+      where: { id: params.id },
+      select: { file_path: true },
+    })
 
-    const { data: record, error: fetchErr } = await supabase
-      .from('ppt_decks')
-      .select('file_path')
-      .eq('id', params.id)
-      .single()
-
-    if (fetchErr || !record) {
+    if (!record) {
       return NextResponse.json({ error: 'Record not found' }, { status: 404 })
     }
 
-    await supabase.storage.from('pptx-decks').remove([record.file_path])
-
-    const { error: dbErr } = await supabase
-      .from('ppt_decks')
-      .delete()
-      .eq('id', params.id)
-
-    if (dbErr) {
-      return NextResponse.json({ error: dbErr.message }, { status: 500 })
+    // Remove from Supabase Storage if file_path exists
+    if (record.file_path) {
+      const supabase = createAdminClient()
+      await supabase.storage.from('pptx-decks').remove([record.file_path])
     }
+
+    await prisma.ppt_decks.delete({ where: { id: params.id } })
 
     return NextResponse.json({ ok: true })
   } catch (err) {

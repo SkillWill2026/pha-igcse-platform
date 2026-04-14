@@ -63,14 +63,20 @@ model exam_boards {
 }
 
 model ppt_decks {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title       String?
-  subtopic_id String?   @db.Uuid
-  status      String?   @default("draft")
-  slides      Json?
-  created_by  String?   @db.Uuid
-  created_at  DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title         String?
+  subtopic_id   String?   @db.Uuid
+  status        String?   @default("draft")
+  slides        Json?
+  created_by    String?   @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
+  filename      String?
+  file_path     String?
+  file_size     Int?
+  subject_id    String?   @db.Uuid
+  topic_id      String?   @db.Uuid
+  exam_board_id String?   @db.Uuid
 }
 
 model production_targets {
