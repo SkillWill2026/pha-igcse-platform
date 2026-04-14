@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 
 const TUTOR_BLOCKED_PATHS = [
   '/admin/users',
-  '/admin/databank',
+  '/admin/databank/dashboard',
   '/admin/answer-queue',
 ]
 
