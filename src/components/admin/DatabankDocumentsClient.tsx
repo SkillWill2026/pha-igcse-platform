@@ -33,6 +33,7 @@ type Props = {
   initialDocuments: unknown[]
   initialTopics: unknown[]
   initialError: string | null
+  role: string
 }
 
 const DOC_TYPES = [
@@ -55,7 +56,7 @@ function formatBytes(bytes: number | null) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function DatabankDocumentsClient({ initialDocuments, initialTopics, initialError }: Props) {
+export function DatabankDocumentsClient({ initialDocuments, initialTopics, initialError, role }: Props) {
   const [documents, setDocuments] = useState<DatabankDoc[]>(initialDocuments as DatabankDoc[])
   const topics = initialTopics as Topic[]
 
@@ -299,12 +300,14 @@ export function DatabankDocumentsClient({ initialDocuments, initialTopics, initi
                   Retry
                 </button>
               )}
-              <button
-                onClick={() => handleDelete(doc.id)}
-                className="px-3 py-1 text-xs rounded border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
-              >
-                Delete
-              </button>
+              {role === 'admin' && (
+                <button
+                  onClick={() => handleDelete(doc.id)}
+                  className="px-3 py-1 text-xs rounded border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         ))}
