@@ -262,10 +262,10 @@ export function ProductionDashboard({ isAdmin }: Props) {
         <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Monthly milestones</div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { month: 'April', days: 18, start: '2025-04-13', end: '2025-04-30' },
-            { month: 'May', days: 31, start: '2025-05-01', end: '2025-05-31' },
-            { month: 'June', days: 30, start: '2025-06-01', end: '2025-06-30' },
-            { month: 'July', days: 30, start: '2025-07-01', end: '2025-07-30' },
+            { month: 'April', days: 16, start: '2026-04-15', end: '2026-04-30' },
+            { month: 'May', days: 31, start: '2026-05-01', end: '2026-05-31' },
+            { month: 'June', days: 30, start: '2026-06-01', end: '2026-06-30' },
+            { month: 'July', days: 30, start: '2026-07-01', end: '2026-07-30' },
           ].map(m => {
             const monthTarget = Math.round((m.days / data.total_days) * data.total_target)
             const endDate = new Date(m.end)
