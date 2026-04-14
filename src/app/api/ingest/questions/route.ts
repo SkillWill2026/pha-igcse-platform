@@ -16,29 +16,37 @@ export async function POST(req: NextRequest) {
 
     // Handle progress-only updates
     if (progress_update && !status) {
-      await prisma.upload_batches.updateMany({
-        where: { id: batch_id },
-        data: { total_questions_extracted: total_questions_extracted ?? 0, updated_at: new Date() }
-      })
+      try {
+        await prisma.upload_batches.updateMany({
+          where: { id: String(batch_id) },
+          data: { total_questions_extracted: Number(total_questions_extracted ?? 0), updated_at: new Date() }
+        })
+      } catch (e) {
+        console.error('Progress update failed (non-fatal):', e)
+      }
       return NextResponse.json({ success: true, inserted: 0 })
     }
 
-    // Update batch status
+    // Update batch status — non-fatal
     if (status) {
-      await prisma.upload_batches.updateMany({
-        where: { id: batch_id },
-        data: {
-          status,
-          total_questions_extracted: total_questions_extracted ?? 0,
-          error_message: error_message ?? null,
-          completed_files: status === 'completed' ? 1 : 0,
-          failed_files: status === 'failed' ? 1 : 0,
-          updated_at: new Date(),
-        }
-      })
+      try {
+        await prisma.upload_batches.updateMany({
+          where: { id: String(batch_id) },
+          data: {
+            status: String(status),
+            total_questions_extracted: Number(total_questions_extracted ?? 0),
+            error_message: error_message ? String(error_message) : null,
+            completed_files: status === 'completed' ? 1 : 0,
+            failed_files: status === 'failed' ? 1 : 0,
+            updated_at: new Date(),
+          }
+        })
+      } catch (e) {
+        console.error('Batch status update failed (non-fatal):', e)
+      }
     }
 
-    // Insert questions
+    // Insert questions — each independently
     let inserted = 0
     if (questions && questions.length > 0) {
       for (const q of questions) {
@@ -46,18 +54,18 @@ export async function POST(req: NextRequest) {
           await prisma.questions.create({
             data: {
               id: randomUUID(),
-              exam_board_id: q.exam_board_id ?? null,
-              topic_id: q.topic_id ?? null,
-              subtopic_id: q.subtopic_id ?? null,
-              sub_subtopic_id: q.sub_subtopic_id ?? null,
-              batch_position: q.batch_position ?? 0,
+              exam_board_id: q.exam_board_id ? String(q.exam_board_id) : null,
+              topic_id: q.topic_id ? String(q.topic_id) : null,
+              subtopic_id: null,
+              sub_subtopic_id: null,
+              batch_position: Number(q.batch_position ?? 0),
               content_text: String(q.content_text ?? '').trim(),
-              parent_question_ref: q.parent_question_ref ?? null,
-              part_label: q.part_label ?? null,
-              batch_id: q.batch_id ?? batch_id,
-              difficulty: q.difficulty ?? 2,
-              question_type: q.question_type ?? 'structured',
-              marks: q.marks ?? 1,
+              parent_question_ref: q.parent_question_ref ? String(q.parent_question_ref) : null,
+              part_label: q.part_label ? String(q.part_label) : null,
+              batch_id: String(q.batch_id ?? batch_id),
+              difficulty: Number(q.difficulty ?? 2),
+              question_type: String(q.question_type ?? 'structured'),
+              marks: Number(q.marks ?? 1),
               status: 'draft',
               ai_extracted: true,
               created_at: new Date(),
