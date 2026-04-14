@@ -86,6 +86,20 @@ export async function POST(request: NextRequest) {
           select: { id: true },
         })
         batchId = newBatch.id
+
+        // Dual-write to Supabase so Edge Function can read it
+        const adminClient = createAdminClient()
+        await adminClient.from('upload_batches').upsert({
+          id:                        batchId,
+          status:                    'processing',
+          source_pdf_path:           null,
+          source_file_name:          file.name,
+          created_by:                authUser?.id ?? null,
+          total_files:               1,
+          completed_files:           0,
+          failed_files:              0,
+          total_questions_extracted: 0,
+        })
       } catch (err) {
         console.error('[ingest] batch insert failed:', err)
         return NextResponse.json({ error: 'Failed to create batch record' }, { status: 500 })
@@ -127,6 +141,14 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Dual-write storage metadata to Supabase so Edge Function has the full path
+    await supabase.from('upload_batches').upsert({
+      id:               batchId,
+      status:           'processing',
+      source_pdf_path:  storagePath,
+      source_file_name: file.name,
+    })
+
     // ── Fire Supabase Edge Function (fire-and-forget) ───────────────────────────
     // The Edge Function does OCR + Claude extraction async — no Vercel timeout applies.
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? ''
@@ -165,6 +187,10 @@ export async function POST(request: NextRequest) {
             error_message: `Edge Function returned ${edgeRes.status}: ${errText.slice(0, 200)}`,
           },
         })
+        await supabase.from('upload_batches').update({
+          status:        'failed',
+          error_message: `Edge Function returned ${edgeRes.status}: ${errText.slice(0, 200)}`,
+        }).eq('id', batchId)
       } else {
         console.log('[ingest] Edge Function accepted job for batch:', batchId)
       }
@@ -178,6 +204,10 @@ export async function POST(request: NextRequest) {
           error_message: `Could not reach processing service: ${msg.slice(0, 200)}`,
         },
       })
+      await supabase.from('upload_batches').update({
+        status:        'failed',
+        error_message: `Could not reach processing service: ${msg.slice(0, 200)}`,
+      }).eq('id', batchId)
     }
 
     return NextResponse.json({ batch_id: batchId, status: 'processing' })
