@@ -4,5 +4,16 @@
       "path": "/api/cron/backup",
       "schedule": "0 20 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "src/app/api/backup/storage/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/cron/backup/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/backup/trigger/route.ts": {
+      "maxDuration": 300
+    }
+  }
 }
