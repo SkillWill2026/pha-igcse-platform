@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
     const role = profile?.role ?? 'tutor'
 
     // Tutor-blocked pages
-    const tutorBlocked = ['/admin/users', '/admin/databank', '/admin/answer-queue']
+    const tutorBlocked = ['/admin/users', '/admin/databank/dashboard', '/admin/answer-queue']
     if (role === 'tutor' && tutorBlocked.some(p => pathname.startsWith(p))) {
       const url = request.nextUrl.clone()
       url.pathname = '/admin/dashboard'
