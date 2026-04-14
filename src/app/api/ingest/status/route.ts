@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,16 +13,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'batch_id required' }, { status: 400 })
   }
 
-  const supabase = createAdminClient()
-  const { data, error } = await supabase
-    .from('upload_batches')
-    .select('id, status, questions_extracted, total_questions, error_message, source_file_name')
-    .eq('id', batch_id)
-    .single()
+  try {
+    const data = await prisma.upload_batches.findUnique({
+      where: { id: batch_id },
+      select: {
+        id:                  true,
+        status:              true,
+        questions_extracted: true,
+        total_questions:     true,
+        error_message:       true,
+        source_file_name:    true,
+      },
+    })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data) {
+      return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
+    }
+
+    return NextResponse.json(data)
+  } catch (err) {
+    console.error('[GET /api/ingest/status]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  return NextResponse.json(data)
 }

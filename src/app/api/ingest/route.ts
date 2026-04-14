@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 import { createServerClient } from '@/lib/supabase-server'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -63,39 +64,41 @@ export async function POST(request: NextRequest) {
     const serverClient = createServerClient()
     const { data: { user: authUser } } = await serverClient.auth.getUser()
 
-    const supabase = createAdminClient()
-
     // ── Create or reuse batch record ────────────────────────────────────────────
     let batchId = batch_id_param
 
     if (!batchId) {
       const isMixTopic = !topic_id_param || topic_id_param === 'mixed'
-      const { data: newBatch, error: batchErr } = await supabase
-        .from('upload_batches')
-        .insert({
-          topic_id: isMixTopic ? null : topic_id_param,
-          subtopic_id: null,
-          sub_subtopic_id: null,
-          total_files: 1,
-          status: 'processing',
-          created_by: authUser?.id ?? null,
+      try {
+        const newBatch = await prisma.upload_batches.create({
+          data: {
+            id:                        crypto.randomUUID(),
+            topic_id:                  isMixTopic ? null : topic_id_param,
+            subtopic_id:               null,
+            sub_subtopic_id:           null,
+            total_files:               1,
+            status:                    'processing',
+            completed_files:           0,
+            failed_files:              0,
+            total_questions_extracted: 0,
+            created_by:                authUser?.id ?? null,
+          },
+          select: { id: true },
         })
-        .select('id')
-        .single()
-
-      if (batchErr || !newBatch) {
-        console.error('[ingest] batch insert failed:', batchErr)
+        batchId = newBatch.id
+      } catch (err) {
+        console.error('[ingest] batch insert failed:', err)
         return NextResponse.json({ error: 'Failed to create batch record' }, { status: 500 })
       }
-      batchId = newBatch.id
     } else {
-      await supabase
-        .from('upload_batches')
-        .update({ status: 'processing' })
-        .eq('id', batchId)
+      await prisma.upload_batches.update({
+        where: { id: batchId },
+        data: { status: 'processing' },
+      })
     }
 
     // ── Store file to Supabase Storage ──────────────────────────────────────────
+    const supabase = createAdminClient()
     let storagePath: string | null = null
     try {
       const contentType = isPDF
@@ -116,13 +119,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Update batch with file metadata
-    await supabase
-      .from('upload_batches')
-      .update({
-        source_pdf_path: storagePath,
+    await prisma.upload_batches.update({
+      where: { id: batchId },
+      data: {
+        source_pdf_path:  storagePath,
         source_file_name: file.name,
-      })
-      .eq('id', batchId)
+      },
+    })
 
     // ── Fire Supabase Edge Function (fire-and-forget) ───────────────────────────
     // The Edge Function does OCR + Claude extraction async — no Vercel timeout applies.
@@ -132,12 +135,12 @@ export async function POST(request: NextRequest) {
 
     const isMixTopic = !topic_id_param || topic_id_param === 'mixed'
     const payload = {
-      batch_id: batchId,
+      batch_id:     batchId,
       is_image_pdf: isImagePdf,
       text_content: isImagePdf ? '' : textContent.slice(0, 20000),
-      topic_id: isMixTopic ? null : topic_id_param,
+      topic_id:     isMixTopic ? null : topic_id_param,
       exam_board_id,
-      file_name: file.name,
+      file_name:    file.name,
     }
 
     // We await this fetch because the Edge Function returns 200 immediately
@@ -155,20 +158,26 @@ export async function POST(request: NextRequest) {
       if (!edgeRes.ok) {
         const errText = await edgeRes.text()
         console.error('[ingest] Edge Function error:', edgeRes.status, errText)
-        await supabase
-          .from('upload_batches')
-          .update({ status: 'error', error_message: `Edge Function returned ${edgeRes.status}: ${errText.slice(0, 200)}` })
-          .eq('id', batchId)
+        await prisma.upload_batches.update({
+          where: { id: batchId },
+          data: {
+            status:        'failed',
+            error_message: `Edge Function returned ${edgeRes.status}: ${errText.slice(0, 200)}`,
+          },
+        })
       } else {
         console.log('[ingest] Edge Function accepted job for batch:', batchId)
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[ingest] Edge Function call failed:', msg)
-      await supabase
-        .from('upload_batches')
-        .update({ status: 'error', error_message: `Could not reach processing service: ${msg.slice(0, 200)}` })
-        .eq('id', batchId)
+      await prisma.upload_batches.update({
+        where: { id: batchId },
+        data: {
+          status:        'failed',
+          error_message: `Could not reach processing service: ${msg.slice(0, 200)}`,
+        },
+      })
     }
 
     return NextResponse.json({ batch_id: batchId, status: 'processing' })

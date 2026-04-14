@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -10,18 +10,21 @@ const isValidUUID = (v: unknown): v is string =>
   typeof v === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
 
+// Map legacy status values to allowed CHECK constraint values
+const sanitiseStatus = (s: string): string => {
+  if (s === 'done') return 'completed'
+  if (s === 'error') return 'failed'
+  return s
+}
+
 // ── GET — recent batches for the filter dropdown ──────────────────────────────
 export async function GET() {
   try {
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('upload_batches')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json(data ?? [])
+    const data = await prisma.upload_batches.findMany({
+      orderBy: { created_at: 'desc' },
+      take: 20,
+    })
+    return NextResponse.json(data)
   } catch (err) {
     console.error('[GET /api/upload-batch]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -38,20 +41,20 @@ export async function POST(request: NextRequest) {
       total_files: number
     }
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('upload_batches')
-      .insert({
-        topic_id:        isValidUUID(body.topic_id) ? body.topic_id : null,
-        subtopic_id:     isValidUUID(body.subtopic_id) ? body.subtopic_id : null,
-        sub_subtopic_id: isValidUUID(body.sub_subtopic_id) ? body.sub_subtopic_id : null,
-        total_files:     body.total_files,
-        status:          'processing',
-      })
-      .select()
-      .single()
+    const data = await prisma.upload_batches.create({
+      data: {
+        id:                        crypto.randomUUID(),
+        topic_id:                  isValidUUID(body.topic_id) ? body.topic_id : null,
+        subtopic_id:               isValidUUID(body.subtopic_id) ? body.subtopic_id : null,
+        sub_subtopic_id:           isValidUUID(body.sub_subtopic_id) ? body.sub_subtopic_id : null,
+        total_files:               body.total_files,
+        status:                    'processing',
+        completed_files:           0,
+        failed_files:              0,
+        total_questions_extracted: 0,
+      },
+    })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)
   } catch (err) {
     console.error('[POST /api/upload-batch]', err)
@@ -70,21 +73,17 @@ export async function PATCH(request: NextRequest) {
       status: string
     }
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('upload_batches')
-      .update({
+    const data = await prisma.upload_batches.update({
+      where: { id: body.batch_id },
+      data: {
         completed_files:           body.completed_files,
         failed_files:              body.failed_files,
         total_questions_extracted: body.total_questions_extracted,
-        status:                    body.status,
-        completed_at:              new Date().toISOString(),
-      })
-      .eq('id', body.batch_id)
-      .select()
-      .single()
+        status:                    sanitiseStatus(body.status),
+        completed_at:              new Date(),
+      },
+    })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)
   } catch (err) {
     console.error('[PATCH /api/upload-batch]', err)
