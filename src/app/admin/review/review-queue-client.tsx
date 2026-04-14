@@ -462,7 +462,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question_id: currentQuestion.id,
-          topic_id: editTopicId ?? null,
+          topic_id: null,
         }),
       })
       const data = await res.json() as {
