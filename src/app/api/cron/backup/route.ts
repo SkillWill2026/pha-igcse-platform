@@ -7,18 +7,18 @@ export const runtime = 'nodejs'
  * Scheduled in vercel.json: { "path": "/api/cron/backup", "schedule": "0 20 * * *" }
  *
  * 1. Verifies Authorization: Bearer {CRON_SECRET}
- * 2. Backs up all Supabase Storage files to OneDrive
- * 3. Exports a DB snapshot and uploads it to OneDrive
+ * 2. Backs up all Supabase Storage files to Azure Blob Storage
+ * 3. Exports a DB snapshot and uploads it to Azure container pha-backups-db
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
-import { uploadToOneDrive } from '@/lib/onedrive-backup'
+import { uploadToAzure } from '@/lib/azure-backup'
 
-const STORAGE_BUCKETS: { name: string; onedriveSuffix: string }[] = [
-  { name: 'question-images', onedriveSuffix: 'QuestionImages' },
-  { name: 'databank',        onedriveSuffix: 'Databank' },
-  { name: 'pptx-decks',      onedriveSuffix: 'PPTXDecks' },
+const STORAGE_BUCKETS: { name: string; azureContainer: string }[] = [
+  { name: 'question-images', azureContainer: 'pha-backups-images' },
+  { name: 'databank',        azureContainer: 'pha-backups-databank' },
+  { name: 'pptx-decks',      azureContainer: 'pha-backups-pdfs' },
 ]
 
 const DB_TABLES = [
@@ -30,9 +30,6 @@ const DB_TABLES = [
   'production_targets',
   'profiles',
 ] as const
-
-const STORAGE_ONEDRIVE_BASE = 'PHA IGCSE Backups/Storage'
-const DB_ONEDRIVE_BASE      = 'PHA IGCSE Backups/Database'
 
 /** Recursively lists all file paths in a Supabase Storage bucket folder. */
 async function listAllFiles(
@@ -58,7 +55,7 @@ async function listAllFiles(
 async function runStorageBackup(supabase: ReturnType<typeof createAdminClient>): Promise<number> {
   let totalFiles = 0
 
-  for (const { name: bucketName, onedriveSuffix } of STORAGE_BUCKETS) {
+  for (const { name: bucketName, azureContainer } of STORAGE_BUCKETS) {
     const bucket    = supabase.storage.from(bucketName)
     const filePaths = await listAllFiles(bucket)
 
@@ -69,9 +66,8 @@ async function runStorageBackup(supabase: ReturnType<typeof createAdminClient>):
 
         const buffer   = Buffer.from(await data.arrayBuffer())
         const mimeType = data.type || 'application/octet-stream'
-        const dest     = `${STORAGE_ONEDRIVE_BASE}/${onedriveSuffix}/${filePath}`
 
-        await uploadToOneDrive(buffer, dest, mimeType)
+        await uploadToAzure(buffer, filePath, mimeType, azureContainer)
         totalFiles++
       } catch (err) {
         console.error(`[cron/backup] storage upload error for ${filePath}:`, err)
@@ -96,13 +92,12 @@ async function runDbSnapshot(supabase: ReturnType<typeof createAdminClient>): Pr
     tables,
   }
 
-  const dateStr   = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
-  const fileName  = `snapshot-${dateStr}.json`
-  const dest      = `${DB_ONEDRIVE_BASE}/${fileName}`
-  const buffer    = Buffer.from(JSON.stringify(snapshot, null, 2), 'utf8')
+  const dateStr  = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  const fileName = `snapshot-${dateStr}.json`
+  const buffer   = Buffer.from(JSON.stringify(snapshot, null, 2), 'utf8')
 
-  await uploadToOneDrive(buffer, dest, 'application/json')
-  console.log(`[cron/backup] DB snapshot uploaded: ${dest}`)
+  await uploadToAzure(buffer, fileName, 'application/json', 'pha-backups-db')
+  console.log(`[cron/backup] DB snapshot uploaded: ${fileName}`)
 }
 
 export async function GET(request: NextRequest) {
@@ -113,7 +108,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const supabase = createAdminClient()
+  const supabase  = createAdminClient()
   const startedAt = new Date().toISOString()
 
   try {

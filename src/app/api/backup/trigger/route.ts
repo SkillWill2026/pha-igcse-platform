@@ -6,16 +6,15 @@ export const runtime = 'nodejs'
  * Called after each upload batch completes.
  * Body: { batch_id: string }
  *
- * Fetches all PDF files associated with the batch from Supabase Storage
- * and uploads them to OneDrive under:
- *   PHA IGCSE Backups/Storage/PDFs/{batch_id}/
+ * Downloads PDF files for the batch from Supabase Storage and uploads
+ * to Azure Blob Storage container 'pha-backups-pdfs' under {batch_id}/{filename}.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
-import { uploadToOneDrive } from '@/lib/onedrive-backup'
+import { uploadToAzure } from '@/lib/azure-backup'
 
-const ONEDRIVE_BASE = 'PHA IGCSE Backups/Storage/PDFs'
+const AZURE_CONTAINER = 'pha-backups-pdfs'
 
 export async function POST(request: NextRequest) {
   let batch_id: string | undefined
@@ -41,17 +40,16 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (batchError || !batchFiles) {
-    // Fallback: list files in the PDFs bucket under the batch_id prefix
+    // Fallback: list files in the pdfs bucket under the batch_id prefix
     const bucket = supabase.storage.from('pdfs')
     const { data: listed } = await bucket.list(batch_id, { limit: 1000 })
     const filePaths = (listed ?? [])
-      .filter(f => f.metadata)   // files only
+      .filter(f => f.metadata)
       .map(f => `${batch_id}/${f.name}`)
 
     return await backupFiles(filePaths, 'pdfs', batch_id)
   }
 
-  // If the batch row has a storage_paths column, use it
   const storagePaths: string[] = Array.isArray(batchFiles.storage_paths)
     ? batchFiles.storage_paths
     : []
@@ -64,8 +62,8 @@ async function backupFiles(
   bucketName: string,
   batchId: string
 ): Promise<NextResponse> {
-  const supabase  = createAdminClient()
-  const bucket    = supabase.storage.from(bucketName)
+  const supabase = createAdminClient()
+  const bucket   = supabase.storage.from(bucketName)
   let filesBackedUp = 0
   const errors: string[] = []
 
@@ -80,9 +78,9 @@ async function backupFiles(
       const buffer   = Buffer.from(await data.arrayBuffer())
       const mimeType = data.type || 'application/pdf'
       const fileName = filePath.split('/').pop() ?? filePath
-      const dest     = `${ONEDRIVE_BASE}/${batchId}/${fileName}`
+      const blobPath = `${batchId}/${fileName}`
 
-      await uploadToOneDrive(buffer, dest, mimeType)
+      await uploadToAzure(buffer, blobPath, mimeType, AZURE_CONTAINER)
       filesBackedUp++
     } catch (err) {
       errors.push(`Error backing up ${filePath}: ${err instanceof Error ? err.message : String(err)}`)

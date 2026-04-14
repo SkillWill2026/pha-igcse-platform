@@ -4,18 +4,13 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 import { createServerClient } from '@/lib/supabase-server'
-import { uploadToOneDrive } from '@/lib/onedrive-backup'
+import { uploadToAzure } from '@/lib/azure-backup'
 
-// Actual storage buckets in use in this project.
-// Note: spec listed question-images / pdfs / databank-documents;
-// real bucket names discovered in codebase are listed here.
-const BUCKETS: { name: string; onedriveSuffix: string }[] = [
-  { name: 'question-images',  onedriveSuffix: 'QuestionImages' },
-  { name: 'databank',         onedriveSuffix: 'Databank' },
-  { name: 'pptx-decks',       onedriveSuffix: 'PPTXDecks' },
+const BUCKETS: { name: string; azureContainer: string }[] = [
+  { name: 'question-images', azureContainer: 'pha-backups-images' },
+  { name: 'databank',        azureContainer: 'pha-backups-databank' },
+  { name: 'pptx-decks',      azureContainer: 'pha-backups-pdfs' },
 ]
-
-const ONEDRIVE_BASE = 'PHA IGCSE Backups/Storage'
 
 async function requireAdmin(): Promise<{ error: NextResponse | null }> {
   const serverClient = createServerClient()
@@ -47,10 +42,8 @@ async function listAllFiles(
   for (const item of data) {
     const fullPath = folder ? `${folder}/${item.name}` : item.name
     if (item.metadata) {
-      // Has metadata → it's a file
       paths.push(fullPath)
     } else {
-      // No metadata → it's a folder — recurse
       const nested = await listAllFiles(bucket, fullPath)
       paths.push(...nested)
     }
@@ -66,7 +59,7 @@ export async function GET() {
   let totalFiles = 0
   const results: { bucket: string; files: number; errors: string[] }[] = []
 
-  for (const { name: bucketName, onedriveSuffix } of BUCKETS) {
+  for (const { name: bucketName, azureContainer } of BUCKETS) {
     const bucket = supabase.storage.from(bucketName)
     const filePaths = await listAllFiles(bucket)
     const errors: string[] = []
@@ -79,12 +72,10 @@ export async function GET() {
           continue
         }
 
-        const arrayBuf = await data.arrayBuffer()
-        const buffer   = Buffer.from(arrayBuf)
+        const buffer   = Buffer.from(await data.arrayBuffer())
         const mimeType = data.type || 'application/octet-stream'
-        const dest     = `${ONEDRIVE_BASE}/${onedriveSuffix}/${filePath}`
 
-        await uploadToOneDrive(buffer, dest, mimeType)
+        await uploadToAzure(buffer, filePath, mimeType, azureContainer)
         totalFiles++
       } catch (err) {
         errors.push(`Error backing up ${filePath}: ${err instanceof Error ? err.message : String(err)}`)
