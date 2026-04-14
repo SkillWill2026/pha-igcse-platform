@@ -239,7 +239,7 @@ export function ProductionDashboard({ isAdmin }: Props) {
           </span>
         </div>
         <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden">
-          <divh
+          <div
             className="h-3 rounded-full bg-green-500 transition-all duration-500"
             style={{ width: `${Math.min(100, data.pct_complete)}%` }}
           />
@@ -258,7 +258,7 @@ export function ProductionDashboard({ isAdmin }: Props) {
       </div>
 
       {/* Monthly milestones */}
-      { month: 'May', days: 31, start: '2026-05-01', end: '2026-05-31' },
+      <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
         <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Monthly milestones</div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
