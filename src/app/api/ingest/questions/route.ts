@@ -74,7 +74,9 @@ export async function POST(req: NextRequest) {
           })
           inserted++
         } catch (qErr) {
-          console.error('Question insert failed:', qErr)
+          const msg = qErr instanceof Error ? qErr.message : String(qErr)
+          console.error('Question insert failed:', msg)
+          return NextResponse.json({ error: msg, inserted }, { status: 500 })
         }
       }
     }
