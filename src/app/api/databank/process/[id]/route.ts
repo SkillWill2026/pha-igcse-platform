@@ -1,33 +1,34 @@
 export const dynamic = 'force-dynamic'
 
+import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
-import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 import { embedTexts, chunkText } from '@/lib/voyage'
 import { extractTextWithOCR, isImageBasedPdf } from '@/lib/ocr'
 
 export const maxDuration = 300
 
 export async function POST(
-  _request: Request,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: { id: string } },
 ) {
-  const supabase = createAdminClient()
   const { id } = params
 
-  await supabase
-    .from('databank_documents')
-    .update({ processing_status: 'processing', processing_error: null })
-    .eq('id', id)
+  await prisma.databank_documents.update({
+    where: { id },
+    data: { processing_status: 'processing', processing_error: null },
+  })
 
   try {
-    const { data: doc, error: docError } = await supabase
-      .from('databank_documents')
-      .select('file_path, title')
-      .eq('id', id)
-      .single()
+    const doc = await prisma.databank_documents.findUnique({
+      where: { id },
+      select: { file_path: true, title: true },
+    })
 
-    if (docError || !doc) throw new Error('Document not found')
+    if (!doc) throw new Error('Document not found')
 
+    // ── Download from Supabase Storage (unchanged) ────────────────────────────
+    const supabase = createAdminClient()
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('databank')
       .download(doc.file_path)
@@ -49,10 +50,10 @@ export async function POST(
       usedOCR = true
     }
 
-    await supabase
-      .from('databank_documents')
-      .update({ page_count: pageCount })
-      .eq('id', id)
+    await prisma.databank_documents.update({
+      where: { id },
+      data: { page_count: pageCount },
+    })
 
     const chunks = chunkText(fullText, 2000, 200)
 
@@ -64,56 +65,58 @@ export async function POST(
       )
     }
 
-    await supabase
-      .from('databank_chunks')
-      .delete()
-      .eq('document_id', id)
+    // Delete existing chunks (no embedding field involved — regular Prisma ok)
+    await prisma.databank_chunks.deleteMany({ where: { document_id: id } })
 
     const embeddings = await embedTexts(chunks)
 
-    const rows = chunks.map((content, i) => ({
-      document_id: id,
-      content,
-      embedding: JSON.stringify(embeddings[i]),
-      chunk_index: i,
-      token_count: Math.round(content.length / 4),
-    }))
-
+    // ── Insert chunks with vector embeddings via raw SQL ──────────────────────
+    // Prisma cannot handle the vector type natively — must use $executeRaw
     const batchSize = 50
-    for (let i = 0; i < rows.length; i += batchSize) {
-      const { error: insertError } = await supabase
-        .from('databank_chunks')
-        .insert(rows.slice(i, i + batchSize))
-      if (insertError) throw new Error(`Chunk insert failed: ${insertError.message}`)
+    for (let i = 0; i < chunks.length; i += batchSize) {
+      const batchChunks = chunks.slice(i, i + batchSize)
+      const batchEmbeddings = embeddings.slice(i, i + batchSize)
+
+      for (let j = 0; j < batchChunks.length; j++) {
+        const content = batchChunks[j]
+        const embeddingStr = JSON.stringify(batchEmbeddings[j])
+        const chunkIndex = i + j
+        const tokenCount = Math.round(content.length / 4)
+
+        await prisma.$executeRaw`
+          INSERT INTO databank_chunks (document_id, content, embedding, chunk_index, token_count)
+          VALUES (${id}::uuid, ${content}, ${embeddingStr}::vector, ${chunkIndex}, ${tokenCount})
+        `
+      }
     }
 
-    await supabase
-      .from('databank_documents')
-      .update({
+    await prisma.databank_documents.update({
+      where: { id },
+      data: {
         processing_status: 'completed',
-        chunk_count: chunks.length,
-        page_count: pageCount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
+        chunk_count:       chunks.length,
+        page_count:        pageCount,
+        updated_at:        new Date(),
+      },
+    })
 
     return NextResponse.json({
-      success: true,
-      chunks: chunks.length,
-      pages: pageCount,
-      ocr_used: usedOCR,
+      success:   true,
+      chunks:    chunks.length,
+      pages:     pageCount,
+      ocr_used:  usedOCR,
     })
 
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    await supabase
-      .from('databank_documents')
-      .update({
+    await prisma.databank_documents.update({
+      where: { id },
+      data: {
         processing_status: 'failed',
-        processing_error: message,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
+        processing_error:  message,
+        updated_at:        new Date(),
+      },
+    })
 
     return NextResponse.json({ error: message }, { status: 500 })
   }

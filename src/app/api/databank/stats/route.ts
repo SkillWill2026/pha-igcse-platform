@@ -1,74 +1,67 @@
 export const dynamic = 'force-dynamic'
 
-import { createAdminClient } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export const runtime = 'nodejs'
 
 export async function GET() {
-  const supabase = createAdminClient()
+  try {
+    const [docs, totalChunks, topics, completedDocs, topicCoverage] = await Promise.all([
+      prisma.databank_documents.findMany({
+        select: { id: true, processing_status: true },
+      }),
+      prisma.databank_chunks.count(),
+      prisma.topics.findMany({
+        select: { id: true, name: true, ref: true },
+        orderBy: { ref: 'asc' },
+      }),
+      prisma.databank_documents.findMany({
+        where: { processing_status: 'completed' },
+        select: { doc_type: true, processing_status: true },
+      }),
+      prisma.databank_documents.findMany({
+        where: { processing_status: 'completed' },
+        select: { topic_id: true, chunk_count: true },
+      }),
+    ])
 
-  const [docsRes, chunksRes, topicsRes, byTypeRes] = await Promise.all([
-    supabase
-      .from('databank_documents')
-      .select('id, processing_status'),
-    supabase
-      .from('databank_chunks')
-      .select('id', { count: 'exact', head: true }),
-    supabase
-      .from('topics')
-      .select('id, name, ref')
-      .order('ref'),
-    supabase
-      .from('databank_documents')
-      .select('doc_type, processing_status')
-      .eq('processing_status', 'completed'),
-  ])
-
-  if (docsRes.error) {
-    return NextResponse.json({ error: docsRes.error.message }, { status: 500 })
-  }
-
-  const docs = docsRes.data ?? []
-  const totalChunks = chunksRes.count ?? 0
-  const topics = topicsRes.data ?? []
-  const completedDocs = byTypeRes.data ?? []
-
-  const byStatus = {
-    completed: docs.filter(d => d.processing_status === 'completed').length,
-    processing: docs.filter(d => d.processing_status === 'processing').length,
-    pending: docs.filter(d => d.processing_status === 'pending').length,
-    failed: docs.filter(d => d.processing_status === 'failed').length,
-  }
-
-  const byType: Record<string, number> = {}
-  for (const d of completedDocs) {
-    byType[d.doc_type] = (byType[d.doc_type] ?? 0) + 1
-  }
-
-  const { data: topicCoverage } = await supabase
-    .from('databank_documents')
-    .select('topic_id, chunk_count')
-    .eq('processing_status', 'completed')
-
-  const topicStats = topics.map(t => {
-    const linked = (topicCoverage ?? []).filter(d => d.topic_id === t.id)
-    return {
-      id: t.id,
-      ref: t.ref,
-      name: t.name,
-      doc_count: linked.length,
-      chunk_count: linked.reduce((sum, d) => sum + (d.chunk_count ?? 0), 0),
+    const byStatus = {
+      completed: docs.filter(d => d.processing_status === 'completed').length,
+      processing: docs.filter(d => d.processing_status === 'processing').length,
+      pending:    docs.filter(d => d.processing_status === 'pending').length,
+      failed:     docs.filter(d => d.processing_status === 'failed').length,
     }
-  })
 
-  const coveredTopics = topicStats.filter(t => t.doc_count > 0).length
+    const byType: Record<string, number> = {}
+    for (const d of completedDocs) {
+      byType[d.doc_type] = (byType[d.doc_type] ?? 0) + 1
+    }
 
-  return NextResponse.json({
-    total_documents: docs.length,
-    total_chunks: totalChunks,
-    covered_topics: coveredTopics,
-    total_topics: topics.length,
-    by_status: byStatus,
-    by_type: byType,
-    topic_coverage: topicStats,
-  })
+    const topicStats = topics.map(t => {
+      const linked = topicCoverage.filter(d => d.topic_id === t.id)
+      return {
+        id:          t.id,
+        ref:         t.ref,
+        name:        t.name,
+        doc_count:   linked.length,
+        chunk_count: linked.reduce((sum, d) => sum + (d.chunk_count ?? 0), 0),
+      }
+    })
+
+    const coveredTopics = topicStats.filter(t => t.doc_count > 0).length
+
+    return NextResponse.json({
+      total_documents: docs.length,
+      total_chunks:    totalChunks,
+      covered_topics:  coveredTopics,
+      total_topics:    topics.length,
+      by_status:       byStatus,
+      by_type:         byType,
+      topic_coverage:  topicStats,
+    })
+  } catch (err) {
+    console.error('[GET /api/databank/stats]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

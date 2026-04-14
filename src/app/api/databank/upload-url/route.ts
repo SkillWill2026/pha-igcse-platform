@@ -1,11 +1,13 @@
 export const dynamic = 'force-dynamic'
 
+import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
-import { NextResponse } from 'next/server'
 
-export async function POST(request: Request) {
+export const runtime = 'nodejs'
+
+export async function POST(request: NextRequest) {
   const supabase = createAdminClient()
-  const body = await request.json()
+  const body = await request.json() as { fileName?: string }
   const { fileName } = body
 
   if (!fileName) {
