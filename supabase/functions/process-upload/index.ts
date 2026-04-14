@@ -64,6 +64,24 @@ RULE 6 — OUTPUT FORMAT:
 Return ONLY a valid JSON array. No markdown, no code fences, no explanation.
 Each object must have: content (string), part_label (string|null), parent_question_ref (string|null), question_type ("mcq"|"short_answer"|"structured"|"extended"), marks (integer 1-10), difficulty (integer 1-5)`;
 
+// ── Azure write-through helper ────────────────────────────────────────────────
+async function postToAzure(path: string, body: unknown): Promise<void> {
+  const appUrl = Deno.env.get("NEXT_PUBLIC_APP_URL") ?? "https://pha-igcse-platform.vercel.app";
+  const secret = Deno.env.get("EDGE_FUNCTION_SECRET")!;
+  const res = await fetch(`${appUrl}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-edge-secret": secret,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`postToAzure ${path} failed: ${res.status} ${text.slice(0, 300)}`);
+  }
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 serve(async (req: Request) => {
   try {
@@ -231,13 +249,14 @@ async function processUpload(payload: {
           console.warn("[process-upload] JSON parse failed on chunk", chunkIdx);
         }
 
-        // Insert questions
+        // Collect questions for this chunk
+        const questionRows: unknown[] = [];
         for (const q of questions) {
           const qType = VALID_QUESTION_TYPES.includes(q.question_type ?? "")
             ? q.question_type!
             : "structured";
 
-          const { error: insertErr } = await supabase.from("questions").insert({
+          questionRows.push({
             exam_board_id,
             topic_id: topic_id || null,
             subtopic_id: null,
@@ -253,20 +272,23 @@ async function processUpload(payload: {
             status: "draft",
             ai_extracted: true,
           });
-
-          if (!insertErr) {
-            totalExtracted++;
-          } else if (insertErr.code !== "23505") {
-            // 23505 = unique violation (duplicate) — skip silently
-            console.warn("[process-upload] insert error:", insertErr.message);
-          }
+          totalExtracted++;
         }
 
-        // Update live progress after each chunk
-        await supabase
-          .from("upload_batches")
-          .update({ questions_extracted: totalExtracted })
-          .eq("id", batch_id);
+        // POST chunk questions to Azure + update progress
+        if (questionRows.length > 0) {
+          await postToAzure("/api/ingest/questions", {
+            batch_id,
+            questions: questionRows,
+          });
+          questionRows.length = 0; // clear after sending
+        }
+        await postToAzure("/api/ingest/questions", {
+          batch_id,
+          questions: [],
+          progress_update: true,
+          total_questions_extracted: totalExtracted,
+        });
 
         console.log(`[process-upload] Chunk ${chunkIdx + 1}/${chunks.length} — ${totalExtracted} questions so far`);
 
@@ -276,16 +298,12 @@ async function processUpload(payload: {
     }
 
     // ── Mark batch as done ────────────────────────────────────────────────────
-    await supabase
-      .from("upload_batches")
-      .update({
-        status: "completed",
-        questions_extracted: totalExtracted,
-        total_questions_extracted: totalExtracted,
-        completed_files: 1,
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", batch_id);
+    await postToAzure("/api/ingest/questions", {
+      batch_id,
+      questions: [],
+      status: "completed",
+      total_questions_extracted: totalExtracted,
+    });
 
     console.log("[process-upload] Done — batch:", batch_id, "| questions:", totalExtracted);
 
@@ -293,9 +311,11 @@ async function processUpload(payload: {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[process-upload] Fatal error for batch", batch_id, ":", msg);
 
-    await supabase
-      .from("upload_batches")
-      .update({ status: "failed", error_message: msg.slice(0, 500) })
-      .eq("id", batch_id);
+    await postToAzure("/api/ingest/questions", {
+      batch_id,
+      questions: [],
+      status: "failed",
+      error_message: msg.slice(0, 500),
+    }).catch(() => {});
   }
 }
