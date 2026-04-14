@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -22,17 +22,10 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-
-    const { error } = await supabase
-      .from('answers')
-      .update({ status, updated_at: new Date().toISOString() })
-      .in('id', ids)
-
-    if (error) {
-      console.error('[PATCH /api/answers/bulk-status]', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    await prisma.answers.updateMany({
+      where: { id: { in: ids } },
+      data: { status, updated_at: new Date() },
+    })
 
     return NextResponse.json({ updated: ids.length })
   } catch (err) {

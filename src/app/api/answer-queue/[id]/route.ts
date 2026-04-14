@@ -1,30 +1,35 @@
 export const dynamic = 'force-dynamic'
 
-import { createAdminClient } from '@/lib/supabase'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
+
+export const runtime = 'nodejs'
 
 export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: { id: string } },
 ) {
-  const supabase = createAdminClient()
-  const body = await request.json()
-  const { content, status } = body
+  try {
+    const body = await request.json() as Record<string, unknown>
+    const { content, status } = body
 
-  const updates: Record<string, unknown> = {}
-  if (content !== undefined) updates.content = content
-  if (status !== undefined) updates.status = status
+    const updates: Record<string, unknown> = {}
+    if (content !== undefined) updates.content = content
+    if (status !== undefined) updates.status = status
 
-  const { data, error } = await supabase
-    .from('answers')
-    .update(updates)
-    .eq('id', params.id)
-    .select()
-    .single()
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
+    }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const answer = await prisma.answers.update({
+      where: { id: params.id },
+      data: updates as Prisma.answersUpdateInput,
+    })
+
+    return NextResponse.json({ answer })
+  } catch (err) {
+    console.error(`[PATCH /api/answer-queue/${params.id}]`, err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
-
-  return NextResponse.json({ answer: data })
 }

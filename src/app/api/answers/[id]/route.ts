@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { createAdminClient } from '@/lib/supabase'
+import { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -23,15 +24,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from('answers')
-      .update(updates)
-      .eq('id', params.id)
-      .select()
-      .single()
+    const data = await prisma.answers.update({
+      where: { id: params.id },
+      data: updates as Prisma.answersUpdateInput,
+    })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     revalidatePath('/admin/answers', 'layout')
     return NextResponse.json(data)
   } catch (err) {
