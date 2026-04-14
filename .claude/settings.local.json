@@ -41,7 +41,9 @@
       "Bash(node enable-pgvector.js)",
       "Bash(node check-embeddings.js)",
       "Bash(node enable-pgvector-final.js)",
-      "Bash(grep -n \"remarkPlugins={\" /c/Users/jayou/Desktop/pha-igcse-platform/src/app/admin/answers/[id]/review-client.tsx)"
+      "Bash(grep -n \"remarkPlugins={\" /c/Users/jayou/Desktop/pha-igcse-platform/src/app/admin/answers/[id]/review-client.tsx)",
+      "Bash(curl -X POST http://localhost:3000/api/classify-question -H 'Content-Type: application/json' -d '{\"question_id\": \"b24ce238-851a-4e7a-9e66-63eea718f110\", \"topic_id\": null}')",
+      "Bash(netstat -tuln)"
     ]
   }
 }

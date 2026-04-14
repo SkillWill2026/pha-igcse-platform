@@ -41,6 +41,7 @@ interface Props {
 export function ReviewQueueClient({ drafts, initialError }: Props) {
   const router = useRouter()
   const [currentIdx, setCurrentIdx] = useState(0)
+  const [localDrafts, setLocalDrafts] = useState(drafts)
   const [stats, setStats] = useState({ approved: 0, rejected: 0 })
   const [actionLoading, setActionLoading] = useState(false)
   const [generatingAnswer, setGeneratingAnswer] = useState(false)
@@ -73,7 +74,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
   const pendingAutoSubSubId = useRef<string | null>(null)
 
-  const remaining = drafts.length - currentIdx - 1
+  const remaining = localDrafts.length - currentIdx - 1
 
   // Split images by type for each section
   const questionImages = useMemo(() => {
@@ -85,8 +86,8 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   }, [currentQuestion?.id, currentQuestion?.question_images])
 
   const questionsWithoutAnswers = useMemo(() => {
-    return drafts.filter(d => !d.answer && !bgAnswers.has(d.id))
-  }, [drafts, bgAnswers])
+    return localDrafts.filter(d => !d.answer && !bgAnswers.has(d.id))
+  }, [localDrafts, bgAnswers])
 
   const canApprove = !!(
     (editTopicId || currentQuestion?.topic_id) &&
@@ -96,7 +97,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
   // Update currentQuestion when index changes (reset all edit states)
   useEffect(() => {
-    const base = drafts[currentIdx] ?? null
+    const base = localDrafts[currentIdx] ?? null
     if (base && !base.answer && bgAnswers.has(base.id)) {
       setCurrentQuestion({ ...base, answer: bgAnswers.get(base.id)! })
     } else {
@@ -112,7 +113,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
     setEditTopicId(null)
     setEditSubtopicId(null)
     setEditSubSubtopicId(null)
-  }, [currentIdx, drafts])
+  }, [currentIdx, localDrafts])
 
   // Update currentQuestion with background answer (don't reset edit states)
   useEffect(() => {
@@ -201,7 +202,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
   // Background answer generation
   useEffect(() => {
-    const questionsToGenerate = drafts.filter(d => !d.answer)
+    const questionsToGenerate = localDrafts.filter(d => !d.answer)
     if (questionsToGenerate.length === 0) return
 
     let cancelled = false
@@ -426,6 +427,18 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
             }
           : (q as any)
       )
+      setLocalDrafts(prev => prev.map(d =>
+        d.id === currentQuestion!.id
+          ? {
+              ...d,
+              content_text: textToSave,
+              difficulty: editedDifficulty,
+              topic_id: editTopicId || d.topic_id,
+              subtopic_id: editSubtopicId || d.subtopic_id,
+              sub_subtopic_id: editSubSubtopicId || d.sub_subtopic_id,
+            }
+          : d
+      ))
       setEditing(false)
       setEditedText('')
       setEditTopicId(null)
@@ -535,7 +548,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
       // Update the current question with new answer
       setCurrentQuestion((q) => (q ? { ...q, answer: data.answer } : q))
-      setDrafts((prev) =>
+      setLocalDrafts((prev) =>
         prev.map((q) =>
           q.id === currentQuestion.id ? { ...q, answer: data.answer } : q
         )

@@ -6,6 +6,51 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// Keyword-based topic detection (fast and reliable)
+function detectTopicFromText(text: string, topics: { id: string; name: string; ref: string }[]): string | null {
+  const t = text.toLowerCase()
+  const find = (keyword: string) => topics.find(tp => tp.name.toLowerCase().includes(keyword))?.id ?? null
+
+  // Mensuration: anything about calculating area, volume, perimeter — including real-world contexts
+  if (/\b(area|perimeter|volume|surface area|litres?|coverage|paint|fence|fencing|carpet|tile|tiling|cm²|m²|mm²|capacity|cross.section|compound shape)\b/.test(t)) {
+    return find('mensuration')
+  }
+  // Algebra: equations, rearranging, formulae, expressions, sequences
+  if (/\b(subject|rearrange|transpose|expand|factorise|simplify|expression|sequence|nth term|function|inequality|quadratic|simultaneous|indices|algebraic)\b/.test(t) || /\bsolve\b/.test(t) && !/\bangle\b/.test(t)) {
+    return find('algebra')
+  }
+  // Probability
+  if (/\b(probability|chance|likelihood|tree diagram|random|event|mutually exclusive|independent)\b/.test(t)) {
+    return find('probability')
+  }
+  // Statistics
+  if (/\b(mean|median|mode|range|frequency|histogram|pie chart|scatter|average|quartile|percentile|cumulative)\b/.test(t)) {
+    return find('statistics')
+  }
+  // Number
+  if (/\b(percentage|fraction|ratio|decimal|standard form|significant figures|rounding|estimate|lcm|hcf|prime|integer|calculator)\b/.test(t)) {
+    return find('number')
+  }
+  // Trigonometry
+  if (/\b(sine|cosine|tangent|trigonometry|bearing|elevation|depression|pythagoras|hypotenuse)\b/.test(t) || /\b(sin|cos|tan)\s*[\^(]/.test(t)) {
+    return find('trigonometry')
+  }
+  // Vectors and Transformations
+  if (/\b(vector|translation|rotation|reflection|enlargement|transformation|column vector)\b/.test(t)) {
+    return find('vector')
+  }
+  // Coordinate Geometry
+  if (/\b(gradient|y-intercept|midpoint|coordinate|straight line graph|distance between points|equation of a line)\b/.test(t)) {
+    return find('coordinate')
+  }
+  // Geometry: only if explicitly about angles, constructions, shape properties — NOT calculations
+  if (/\b(angle|polygon|construction|symmetry|congruent|similar|circle theorem|tangent from|chord|arc|sector|cyclic|parallel lines|locus)\b/.test(t)) {
+    return find('geometry')
+  }
+
+  return null // Fall back to Haiku only if no keywords matched
+}
+
 // Rule-based fallback matcher for sub-subtopic when Claude returns null
 function ruleBasedSubSubtopic(questionText: string, subSubtopics: {id: string, outcome: string}[]): string | null {
   const text = questionText.toLowerCase()
@@ -58,33 +103,30 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
   let effectiveTopicId: string | null = searchAllTopics ? null : (restrictToTopicId ?? question.topic_id ?? null)
 
   if (searchAllTopics && topics.length > 0) {
-    const topicList = topics.map(t => `ID:${t.id} | ${t.ref} – ${t.name}`).join('\n')
-    const topicMsg = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 256,
-      system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert. Classify which topic a question belongs to.
-
-KEY DISTINCTIONS:
-- Mensuration = questions asking you to CALCULATE area, volume, perimeter, surface area of any shape (even if about painting, fencing, filling, covering)
-- Geometry = questions about angle properties, constructions, symmetry, transformations, shape names/properties (NOT calculating area/volume)
-- Algebra = equations, formulae, sequences, functions, graphs of functions
-- Number = fractions, percentages, ratio, standard form, arithmetic
-- Probability = chance, likelihood, tree diagrams
-- Statistics = averages, charts, data handling
-
-Respond ONLY with valid JSON: {"topic_id": "exact-uuid"} No explanation, no markdown.`,
-      messages: [{ role: 'user', content: `QUESTION: ${cleanText}\n\nAVAILABLE TOPICS:\n${topicList}\n\nWhich topic_id best matches this question? Return ONLY JSON: {"topic_id": "..."}` }]
-    })
-    const topicText = topicMsg.content[0].type === 'text' ? topicMsg.content[0].text.trim() : '{}'
-    try {
-      const cleaned = topicText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
-      const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
-      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned)
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-      if (parsed.topic_id && uuidRegex.test(parsed.topic_id) && topics.find(t => t.id === parsed.topic_id)) {
-        effectiveTopicId = parsed.topic_id
-      }
-    } catch { /* ignore */ }
+    // Try keyword-based detection first (fast and reliable)
+    const keywordTopicId = detectTopicFromText(cleanText, topics)
+    if (keywordTopicId) {
+      effectiveTopicId = keywordTopicId
+    } else {
+      // Fall back to Haiku only if keywords didn't match
+      const topicList = topics.map(t => `ID:${t.id} | ${t.ref} – ${t.name}`).join('\n')
+      const topicMsg = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 256,
+        system: `You are a Cambridge IGCSE Mathematics (0580) curriculum expert. Identify which topic a question belongs to. KEY RULES: Mensuration = CALCULATE area/volume/perimeter. Geometry = angle properties/constructions/shape names. Algebra = equations/formulae/rearranging. Respond ONLY with JSON: {"topic_id": "exact-uuid"}`,
+        messages: [{ role: 'user', content: `QUESTION: ${cleanText}\n\nTOPICS:\n${topicList}\n\nReturn ONLY JSON: {"topic_id": "..."}` }]
+      })
+      const topicText = topicMsg.content[0].type === 'text' ? topicMsg.content[0].text.trim() : '{}'
+      try {
+        const cleaned = topicText.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+        const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (parsed.topic_id && uuidRegex.test(parsed.topic_id) && topics.find(t => t.id === parsed.topic_id)) {
+          effectiveTopicId = parsed.topic_id
+        }
+      } catch { /* ignore */ }
+    }
   }
 
   if (!effectiveTopicId) return
