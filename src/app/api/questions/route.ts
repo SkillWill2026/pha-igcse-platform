@@ -1,12 +1,13 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
-const { searchParams } = request.nextUrl
+  const { searchParams } = request.nextUrl
   const topicId       = searchParams.get('topic_id')
   const subtopicId    = searchParams.get('subtopic_id')
   const subSubtopicId = searchParams.get('sub_subtopic_id')
@@ -15,84 +16,74 @@ const { searchParams } = request.nextUrl
   const subjectId     = searchParams.get('subject_id')
 
   try {
-    const supabase = createAdminClient()
-
-    let query = supabase
-      .from('questions')
-      .select('*')
-      .order('serial_number', { ascending: true })
+    const where: Prisma.questionsWhereInput = {}
 
     // Status filtering: default to active (draft+approved), or filter by explicit status
     if (statusParam === 'rejected') {
-      query = query.eq('status', 'rejected')
+      where.status = 'rejected'
     } else if (statusParam === 'deleted') {
-      query = query.eq('status', 'deleted')
-    } else if (statusParam === 'all') {
-      // no status filter
-    } else {
-      // Default: only active questions
-      query = query.in('status', ['draft', 'approved'])
+      where.status = 'deleted'
+    } else if (statusParam !== 'all') {
+      where.status = { in: ['draft', 'approved'] }
     }
 
     // If subject_id given but no topic_id, scope questions to that subject's topics
     if (subjectId && (!topicId || topicId === '')) {
-      const { data: subjectTopics } = await supabase
-        .from('topics')
-        .select('id')
-        .eq('subject_id', subjectId)
-      const subjectTopicIds = (subjectTopics ?? []).map((t: { id: string }) => t.id)
-      if (subjectTopicIds.length === 0) {
-        // Subject exists but has no topics yet — return empty result immediately
-        return NextResponse.json([])
-      }
-      query = query.in('topic_id', subjectTopicIds)
+      const subjectTopics = await prisma.topics.findMany({
+        where: { subject_id: subjectId },
+        select: { id: true },
+      })
+      const subjectTopicIds = subjectTopics.map(t => t.id)
+      if (subjectTopicIds.length === 0) return NextResponse.json([])
+      where.topic_id = { in: subjectTopicIds }
     }
 
-    if (topicId       && topicId       !== '') query = query.eq('topic_id',        topicId)
-    if (subtopicId    && subtopicId    !== '') query = query.eq('subtopic_id',     subtopicId)
-    if (subSubtopicId && subSubtopicId !== '') query = query.eq('sub_subtopic_id', subSubtopicId)
-    if (batchId       && batchId       !== '') query = query.eq('batch_id',        batchId)
+    if (topicId       && topicId       !== '') where.topic_id        = topicId
+    if (subtopicId    && subtopicId    !== '') where.subtopic_id     = subtopicId
+    if (subSubtopicId && subSubtopicId !== '') where.sub_subtopic_id = subSubtopicId
+    if (batchId       && batchId       !== '') where.batch_id        = batchId
 
-    const { data, error } = await query
-    if (error) {
-      console.error('[GET /api/questions]', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    const rows = data ?? []
+    const rows = await prisma.questions.findMany({ where, orderBy: { serial_number: 'asc' } })
 
     // Collect unique FK ids for parallel reference fetches
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const questionIds  = rows.map((q: any) => q.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const topicIds     = [...new Set(rows.map((q: any) => q.topic_id).filter(Boolean))]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const subtopicIds  = [...new Set(rows.map((q: any) => q.subtopic_id).filter(Boolean))]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const boardIds     = [...new Set(rows.map((q: any) => q.exam_board_id).filter(Boolean))]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sstIds       = [...new Set(rows.map((q: any) => q.sub_subtopic_id).filter(Boolean))]
 
-    const [topicsRes, subtopicsRes, boardsRes, sstRes, answersRes] = await Promise.all([
-      topicIds.length    > 0 ? supabase.from('topics').select('id, ref, name').in('id', topicIds) : { data: [] },
-      subtopicIds.length > 0 ? supabase.from('subtopics').select('id, ref, title').in('id', subtopicIds) : { data: [] },
-      boardIds.length    > 0 ? supabase.from('exam_boards').select('id, name').in('id', boardIds) : { data: [] },
-      sstIds.length      > 0 ? supabase.from('sub_subtopics').select('id, ext_num, outcome, tier').in('id', sstIds) : { data: [] },
-      questionIds.length > 0
-        ? supabase.from('answers').select('question_id, serial_number, status').in('question_id', questionIds)
-        : { data: [] },
+    const [topicsData, subtopicsData, boardsData, sstData, answersData] = await Promise.all([
+      topicIds.length    > 0 ? prisma.topics.findMany({ where: { id: { in: topicIds as string[] } }, select: { id: true, ref: true, name: true } }) : Promise.resolve([]),
+      subtopicIds.length > 0 ? prisma.subtopics.findMany({ where: { id: { in: subtopicIds as string[] } }, select: { id: true, ref: true, title: true } }) : Promise.resolve([]),
+      boardIds.length    > 0 ? prisma.exam_boards.findMany({ where: { id: { in: boardIds as string[] } }, select: { id: true, name: true } }) : Promise.resolve([]),
+      sstIds.length      > 0 ? prisma.sub_subtopics.findMany({ where: { id: { in: sstIds as string[] } }, select: { id: true, ext_num: true, outcome: true, tier: true } }) : Promise.resolve([]),
+      questionIds.length > 0 ? prisma.answers.findMany({ where: { question_id: { in: questionIds as string[] } }, select: { question_id: true, serial_number: true, status: true } }) : Promise.resolve([]),
     ])
 
-    const topicMap    = new Map((topicsRes.data    ?? []).map((r: any) => [r.id, r]))
-    const subtopicMap = new Map((subtopicsRes.data ?? []).map((r: any) => [r.id, r]))
-    const boardMap    = new Map((boardsRes.data    ?? []).map((r: any) => [r.id, r]))
-    const sstMap      = new Map((sstRes.data       ?? []).map((r: any) => [r.id, r]))
-    // Map question_id → first answer found
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const topicMap    = new Map(topicsData.map((r: any)    => [r.id, r]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subtopicMap = new Map(subtopicsData.map((r: any) => [r.id, r]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const boardMap    = new Map(boardsData.map((r: any)    => [r.id, r]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sstMap      = new Map(sstData.map((r: any)       => [r.id, r]))
     const answerMap   = new Map<string, { serial_number: string | null; status: string }>()
-    for (const a of (answersRes.data ?? [])) {
-      if (!answerMap.has((a as any).question_id)) {
-        answerMap.set((a as any).question_id, {
-          serial_number: (a as any).serial_number ?? null,
-          status: (a as any).status ?? 'draft',
+    for (const a of answersData) {
+      if (a.question_id && !answerMap.has(a.question_id)) {
+        answerMap.set(a.question_id, {
+          serial_number: a.serial_number ?? null,
+          status: a.status ?? 'draft',
         })
       }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const questions = rows.map((q: any) => {
       const sub    = subtopicMap.get(q.subtopic_id)
       const answer = answerMap.get(q.id)

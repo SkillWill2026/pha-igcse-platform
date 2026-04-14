@@ -2,7 +2,9 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
+import { Prisma } from '@prisma/client'
 import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -13,45 +15,37 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    const supabase = createAdminClient()
-
     // Collect all question IDs in the family (root + all chained descendants)
     const allIds: string[] = [params.id]
     let frontier: string[] = [params.id]
     for (let depth = 0; depth < 10; depth++) {
-      const { data } = await supabase
-        .from('questions')
-        .select('id')
-        .in('source_question_id', frontier)
-      if (!data || data.length === 0) break
-      const newIds = data.map((d) => d.id)
+      const descendants = await prisma.questions.findMany({
+        where: { source_question_id: { in: frontier } },
+        select: { id: true },
+      })
+      if (descendants.length === 0) break
+      const newIds = descendants.map(d => d.id)
       allIds.push(...newIds)
       frontier = newIds
     }
 
     // Delete storage images for every question in the family
-    const { data: family } = await supabase
-      .from('questions')
-      .select('id, image_url')
-      .in('id', allIds)
+    const family = await prisma.questions.findMany({
+      where: { id: { in: allIds } },
+      select: { id: true, image_url: true },
+    })
 
-    for (const q of family ?? []) {
+    const supabase = createAdminClient()
+    for (const q of family) {
       if (!q.image_url) continue
       const { data: files } = await supabase.storage.from(IMAGE_BUCKET).list(q.id)
       if (files && files.length > 0) {
-        await supabase.storage
-          .from(IMAGE_BUCKET)
-          .remove(files.map((f) => `${q.id}/${f.name}`))
+        await supabase.storage.from(IMAGE_BUCKET).remove(files.map(f => `${q.id}/${f.name}`))
       }
     }
 
     // Delete all questions — answers cascade automatically (ON DELETE CASCADE)
-    const { error: delErr } = await supabase
-      .from('questions')
-      .delete()
-      .in('id', allIds)
-
-    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+    await prisma.questions.deleteMany({ where: { id: { in: allIds } } })
 
     revalidatePath('/admin/questions', 'layout')
     return NextResponse.json({ ok: true, deleted: allIds.length })
@@ -78,17 +72,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
     console.log(`[PATCH /api/questions/${params.id}] updates:`, JSON.stringify(updates))
-    const { data, error } = await supabase
-      .from('questions')
-      .update(updates)
-      .eq('id', params.id)
-      .select()
-      .single()
-    console.log(`[PATCH /api/questions/${params.id}] result — id: ${data?.id ?? null}, image_url: ${(data as Record<string,unknown>)?.image_url ?? 'missing'}, error: ${error?.message ?? 'none'}`)
+    const data = await prisma.questions.update({
+      where: { id: params.id },
+      data: updates as Prisma.questionsUpdateInput,
+    })
+    console.log(`[PATCH /api/questions/${params.id}] result — id: ${data.id}, image_url: ${(data as Record<string,unknown>).image_url ?? 'missing'}`)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     revalidatePath('/admin/questions', 'layout')
     return NextResponse.json(data)
   } catch (err) {

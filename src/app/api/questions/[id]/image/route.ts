@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -62,15 +63,11 @@ export async function POST(
 
     // Persist the URL to the questions table
     console.log(`[image POST] writing image_url to DB — question: ${params.id}, url: ${publicUrl}`)
-    const { error: dbError } = await supabase
-      .from('questions')
-      .update({ image_url: publicUrl })
-      .eq('id', params.id)
-
-    console.log(`[image POST] DB write result — error: ${dbError?.message ?? 'none'}`)
-    if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 })
-    }
+    await prisma.questions.update({
+      where: { id: params.id },
+      data: { image_url: publicUrl },
+    })
+    console.log(`[image POST] DB write complete`)
 
     revalidatePath('/admin/questions', 'layout')
     return NextResponse.json({ url: publicUrl })
@@ -89,24 +86,17 @@ export async function DELETE(
     const supabase = createAdminClient()
 
     // List and delete all files under this question's folder
-    const { data: files } = await supabase.storage
-      .from(BUCKET)
-      .list(params.id)
-
+    const { data: files } = await supabase.storage.from(BUCKET).list(params.id)
     if (files && files.length > 0) {
       const paths = files.map((f) => `${params.id}/${f.name}`)
       await supabase.storage.from(BUCKET).remove(paths)
     }
 
     // Clear the URL in the DB
-    const { error: dbError } = await supabase
-      .from('questions')
-      .update({ image_url: null })
-      .eq('id', params.id)
-
-    if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 })
-    }
+    await prisma.questions.update({
+      where: { id: params.id },
+      data: { image_url: null },
+    })
 
     revalidatePath('/admin/questions', 'layout')
     return NextResponse.json({ ok: true })

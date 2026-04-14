@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -17,37 +17,36 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-
     // Update the question
-    const { data: questionData, error: questionError } = await supabase
-      .from('questions')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
-      .select('serial_number')
-      .single()
+    const questionData = await prisma.questions.update({
+      where: { id: params.id },
+      data: { status, updated_at: new Date() },
+      select: { serial_number: true },
+    }).catch((err) => {
+      console.error('[PATCH /api/questions/[id]/status] question error:', err)
+      throw err
+    })
 
-    if (questionError) {
-      console.error('[PATCH /api/questions/[id]/status] question error:', questionError)
-      return NextResponse.json({ error: questionError.message }, { status: 500 })
-    }
-
-    // Mirror status to linked answer
-    const { data: answerData, error: answerError } = await supabase
-      .from('answers')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('question_id', params.id)
-      .select('serial_number')
-      .maybeSingle()
-
-    if (answerError) {
-      console.error('[PATCH /api/questions/[id]/status] answer error:', answerError)
+    // Mirror status to linked answer (non-fatal)
+    let answerSerial: string | null = null
+    try {
+      await prisma.answers.updateMany({
+        where: { question_id: params.id },
+        data: { status, updated_at: new Date() },
+      })
+      const answer = await prisma.answers.findFirst({
+        where: { question_id: params.id },
+        select: { serial_number: true },
+      })
+      answerSerial = answer?.serial_number ?? null
+    } catch (answerErr) {
+      console.error('[PATCH /api/questions/[id]/status] answer error:', answerErr)
       // Non-fatal
     }
 
     return NextResponse.json({
       question_serial: questionData?.serial_number ?? null,
-      answer_serial: answerData?.serial_number ?? null,
+      answer_serial: answerSerial,
     })
   } catch (err) {
     console.error('[PATCH /api/questions/[id]/status] unexpected:', err)

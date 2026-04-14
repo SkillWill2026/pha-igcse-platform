@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -17,23 +17,21 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    const supabase = createAdminClient()
+    await prisma.questions.updateMany({
+      where: { id: { in: ids as string[] } },
+      data: { status: 'approved' },
+    })
 
-    const { data, error } = await supabase
-      .from('questions')
-      .update({ status: 'approved' })
-      .in('id', ids as string[])
-      .select('id, serial_number')
+    const data = await prisma.questions.findMany({
+      where: { id: { in: ids as string[] } },
+      select: { id: true, serial_number: true },
+    })
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    const serials = (data ?? [])
-      .map((r: any) => r.serial_number as string | null)
+    const serials = data
+      .map(r => r.serial_number)
       .filter((s): s is string => s !== null)
 
-    return NextResponse.json({ updated: data?.length ?? 0, serials })
+    return NextResponse.json({ updated: data.length, serials })
   } catch (err) {
     console.error('[PATCH /api/questions/approve]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -22,26 +22,25 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
-
-    const [questionsRes, answersRes] = await Promise.all([
-      supabase
-        .from('questions')
-        .update({ status, updated_at: new Date().toISOString() })
-        .in('id', question_ids),
-      supabase
-        .from('answers')
-        .update({ status, updated_at: new Date().toISOString() })
-        .in('question_id', question_ids),
+    const now = new Date()
+    const [questionsResult, answersResult] = await Promise.allSettled([
+      prisma.questions.updateMany({
+        where: { id: { in: question_ids } },
+        data: { status, updated_at: now },
+      }),
+      prisma.answers.updateMany({
+        where: { question_id: { in: question_ids } },
+        data: { status, updated_at: now },
+      }),
     ])
 
-    if (questionsRes.error) {
-      console.error('[PATCH /api/questions/batch-status] questions error:', questionsRes.error)
-      return NextResponse.json({ error: questionsRes.error.message }, { status: 500 })
+    if (questionsResult.status === 'rejected') {
+      console.error('[PATCH /api/questions/batch-status] questions error:', questionsResult.reason)
+      return NextResponse.json({ error: 'Failed to update questions' }, { status: 500 })
     }
 
-    if (answersRes.error) {
-      console.error('[PATCH /api/questions/batch-status] answers error:', answersRes.error)
+    if (answersResult.status === 'rejected') {
+      console.error('[PATCH /api/questions/batch-status] answers error:', answersResult.reason)
       // Non-fatal: answers may not exist for every question
     }
 

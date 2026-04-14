@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
@@ -17,15 +17,22 @@ export async function POST(
       return NextResponse.json({ error: 'exam_board_ids is required' }, { status: 400 })
     }
 
-    const supabase = createAdminClient()
+    const source = await prisma.questions.findUnique({
+      where: { id: params.id },
+      select: {
+        content_text: true,
+        difficulty: true,
+        question_type: true,
+        marks: true,
+        topic_id: true,
+        subtopic_id: true,
+        image_url: true,
+        status: true,
+        source_question_id: true,
+      },
+    })
 
-    const { data: source, error: srcErr } = await supabase
-      .from('questions')
-      .select('content_text, difficulty, question_type, marks, topic_id, subtopic_id, image_url, status, source_question_id')
-      .eq('id', params.id)
-      .single()
-
-    if (srcErr || !source) {
+    if (!source) {
       return NextResponse.json({ error: 'Source question not found' }, { status: 404 })
     }
 
@@ -33,32 +40,30 @@ export async function POST(
     let rootId = params.id
     let cursor = source.source_question_id
     for (let i = 0; i < 10 && cursor; i++) {
-      const { data: ancestor } = await supabase
-        .from('questions')
-        .select('id, source_question_id')
-        .eq('id', cursor)
-        .single()
+      const ancestor = await prisma.questions.findUnique({
+        where: { id: cursor },
+        select: { id: true, source_question_id: true },
+      })
       if (!ancestor) break
       rootId = ancestor.id
       cursor = ancestor.source_question_id
     }
 
     // ── Find all board IDs already covered in this family ────────────────────
-    const { data: family } = await supabase
-      .from('questions')
-      .select('exam_board_id')
-      .or(`id.eq.${rootId},source_question_id.eq.${rootId}`)
-
-    const coveredBoardIds = new Set(family?.map((f) => f.exam_board_id) ?? [])
+    const family = await prisma.questions.findMany({
+      where: { OR: [{ id: rootId }, { source_question_id: rootId }] },
+      select: { exam_board_id: true },
+    })
+    const coveredBoardIds = new Set(family.map(f => f.exam_board_id).filter(Boolean))
 
     // ── Create copies only for boards not already covered ────────────────────
-    const newBoardIds = exam_board_ids.filter((id) => !coveredBoardIds.has(id))
+    const newBoardIds = exam_board_ids.filter(id => !coveredBoardIds.has(id))
 
     if (newBoardIds.length === 0) {
       return NextResponse.json({ created: [] })
     }
 
-    const copies = newBoardIds.map((board_id) => ({
+    const copies = newBoardIds.map(board_id => ({
       exam_board_id:      board_id,
       topic_id:           source.topic_id,
       subtopic_id:        source.subtopic_id,
@@ -72,14 +77,9 @@ export async function POST(
       source_question_id: rootId,
     }))
 
-    const { data: created, error: insertErr } = await supabase
-      .from('questions')
-      .insert(copies)
-      .select()
-
-    if (insertErr) {
-      return NextResponse.json({ error: insertErr.message }, { status: 500 })
-    }
+    const created = await prisma.$transaction(
+      copies.map(copy => prisma.questions.create({ data: copy }))
+    )
 
     revalidatePath('/admin/questions', 'layout')
     return NextResponse.json({ created })

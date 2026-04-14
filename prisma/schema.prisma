@@ -7,13 +7,14 @@ datasource db {
 }
 
 model answers {
-  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  question_id  String?   @db.Uuid
-  content_text String?
-  status       String?   @default("draft")
-  created_by   String?   @db.Uuid
-  created_at   DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  question_id   String?   @db.Uuid
+  content_text  String?
+  status        String?   @default("draft")
+  created_by    String?   @db.Uuid
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
+  serial_number String?
 }
 
 model databank_chunks {
@@ -121,24 +122,29 @@ model question_images {
 }
 
 model questions {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  content_text    String?
-  difficulty      String?
-  marks           Int?
-  topic_id        String?   @db.Uuid
-  subtopic_id     String?   @db.Uuid
-  sub_subtopic_id String?   @db.Uuid
-  exam_board_id   String?   @db.Uuid
-  status          String?   @default("draft")
-  batch_id        String?   @db.Uuid
-  created_by      String?   @db.Uuid
-  has_image       Boolean?  @default(false)
-  question_number Int?
-  source_page     Int?
-  year            Int?
-  paper           String?
-  created_at      DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime? @default(now()) @db.Timestamptz(6)
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  content_text       String?
+  difficulty         String?
+  marks              Int?
+  topic_id           String?   @db.Uuid
+  subtopic_id        String?   @db.Uuid
+  sub_subtopic_id    String?   @db.Uuid
+  exam_board_id      String?   @db.Uuid
+  status             String?   @default("draft")
+  batch_id           String?   @db.Uuid
+  created_by         String?   @db.Uuid
+  has_image          Boolean?  @default(false)
+  question_number    Int?
+  source_page        Int?
+  year               Int?
+  paper              String?
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime? @default(now()) @db.Timestamptz(6)
+  serial_number      String?
+  image_url          String?
+  question_type      String?
+  source_question_id String?   @db.Uuid
+  ai_extracted       Boolean?  @default(false)
 }
 
 model sub_subtopics {
