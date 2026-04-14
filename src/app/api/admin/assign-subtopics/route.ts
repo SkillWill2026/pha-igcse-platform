@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 import { createAnthropicClient } from '@/lib/anthropic'
 
 export const runtime = 'nodejs'
@@ -25,59 +25,36 @@ function sleep(ms: number) {
 
 export async function POST() {
   try {
-    const supabase = createAdminClient()
     const anthropic = createAnthropicClient()
 
     // 1. Fetch questions where subtopic_id IS NULL
-    const { data: questionsRaw, error: qErr } = await supabase
-      .from('questions')
-      .select('id, content_text')
-      .is('subtopic_id', null)
-
-    if (qErr) {
-      console.error('[assign-subtopics] questions fetch error:', qErr.message)
-      return NextResponse.json({ error: qErr.message }, { status: 500 })
-    }
-
-    const questions = questionsRaw ?? []
+    const questions = await prisma.questions.findMany({
+      where: { subtopic_id: null },
+      select: { id: true, content_text: true },
+    })
 
     // 2. Fetch all subtopics
-    const { data: subtopicsRaw, error: sErr } = await supabase
-      .from('subtopics')
-      .select('id, ref, title, topic_id')
+    const subtopics = await prisma.subtopics.findMany({
+      select: { id: true, ref: true, title: true, topic_id: true },
+    })
 
-    if (sErr) {
-      console.error('[assign-subtopics] subtopics fetch error:', sErr.message)
-      return NextResponse.json({ error: sErr.message }, { status: 500 })
-    }
-
-    const subtopics = subtopicsRaw ?? []
-
-    // 3. Fetch all topics
-    const { data: topicsRaw, error: tErr } = await supabase
-      .from('topics')
-      .select('id, ref, name')
-
-    if (tErr) {
-      console.error('[assign-subtopics] topics fetch error:', tErr.message)
-      return NextResponse.json({ error: tErr.message }, { status: 500 })
-    }
-
-    const _topics = topicsRaw ?? []
+    // 3. Fetch all topics (used only for logging context)
+    const _topics = await prisma.topics.findMany({ select: { id: true, ref: true, name: true } })
     void _topics
 
-    // 4. Fetch all sub_subtopics
-    const { data: subSubtopicsRaw, error: sstErr } = await supabase
-      .from('sub_subtopics')
-      .select('id, subtopic_id, ext_num, outcome, sort_order')
-      .order('sort_order')
-
-    if (sstErr) {
-      console.error('[assign-subtopics] sub_subtopics fetch error:', sstErr.message)
+    // 4. Fetch all sub_subtopics (non-fatal if missing)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let subSubtopics: any[] = []
+    try {
+      subSubtopics = await prisma.sub_subtopics.findMany({
+        select: { id: true, subtopic_id: true, ext_num: true, outcome: true, sort_order: true },
+        orderBy: { sort_order: 'asc' },
+      })
+    } catch (sstErr) {
+      console.error('[assign-subtopics] sub_subtopics fetch error:', sstErr)
       // Non-fatal — continue without sub-subtopic assignment
     }
 
-    const subSubtopics = subSubtopicsRaw ?? []
     const subSubtopicIds = new Set(subSubtopics.map((s) => s.id))
 
     // Build a map from subtopic_id → sub_subtopics[]
@@ -156,29 +133,19 @@ export async function POST() {
             isValidUuid(subtopicId) &&
             subtopicIds.has(subtopicId)
           ) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const updatePayload: any = { subtopic_id: subtopicId }
-
             const validSubSst =
               subSubtopicId !== null &&
               typeof subSubtopicId === 'string' &&
               isValidUuid(subSubtopicId) &&
               subSubtopicIds.has(subSubtopicId)
 
-            if (validSubSst) {
-              updatePayload.sub_subtopic_id = subSubtopicId
-            }
-
-            const { error: updateErr } = await supabase
-              .from('questions')
-              .update(updatePayload)
-              .eq('id', question.id)
-
-            if (updateErr) {
-              console.error('[assign-subtopics] update error for question', question.id, ':', updateErr.message)
-              errors++
-              continue
-            }
+            await prisma.questions.update({
+              where: { id: question.id },
+              data: {
+                subtopic_id: subtopicId,
+                ...(validSubSst && { sub_subtopic_id: subSubtopicId }),
+              },
+            })
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const matchedSubtopic = subtopics.find((s: any) => s.id === subtopicId) as any
@@ -196,7 +163,7 @@ export async function POST() {
               '[assign-subtopics] Skipped question',
               question.id,
               '— content preview:',
-              question.content_text.slice(0, 120),
+              question.content_text?.slice(0, 120),
             )
             skipped++
           }

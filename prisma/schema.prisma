@@ -83,7 +83,6 @@ model production_targets {
   subject_id   String?   @db.Uuid
 }
 
-/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model production_topic_targets {
   id         String    @id @db.Uuid
   topic_id   String    @db.Uuid
@@ -91,8 +90,6 @@ model production_topic_targets {
   created_at DateTime? @db.Timestamptz(6)
   updated_at DateTime? @db.Timestamptz(6)
   subject_id String?   @db.Uuid
-
-  @@ignore
 }
 
 model profiles {

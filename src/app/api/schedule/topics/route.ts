@@ -1,52 +1,61 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 
 export async function GET() {
   try {
-    const supabase = createAdminClient()
+    // Fetch topics ordered by sort_order
+    const topicsRaw = await prisma.topics.findMany({ orderBy: { sort_order: 'asc' } })
+    const topicIds = topicsRaw.map(t => t.id)
 
-    const { data, error } = await supabase
-      .from('topics')
-      .select(`*, subtopics(*)`)
-      .order('sort_order', { ascending: true })
+    // Fetch all subtopics for these topics
+    const subtopicsRaw = await prisma.subtopics.findMany({
+      where: { topic_id: { in: topicIds } },
+      orderBy: { sort_order: 'asc' },
+    })
+    const subtopicIds = subtopicsRaw.map(s => s.id)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    // Collect all subtopic IDs to fetch ppt_decks in one query
-    const allSubtopics = (data ?? []).flatMap((t) => t.subtopics ?? [])
-    const subtopicIds = allSubtopics.map((s: { id: string }) => s.id)
-
-    // Fetch ppt_decks for all subtopics in parallel with topics sort
-    let pptBySubtopic: Record<string, { id: string; status: string; title: string; created_at: string; updated_at: string; slides: unknown[]; tutor_notes: string | null; subject_id: string; subtopic_id: string }[]> = {}
-
+    // Fetch ppt_decks for all subtopics
+    let pptBySubtopic: Record<string, typeof pptData> = {}
     if (subtopicIds.length > 0) {
-      const { data: pptData } = await supabase
-        .from('ppt_decks')
-        .select('id, subtopic_id, subject_id, title, status, slides, tutor_notes, created_at, updated_at')
-        .in('subtopic_id', subtopicIds)
-        .order('created_at', { ascending: false })
-
-      if (pptData) {
-        for (const deck of pptData) {
-          if (!pptBySubtopic[deck.subtopic_id]) pptBySubtopic[deck.subtopic_id] = []
-          pptBySubtopic[deck.subtopic_id].push(deck)
-        }
+      const pptData = await prisma.ppt_decks.findMany({
+        where: { subtopic_id: { in: subtopicIds } },
+        select: {
+          id: true,
+          subtopic_id: true,
+          title: true,
+          status: true,
+          slides: true,
+          created_by: true,
+          created_at: true,
+          updated_at: true,
+        },
+        orderBy: { created_at: 'desc' },
+      })
+      for (const deck of pptData) {
+        if (!deck.subtopic_id) continue
+        if (!pptBySubtopic[deck.subtopic_id]) pptBySubtopic[deck.subtopic_id] = []
+        pptBySubtopic[deck.subtopic_id].push(deck)
       }
     }
 
-    // Attach ppt_decks and sort subtopics
-    const topics = (data ?? []).map((t) => ({
+    // Group subtopics by topic_id
+    const subtopicsByTopic: Record<string, typeof subtopicsRaw> = {}
+    for (const s of subtopicsRaw) {
+      if (!subtopicsByTopic[s.topic_id]) subtopicsByTopic[s.topic_id] = []
+      subtopicsByTopic[s.topic_id].push(s)
+    }
+
+    // Assemble final shape
+    const topics = topicsRaw.map(t => ({
       ...t,
-      subtopics: (t.subtopics ?? [])
-        .sort((a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order)
-        .map((s: { id: string }) => ({
-          ...s,
-          ppt_decks: pptBySubtopic[s.id] ?? [],
-        })),
+      subtopics: (subtopicsByTopic[t.id] ?? []).map(s => ({
+        ...s,
+        ppt_decks: pptBySubtopic[s.id] ?? [],
+      })),
     }))
 
     return NextResponse.json({ topics })
@@ -68,19 +77,21 @@ export async function POST(request: NextRequest) {
       hours_est: number | null
     }
 
-    const supabase = createAdminClient()
+    const sort_order = await prisma.topics.count() + 1
 
-    // Assign sort_order as max + 1
-    const { count } = await supabase.from('topics').select('*', { count: 'exact', head: true })
-    const sort_order = (count ?? 0) + 1
-
-    const { data, error } = await supabase
-      .from('topics')
-      .insert({ ...body, sort_order })
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    const data = await prisma.topics.create({
+      data: {
+        id: crypto.randomUUID(),
+        ref: body.ref,
+        name: body.name,
+        subtopic_count: body.subtopic_count,
+        total_questions: body.total_questions,
+        ppt_decks: body.ppt_decks,
+        completion_date: body.completion_date ? new Date(body.completion_date) : null,
+        hours_est: body.hours_est,
+        sort_order,
+      },
+    })
 
     return NextResponse.json({ topic: { ...data, subtopics: [] } })
   } catch (err) {

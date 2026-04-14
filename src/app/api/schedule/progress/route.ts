@@ -1,49 +1,42 @@
 export const dynamic = 'force-dynamic'
 
-import { createAdminClient } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export const runtime = 'nodejs'
 
 export async function GET() {
   try {
-    const supabase = createAdminClient()
-
-    const [targetRes, topicTargetsRes, topicsRes] = await Promise.all([
-      supabase.from('production_targets').select('*').order('updated_at', { ascending: false }).limit(1).single(),
-      supabase.from('production_topic_targets').select('topic_id, target'),
-      supabase.from('topics').select('id, ref, name').order('ref'),
+    const [target, topicTargets, topics] = await Promise.all([
+      prisma.production_targets.findFirst({ orderBy: { updated_at: 'desc' } }),
+      prisma.production_topic_targets.findMany({ select: { topic_id: true, target: true } }),
+      prisma.topics.findMany({ select: { id: true, ref: true, name: true }, orderBy: { ref: 'asc' } }),
     ])
 
-    if (targetRes.error || !targetRes.data) {
+    if (!target) {
       return NextResponse.json({ error: 'No production target found' }, { status: 404 })
     }
 
-    const target = targetRes.data
-
     // Get approved answers
-    const { data: approvedAnswers, error: answersError } = await supabase
-      .from('answers')
-      .select('question_id')
-      .eq('status', 'approved')
+    const approvedAnswers = await prisma.answers.findMany({
+      where: { status: 'approved' },
+      select: { question_id: true },
+    })
 
-    if (answersError) {
-      return NextResponse.json({ error: answersError.message }, { status: 500 })
-    }
-
-    const approvedQuestionIds = (approvedAnswers ?? []).map(a => a.question_id).filter(Boolean)
+    const approvedQuestionIds = approvedAnswers.map(a => a.question_id).filter(Boolean) as string[]
 
     // Get approved questions that also have approved answers
     let approvedCount = 0
     const topicCounts: Record<string, number> = {}
 
     if (approvedQuestionIds.length > 0) {
-      const { data: approvedQuestions } = await supabase
-        .from('questions')
-        .select('id, topic_id')
-        .eq('status', 'approved')
-        .in('id', approvedQuestionIds)
+      const approvedQuestions = await prisma.questions.findMany({
+        where: { status: 'approved', id: { in: approvedQuestionIds } },
+        select: { id: true, topic_id: true },
+      })
 
-      approvedCount = approvedQuestions?.length ?? 0
-      for (const q of approvedQuestions ?? []) {
+      approvedCount = approvedQuestions.length
+      for (const q of approvedQuestions) {
         if (q.topic_id) {
           topicCounts[q.topic_id] = (topicCounts[q.topic_id] ?? 0) + 1
         }
@@ -58,11 +51,7 @@ export async function GET() {
     endDate.setHours(0, 0, 0, 0)
 
     const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-
-    // Days elapsed since start (0 if not started yet)
     const daysElapsed = Math.max(0, Math.ceil((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
-
-    // Days remaining until end (counted from today or start, whichever is later)
     const effectiveStart = today < startDate ? startDate : today
     const daysRemaining = Math.max(1, Math.ceil((endDate.getTime() - effectiveStart.getTime()) / (1000 * 60 * 60 * 24)))
 
@@ -71,11 +60,9 @@ export async function GET() {
     const expectedByNow = Math.ceil((target.total_target / totalDays) * daysElapsed)
     const variance = approvedCount - expectedByNow
 
-    const topicTargetMap = Object.fromEntries(
-      (topicTargetsRes.data ?? []).map(t => [t.topic_id, t.target])
-    )
+    const topicTargetMap = Object.fromEntries(topicTargets.map(t => [t.topic_id, t.target]))
 
-    const topicBreakdown = (topicsRes.data ?? [])
+    const topicBreakdown = topics
       .filter(t => t.ref !== 'MIX')
       .map(t => ({
         id: t.id,

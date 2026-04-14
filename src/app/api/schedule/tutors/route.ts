@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 export async function GET() {
   try {
-    const supabase = createAdminClient()
-
     const startOfPeriod = new Date('2026-04-13')
     const endOfPeriod = new Date('2026-07-30')
     const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -15,17 +14,12 @@ export async function GET() {
     const daysElapsed = Math.max(0, Math.ceil((today.getTime() - startOfPeriod.getTime()) / (1000 * 60 * 60 * 24)))
 
     // Parallel: tutors, assignments, topic targets, topics
-    const [profilesRes, assignmentsRes, targetsRes, topicsRes] = await Promise.all([
-      supabase.from('profiles').select('id, full_name').eq('role', 'tutor'),
-      supabase.from('tutor_topic_assignments').select('user_id, topic_id'),
-      supabase.from('production_topic_targets').select('topic_id, target'),
-      supabase.from('topics').select('id, name, ref'),
+    const [tutors, assignments, targets, topics] = await Promise.all([
+      prisma.profiles.findMany({ where: { role: 'tutor' }, select: { id: true, full_name: true } }),
+      prisma.tutor_topic_assignments.findMany({ select: { user_id: true, topic_id: true } }),
+      prisma.production_topic_targets.findMany({ select: { topic_id: true, target: true } }),
+      prisma.topics.findMany({ select: { id: true, name: true, ref: true } }),
     ])
-
-    const tutors = profilesRes.data ?? []
-    const assignments = assignmentsRes.data ?? []
-    const targets = targetsRes.data ?? []
-    const topics = topicsRes.data ?? []
 
     const tutorBreakdown = await Promise.all(
       tutors.map(async (tutor) => {
@@ -54,13 +48,10 @@ export async function GET() {
           .filter(Boolean)
           .sort()
 
-        const { count: approved } = await supabase
-          .from('questions')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'approved')
-          .in('topic_id', topicIds)
+        const approvedCount = await prisma.questions.count({
+          where: { status: 'approved', topic_id: { in: topicIds } },
+        })
 
-        const approvedCount = approved ?? 0
         const pct = totalTarget > 0 ? Math.round((approvedCount / totalTarget) * 100) : 0
         const remaining = Math.max(0, totalTarget - approvedCount)
         const dailyTarget = Math.ceil(remaining / daysLeft)
