@@ -47,6 +47,14 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
     throw new Error('Question not found')
   }
 
+  // Strip LaTeX delimiters from question text for cleaner classification
+  const cleanText = question.content_text
+    .replace(/\$\$[\s\S]*?\$\$/g, '[math expression]')
+    .replace(/\$([^$]+)\$/g, '$1')
+    .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
+    .replace(/\\[a-zA-Z]+/g, '')
+    .trim()
+
   // Skip classification for MIX topic — tutor assigns manually
   const effectiveTopicId = restrictToTopicId ?? question.topic_id
   if (!effectiveTopicId) return
@@ -90,7 +98,7 @@ STRICT RULES:
 - Return ONLY the JSON object. No explanation, no markdown, no code blocks.`,
     messages: [{
       role: 'user',
-      content: `QUESTION: ${question.content_text}
+      content: `QUESTION: ${cleanText}
 
 AVAILABLE SUBTOPICS (topic: ${effectiveTopicId}):
 ${subtopicList}
