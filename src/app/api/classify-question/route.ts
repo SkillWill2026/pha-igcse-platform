@@ -78,6 +78,29 @@ function ruleBasedSubSubtopic(questionText: string, subSubtopics: {id: string, o
   return null
 }
 
+// Keyword-based Mensuration subtopic detection
+function detectMensurationSubtopic(text: string, subtopics: { id: string; title: string }[]): string | null {
+  const t = text.toLowerCase()
+  const find = (keyword: string) => subtopics.find(s => s.title.toLowerCase().includes(keyword))?.id ?? null
+
+  // Volume: 3D shapes
+  if (/\b(volume|cylinder|cone|sphere|prism|pyramid|cuboid|cube|hemisphere)\b/.test(t)) return find('volume')
+  // Surface area
+  if (/\bsurface area\b/.test(t)) return find('surface area') ?? find('volume')
+  // Arc/sector (circles)
+  if (/\b(arc length|sector area|arc|sector)\b/.test(t) && /\b(area|length|perimeter)\b/.test(t)) return find('arc') ?? find('circle')
+  // Compound shapes: area of walls, floors, rooms, fields, painted surfaces
+  if (/\b(area|compound|wall|floor|field|garden|path|frame|shaded|total area|work out the area)\b/.test(t)) {
+    return find('compound') ?? find('area')
+  }
+  // Perimeter
+  if (/\bperimeter\b/.test(t)) return find('perimeter') ?? find('compound')
+  // Units of measure ONLY if explicitly about converting units — NOT just because m² appears
+  if (/\b(convert|conversion|change.*unit|unit.*change)\b/.test(t)) return find('unit')
+
+  return null
+}
+
 export async function classifyQuestion(questionId: string, restrictToTopicId?: string | null, searchAllTopics = false): Promise<void> {
   const supabase = createAdminClient()
 
@@ -139,6 +162,29 @@ export async function classifyQuestion(questionId: string, restrictToTopicId?: s
 
   const subtopics = subtopicsRes.data ?? []
   const allSubSubtopics = allSubSubtopicsRes.data ?? []
+
+  // Try subtopic keyword detection first for Mensuration (Haiku often picks Units of Measure wrongly)
+  const isMensuration = topics.find(t => t.id === effectiveTopicId)?.name?.toLowerCase().includes('mensuration')
+  if (isMensuration) {
+    const keywordSubtopicId = detectMensurationSubtopic(cleanText, subtopics)
+    if (keywordSubtopicId) {
+      const matchedSub = subtopics.find(s => s.id === keywordSubtopicId)
+      if (matchedSub) {
+        // Still let Haiku pick the sub-subtopic within this subtopic
+        const subSubsForSubtopic = allSubSubtopics.filter(ss => ss.subtopic_id === keywordSubtopicId)
+        const subSubtopicId = ruleBasedSubSubtopic(question.content_text, subSubsForSubtopic) ??
+          (subSubsForSubtopic.length > 0 ? subSubsForSubtopic[0].id : null)
+
+        await supabase.from('questions').update({
+          subtopic_id: keywordSubtopicId,
+          sub_subtopic_id: subSubtopicId,
+          topic_id: effectiveTopicId,
+          updated_at: new Date().toISOString(),
+        }).eq('id', questionId).select().single()
+        return
+      }
+    }
+  }
 
   const subtopicList = subtopics.map(s => {
     const subSubs = allSubSubtopics.filter(ss => ss.subtopic_id === s.id)
