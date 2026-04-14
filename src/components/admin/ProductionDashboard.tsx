@@ -239,7 +239,7 @@ export function ProductionDashboard({ isAdmin }: Props) {
           </span>
         </div>
         <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-3 overflow-hidden">
-          <div
+          <divh
             className="h-3 rounded-full bg-green-500 transition-all duration-500"
             style={{ width: `${Math.min(100, data.pct_complete)}%` }}
           />
@@ -258,14 +258,14 @@ export function ProductionDashboard({ isAdmin }: Props) {
       </div>
 
       {/* Monthly milestones */}
-      <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+      { month: 'May', days: 31, start: '2026-05-01', end: '2026-05-31' },
         <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Monthly milestones</div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { month: 'April', days: 18, start: '2025-04-13', end: '2025-04-30' },
-            { month: 'May', days: 31, start: '2025-05-01', end: '2025-05-31' },
-            { month: 'June', days: 30, start: '2025-06-01', end: '2025-06-30' },
-            { month: 'July', days: 30, start: '2025-07-01', end: '2025-07-30' },
+            { month: 'April', days: 18, start: '2026-04-15', end: '2026-04-30' },
+            { month: 'May', days: 31, start: '2026-05-01', end: '2026-05-31' },
+            { month: 'June', days: 30, start: '2026-06-01', end: '2026-06-30' },
+            { month: 'July', days: 30, start: '2026-07-01', end: '2026-07-30' },
           ].map(m => {
             const monthTarget = Math.round((m.days / data.total_days) * data.total_target)
             const endDate = new Date(m.end)
