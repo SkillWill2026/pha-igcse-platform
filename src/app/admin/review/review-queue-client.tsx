@@ -386,11 +386,12 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
   }
 
   async function handleSaveEdit() {
-    if (!currentQuestion || editSaving || !editedText.trim()) return
+    if (!currentQuestion || editSaving) return
     setEditSaving(true)
     try {
+      const textToSave = editedText.trim() || currentQuestion.content_text
       const updates: Record<string, unknown> = {
-        content: editedText.trim(),
+        content: textToSave,
         difficulty: editedDifficulty,
       }
       if (editTopicId) {
@@ -417,7 +418,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         q
           ? {
               ...q,
-              content_text: editedText.trim(),
+              content_text: textToSave,
               topic_id: editTopicId || q.topic_id,
               subtopic_id: editSubtopicId || q.subtopic_id,
               sub_subtopic_id: editSubSubtopicId || q.sub_subtopic_id,
@@ -447,7 +448,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question_id: currentQuestion.id,
-          topic_id: editTopicId || currentQuestion.topic_id || null,
+          topic_id: editTopicId ?? null,
         }),
       })
       const data = await res.json() as {
@@ -494,7 +495,7 @@ export function ReviewQueueClient({ drafts, initialError }: Props) {
 
   function handleStartEdit() {
     if (!currentQuestion) return
-    setEditedText(currentQuestion.content_text)
+    setEditedText(currentQuestion.content_text ?? '')
     setEditedDifficulty(currentQuestion.difficulty ?? 3)
     setEditing(true)
   }
