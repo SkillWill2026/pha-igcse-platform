@@ -27,6 +27,14 @@ yarn-error.log*
 
 # local env files
 .env*.local
+.env
+
+# generated prisma client (old output path)
+/src/generated/prisma/
+
+# scripts that contain credentials
+scripts/migrate-to-azure.js
+scripts/backup/export.js
 
 # vercel
 .vercel
