@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
               parent_question_ref: q.parent_question_ref ? String(q.parent_question_ref) : null,
               part_label: q.part_label ? String(q.part_label) : null,
               batch_id: String(q.batch_id ?? batch_id),
-              difficulty: Number(q.difficulty ?? 2),
+              difficulty: String(q.difficulty ?? 2),
               question_type: String(q.question_type ?? 'structured'),
               marks: Number(q.marks ?? 1),
               status: 'draft',
@@ -74,9 +74,7 @@ export async function POST(req: NextRequest) {
           })
           inserted++
         } catch (qErr) {
-          const msg = qErr instanceof Error ? qErr.message : String(qErr)
-          console.error('Question insert failed:', msg)
-          return NextResponse.json({ error: msg, inserted }, { status: 500 })
+          console.error('Question insert failed:', qErr instanceof Error ? qErr.message : String(qErr))
         }
       }
     }
