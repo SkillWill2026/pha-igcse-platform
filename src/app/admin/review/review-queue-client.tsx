@@ -673,13 +673,28 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
       <div className="flex items-center justify-between border-b pb-4">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold">Review Queue</h2>
-          <p className="text-sm text-muted-foreground">
-            {currentIdx + 1} / {drafts.length} remaining ({remaining} after this)
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Approved: <span className="text-green-700 font-semibold">{stats.approved}</span> |
-            Rejected: <span className="text-red-700 font-semibold">{stats.rejected}</span>
-          </p>
+         <p className="text-sm text-muted-foreground">
+  {page * pageSize + currentIdx + 1} / {totalCount} total
+  {' '}(page {page + 1} of {Math.ceil(totalCount / pageSize)})
+</p>
+<p className="text-xs text-muted-foreground">
+  Approved: <span className="text-green-700 font-semibold">{stats.approved}</span> |
+  Rejected: <span className="text-red-700 font-semibold">{stats.rejected}</span>
+</p>
+<div className="flex gap-2 mt-1">
+  {page > 0 && (
+    <a href={`/admin/review?subject=${subjectCode}&page=${page - 1}`}
+      className="text-xs text-blue-600 underline">
+      ← Previous 30
+    </a>
+  )}
+  {(page + 1) * pageSize < totalCount && (
+    <a href={`/admin/review?subject=${subjectCode}&page=${page + 1}`}
+      className="text-xs text-blue-600 underline">
+      Next 30 →
+    </a>
+  )}
+</div>
         </div>
         <Button
           variant="outline"
