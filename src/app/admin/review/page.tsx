@@ -6,25 +6,28 @@ import { ReviewQueueClient } from './review-queue-client'
 
 export const dynamic = 'force-dynamic'
 
+const PAGE_SIZE = 30
+
 interface DraftQuestion extends QuestionWithRelations {
   answer: AnswerRow | null
 }
 
 interface PageProps {
-  searchParams: { subject?: string }
+  searchParams: { subject?: string; page?: string }
 }
 
 export default async function ReviewPage({ searchParams }: PageProps) {
   noStore()
   const subjectCode = searchParams.subject ?? '0580'
+  const page = Math.max(0, parseInt(searchParams.page ?? '0'))
 
   let drafts: DraftQuestion[] = []
+  let totalCount = 0
   let error: string | null = null
 
   try {
     const supabase = createAdminClient()
 
-    // Resolve subject code → subject id → topic IDs (still from Supabase for curriculum)
     const subjectRes = await supabase
       .from('subjects')
       .select('id')
@@ -42,23 +45,31 @@ export default async function ReviewPage({ searchParams }: PageProps) {
       topicIds = (topicsData ?? []).map((t) => t.id)
     }
 
-    // Fetch draft questions from Azure via Prisma
-    const questions = await prisma.questions.findMany({
-      where: {
-        status: 'draft',
-        ...(topicIds.length > 0
-          ? { OR: [{ topic_id: { in: topicIds } }, { topic_id: null }] }
-          : { topic_id: null }),
-      },
-      orderBy: [
-        { batch_id: 'desc' },
-        { batch_position: 'asc' },
-        { created_at: 'asc' },
-      ],
-    })
+    const whereClause = {
+      status: 'draft',
+      ...(topicIds.length > 0
+        ? { OR: [{ topic_id: { in: topicIds } }, { topic_id: null }] }
+        : { topic_id: null }),
+    }
+
+    // Get total count and paginated questions in parallel
+    const [count, questions] = await Promise.all([
+      prisma.questions.count({ where: whereClause }),
+      prisma.questions.findMany({
+        where: whereClause,
+        orderBy: [
+          { batch_id: 'desc' },
+          { batch_position: 'asc' },
+          { created_at: 'asc' },
+        ],
+        skip: page * PAGE_SIZE,
+        take: PAGE_SIZE,
+      }),
+    ])
+
+    totalCount = count
 
     if (questions.length > 0) {
-      // Fetch related data from Supabase (curriculum stays there)
       const [boardRes, topicRes, subtopicRes, sstRes] = await Promise.all([
         supabase.from('exam_boards').select('id, name'),
         supabase.from('topics').select('id, ref, name'),
@@ -66,7 +77,6 @@ export default async function ReviewPage({ searchParams }: PageProps) {
         supabase.from('sub_subtopics').select('id, subtopic_id, ext_num, outcome, tier'),
       ])
 
-      // Fetch answers from Azure
       const questionIds = questions.map((q) => q.id)
       const answers = await prisma.answers.findMany({
         where: { question_id: { in: questionIds } },
@@ -97,5 +107,15 @@ export default async function ReviewPage({ searchParams }: PageProps) {
     error = `Unexpected error: ${msg}`
   }
 
-  return <ReviewQueueClient key={subjectCode} drafts={drafts} initialError={error} />
+  return (
+    <ReviewQueueClient
+      key={`${subjectCode}-${page}`}
+      drafts={drafts}
+      initialError={error}
+      page={page}
+      pageSize={PAGE_SIZE}
+      totalCount={totalCount}
+      subjectCode={subjectCode}
+    />
+  )
 }
