@@ -37,13 +37,19 @@ export async function GET(request: NextRequest) {
 
     // Question counts from Azure via Prisma
     const [qApproved, qPending] = await Promise.all([
-      prisma.questions.count({
-        where: { status: 'approved', ...(topicFilter ? { topic_id: { in: topicFilter } } : {}) },
-      }),
-      prisma.questions.count({
-        where: { status: 'draft', ...(topicFilter ? { topic_id: { in: topicFilter } } : {}) },
-      }),
-    ])
+  prisma.questions.count({
+    where: {
+      status: 'approved',
+      ...(topicFilter ? { OR: [{ topic_id: { in: topicFilter } }, { topic_id: null }] } : {}),
+    },
+  }),
+  prisma.questions.count({
+    where: {
+      status: 'draft',
+      ...(topicFilter ? { OR: [{ topic_id: { in: topicFilter } }, { topic_id: null }] } : {}),
+    },
+  }),
+])
 
     // Answer counts from Azure via Prisma
     let aApproved = 0
