@@ -977,7 +977,7 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
           </section>
 
           {/* Metadata */}
-          <div className="grid grid-cols-4 gap-2 text-sm text-muted-foreground">
+          <div className="grid grid-cols-5 gap-2 text-sm text-muted-foreground">
             <div>
               <span className="font-semibold">Type:</span> {currentQuestion.question_type}
             </div>
@@ -990,8 +990,12 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
             <div>
               <span className="font-semibold">Board:</span> {currentQuestion.exam_boards?.name ?? '—'}
             </div>
-          </div>
-        </div>
+<div>
+   <span className="font-semibold">Calculator:</span>{' '}
+   {currentQuestion.calculator ? '✅ Allowed' : '🚫 No'}
+ </div> ← closes Calculator div
+</div> ← closes grid
+
 
         {/* Right panel - Answer */}
         <div className="flex-[2] rounded-lg border bg-muted/20 p-5 flex flex-col space-y-4">
