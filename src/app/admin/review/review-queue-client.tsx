@@ -517,6 +517,7 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
     if (!currentQuestion) return
     setEditedText(currentQuestion.content_text ?? '')
     setEditedDifficulty(currentQuestion.difficulty ?? 3)
+    setEditedCalculator(currentQuestion.calculator ?? false)
     setEditing(true)
   }
 
