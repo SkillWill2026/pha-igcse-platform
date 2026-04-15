@@ -112,6 +112,7 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
     setEditedText('')
     setEditingAnswer(false)
     setEditedAnswerContent('')
+    setEditedCalculator(false)
     setSelectedSubSubtopic(null)
     setSubSubtopicSearch('')
     setSubSubtopicOpen(false)
