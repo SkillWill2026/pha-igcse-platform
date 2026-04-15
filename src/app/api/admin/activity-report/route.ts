@@ -22,11 +22,9 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get('from') ?? new Date(Date.now() - 86400000).toISOString()
   const to   = searchParams.get('to')   ?? new Date().toISOString()
 
-  const [batches, approvedQs, rejectedQs, answers, pptDecks] = await Promise.all([
+  const [batches, approvedQs, rejectedQs, answers, pptDecks, databankDocs] = await Promise.all([
     prisma.upload_batches.findMany({
-      where: {
-        created_at: { gte: new Date(from), lte: new Date(to) },
-      },
+      where: { created_at: { gte: new Date(from), lte: new Date(to) } },
       select: {
         id:                        true,
         created_by:                true,
@@ -55,10 +53,25 @@ export async function GET(request: NextRequest) {
       where: { created_at: { gte: new Date(from), lte: new Date(to) } },
       select: { id: true, title: true, created_at: true },
     }),
+    // NEW — Databank documents
+    prisma.databank_documents.findMany({
+      where: { created_at: { gte: new Date(from), lte: new Date(to) } },
+      select: {
+        id:         true,
+        title:      true,
+        uploaded_by: true,
+        doc_type:   true,
+        created_at: true,
+      },
+      orderBy: { created_at: 'desc' },
+    }),
   ])
 
-  // Enrich batches with profile data (replaces Supabase nested join)
-  const creatorIds = [...new Set(batches.map(b => b.created_by).filter((id): id is string => id !== null))]
+  // Collect all unique user IDs (batches + databank)
+  const batchCreatorIds  = batches.map(b => b.created_by).filter((id): id is string => id !== null)
+  const databankUploaderIds = databankDocs.map(d => d.uploaded_by).filter((id): id is string => id !== null)
+  const creatorIds = [...new Set([...batchCreatorIds, ...databankUploaderIds])]
+
   const profiles = creatorIds.length > 0
     ? await prisma.profiles.findMany({
         where: { id: { in: creatorIds } },
@@ -67,10 +80,11 @@ export async function GET(request: NextRequest) {
     : []
   const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]))
 
-  // Aggregate per user
+  // Aggregate per user — batches
   const byUser: Record<string, {
     userId: string; fullName: string; role: string
-    batchCount: number; filesUploaded: number; questionsExtracted: number; failedFiles: number
+    batchCount: number; filesUploaded: number; questionsExtracted: number
+    failedFiles: number; databankUploads: number
   }> = {}
 
   for (const b of batches) {
@@ -78,19 +92,29 @@ export async function GET(request: NextRequest) {
     const prof = b.created_by ? (profileMap[b.created_by] ?? null) : null
     if (!byUser[uid]) {
       byUser[uid] = {
-        userId:             uid,
-        fullName:           prof?.full_name ?? 'Unknown',
-        role:               prof?.role ?? '',
-        batchCount:         0,
-        filesUploaded:      0,
-        questionsExtracted: 0,
-        failedFiles:        0,
+        userId: uid, fullName: prof?.full_name ?? 'Unknown',
+        role: prof?.role ?? '', batchCount: 0, filesUploaded: 0,
+        questionsExtracted: 0, failedFiles: 0, databankUploads: 0,
       }
     }
     byUser[uid].batchCount++
-    byUser[uid].filesUploaded        += b.total_files               ?? 0
-    byUser[uid].questionsExtracted   += b.total_questions_extracted ?? 0
-    byUser[uid].failedFiles          += b.failed_files              ?? 0
+    byUser[uid].filesUploaded      += b.total_files               ?? 0
+    byUser[uid].questionsExtracted += b.total_questions_extracted ?? 0
+    byUser[uid].failedFiles        += b.failed_files              ?? 0
+  }
+
+  // Aggregate per user — databank uploads
+  for (const d of databankDocs) {
+    const uid  = d.uploaded_by ?? 'system'
+    const prof = d.uploaded_by ? (profileMap[d.uploaded_by] ?? null) : null
+    if (!byUser[uid]) {
+      byUser[uid] = {
+        userId: uid, fullName: prof?.full_name ?? 'Unknown',
+        role: prof?.role ?? '', batchCount: 0, filesUploaded: 0,
+        questionsExtracted: 0, failedFiles: 0, databankUploads: 0,
+      }
+    }
+    byUser[uid].databankUploads++
   }
 
   return NextResponse.json({
@@ -103,6 +127,7 @@ export async function GET(request: NextRequest) {
       totalRejected:           rejectedQs.length,
       totalAnswersGenerated:   answers.length,
       totalPPTDecks:           pptDecks.length,
+      totalDatabankUploads:    databankDocs.length,  // NEW
     },
     byUser: Object.values(byUser),
     recentBatches: batches.slice(0, 30).map(b => ({
@@ -116,5 +141,13 @@ export async function GET(request: NextRequest) {
       createdAt:          b.created_at,
     })),
     recentPPT: pptDecks.map(p => ({ id: p.id, title: p.title, createdAt: p.created_at })),
+    // NEW
+    recentDatabank: databankDocs.slice(0, 30).map(d => ({
+      id:         d.id,
+      title:      d.title,
+      uploadedBy: d.uploaded_by ? (profileMap[d.uploaded_by]?.full_name ?? 'Unknown') : 'Unknown',
+      docType:    d.doc_type,
+      createdAt:  d.created_at,
+    })),
   })
 }
