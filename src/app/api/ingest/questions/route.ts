@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       try {
         await prisma.upload_batches.updateMany({
           where: { id: String(batch_id) },
-          data: { total_questions_extracted: Number(total_questions_extracted ?? 0), updated_at: new Date() }
+          data: { total_questions_extracted: Number(total_questions_extracted ?? 0) }
         })
       } catch (e) {
         console.error('Progress update failed (non-fatal):', e)
@@ -38,7 +38,6 @@ export async function POST(req: NextRequest) {
             error_message: error_message ? String(error_message) : null,
             completed_files: status === 'completed' ? 1 : 0,
             failed_files: status === 'failed' ? 1 : 0,
-            updated_at: new Date(),
           }
         })
       } catch (e) {
