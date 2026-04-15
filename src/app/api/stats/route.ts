@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -14,17 +15,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const subjectId = request.nextUrl.searchParams.get('subject_id')
+    const supabase = createAdminClient()
 
     let topicIds: string[] = []
 
     if (subjectId) {
-      const topics = await prisma.topics.findMany({
-        where: { subject_id: subjectId },
-        select: { id: true },
-      })
-      topicIds = topics.map(t => t.id)
+      // Topics live in Supabase — use Supabase client
+      const { data: topicsData } = await supabase
+        .from('topics')
+        .select('id')
+        .eq('subject_id', subjectId)
 
-      // Subject has no topics — return zeros immediately
+      topicIds = (topicsData ?? []).map(t => t.id)
+
       if (topicIds.length === 0) {
         return NextResponse.json({ qApproved: 0, qPending: 0, aApproved: 0, aPending: 0 })
       }
@@ -32,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     const topicFilter = topicIds.length > 0 ? topicIds : null
 
-    // Question counts
+    // Question counts from Azure via Prisma
     const [qApproved, qPending] = await Promise.all([
       prisma.questions.count({
         where: { status: 'approved', ...(topicFilter ? { topic_id: { in: topicFilter } } : {}) },
@@ -42,12 +45,11 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
-    // Answer counts
+    // Answer counts from Azure via Prisma
     let aApproved = 0
-    let aPending  = 0
+    let aPending = 0
 
     if (topicFilter) {
-      // Get question IDs for this subject's topics
       const subjectQs = await prisma.questions.findMany({
         where: { topic_id: { in: topicFilter } },
         select: { id: true },
@@ -57,18 +59,18 @@ export async function GET(request: NextRequest) {
       if (questionIds.length > 0) {
         const [aApprovedCount, aPendingCount] = await Promise.all([
           prisma.answers.count({ where: { status: 'approved', question_id: { in: questionIds } } }),
-          prisma.answers.count({ where: { status: 'draft',    question_id: { in: questionIds } } }),
+          prisma.answers.count({ where: { status: 'draft', question_id: { in: questionIds } } }),
         ])
         aApproved = aApprovedCount
-        aPending  = aPendingCount
+        aPending = aPendingCount
       }
     } else {
       const [aApprovedCount, aPendingCount] = await Promise.all([
         prisma.answers.count({ where: { status: 'approved' } }),
-        prisma.answers.count({ where: { status: 'draft'    } }),
+        prisma.answers.count({ where: { status: 'draft' } }),
       ])
       aApproved = aApprovedCount
-      aPending  = aPendingCount
+      aPending = aPendingCount
     }
 
     return NextResponse.json({ qApproved, qPending, aApproved, aPending })
