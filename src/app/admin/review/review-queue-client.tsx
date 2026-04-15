@@ -396,11 +396,11 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
     if (!currentQuestion || editSaving) return
     setEditSaving(true)
     try {
-      const textToSave = editedText.trim() || currentQuestion.content_text
       const updates: Record<string, unknown> = {
-        content_text: textToSave,
-        difficulty: editedDifficulty,
-      }
+  content_text: textToSave,
+  difficulty: editedDifficulty,
+  calculator: editedCalculator,
+}
       if (editTopicId) {
         updates.topic_id = editTopicId
         // Save last used topic to localStorage
