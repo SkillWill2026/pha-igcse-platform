@@ -69,28 +69,8 @@ export default async function ReviewPage({ searchParams }: PageProps) {
       }
     } else {
       // Normal draft queue flow
-      const subjectRes = await supabase
-        .from('subjects')
-        .select('id')
-        .eq('code', subjectCode)
-        .single()
-
-      const subjectId = subjectRes.data?.id ?? null
-
-      let topicIds: string[] = []
-      if (subjectId) {
-        const { data: topicsData } = await supabase
-          .from('topics')
-          .select('id')
-          .eq('subject_id', subjectId)
-        topicIds = (topicsData ?? []).map((t) => t.id)
-      }
-
       const whereClause = {
         status: 'draft',
-        ...(topicIds.length > 0
-          ? { OR: [{ topic_id: { in: topicIds } }, { topic_id: null }] }
-          : { topic_id: null }),
       }
 
       const [count, questions] = await Promise.all([
