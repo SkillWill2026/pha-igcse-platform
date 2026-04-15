@@ -71,18 +71,19 @@ export async function POST(request: NextRequest) {
       const isMixTopic = !topic_id_param || topic_id_param === 'mixed'
       try {
         const newBatch = await prisma.upload_batches.create({
-          data: {
-            id:                        crypto.randomUUID(),
-            topic_id:                  isMixTopic ? null : topic_id_param,
-            subtopic_id:               null,
-            sub_subtopic_id:           null,
-            total_files:               1,
-            status:                    'processing',
-            completed_files:           0,
-            failed_files:              0,
-            total_questions_extracted: 0,
-            created_by:                authUser?.id ?? null,
-          },
+  data: {
+    id:                        crypto.randomUUID(),
+    topic_id:                  isMixTopic ? null : topic_id_param,
+    subtopic_id:               null,
+    sub_subtopic_id:           null,
+    total_files:               1,
+    status:                    'processing',
+    completed_files:           0,
+    failed_files:              0,
+    total_questions_extracted: 0,
+    created_by:                authUser?.id ?? null,
+    created_at:                new Date(),
+  },
           select: { id: true },
         })
         batchId = newBatch.id
