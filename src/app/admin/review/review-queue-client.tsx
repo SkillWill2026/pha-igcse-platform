@@ -866,6 +866,35 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
                   </div>
                 </div>
 
+                <div className="border rounded-md p-3 bg-muted/20 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Calculator</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditedCalculator(false)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                        !editedCalculator
+                          ? 'bg-red-100 border-red-300 text-red-700'
+                          : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      🚫 No Calculator
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditedCalculator(true)}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+                        editedCalculator
+                          ? 'bg-green-100 border-green-300 text-green-700'
+                          : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      ✅ Calculator Allowed
+                    </button>
+                  </div>
+                </div>
+
+                <textarea
                 <textarea
                   value={editedText}
                   onChange={(e) => setEditedText(e.target.value)}
