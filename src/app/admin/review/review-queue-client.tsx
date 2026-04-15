@@ -397,10 +397,10 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
     setEditSaving(true)
     try {
       const updates: Record<string, unknown> = {
-  content_text: textToSave,
-  difficulty: editedDifficulty,
-  calculator: editedCalculator,
-}
+        content_text: textToSave,
+        difficulty: editedDifficulty,
+        calculator: editedCalculator,
+      }
       if (editTopicId) {
         updates.topic_id = editTopicId
         // Save last used topic to localStorage
@@ -990,12 +990,12 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
             <div>
               <span className="font-semibold">Board:</span> {currentQuestion.exam_boards?.name ?? '—'}
             </div>
-<div>
-   <span className="font-semibold">Calculator:</span>{' '}
-   {currentQuestion.calculator ? '✅ Allowed' : '🚫 No'}
- </div> ← closes Calculator div
-</div> ← closes grid
-
+            <div>
+              <span className="font-semibold">Calculator:</span>{' '}
+              {currentQuestion.calculator ? '✅ Allowed' : '🚫 No'}
+            </div>
+          </div>
+        </div>
 
         {/* Right panel - Answer */}
         <div className="flex-[2] rounded-lg border bg-muted/20 p-5 flex flex-col space-y-4">
