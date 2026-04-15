@@ -958,7 +958,7 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
                 <div className="flex gap-2">
                   <button
                     onClick={handleSaveEdit}
-                    disabled={editSaving || !editedText.trim()}
+                    disabled={editSaving}
                     className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                   >
                     {editSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : '✓'}
