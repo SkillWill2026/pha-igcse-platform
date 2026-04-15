@@ -50,9 +50,12 @@ export async function POST(req: NextRequest) {
     if (questions && questions.length > 0) {
       for (const q of questions) {
         try {
+          const questionCount = await prisma.questions.count()
+          const serialNumber = `Q${String(questionCount + 1).padStart(5, '0')}`
           await prisma.questions.create({
             data: {
               id: randomUUID(),
+              serial_number: serialNumber,
               exam_board_id: q.exam_board_id ? String(q.exam_board_id) : null,
               topic_id: q.topic_id ? String(q.topic_id) : null,
               subtopic_id: null,
