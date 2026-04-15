@@ -75,6 +75,7 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
   const [editedAnswerContent, setEditedAnswerContent] = useState('')
   const [editAnswerSaving, setEditAnswerSaving] = useState(false)
   const [regeneratingAnswer, setRegeneratingAnswer] = useState(false)
+  const [editedCalculator, setEditedCalculator] = useState<boolean>(false)
 
   const pendingAutoSubSubId = useRef<string | null>(null)
 
