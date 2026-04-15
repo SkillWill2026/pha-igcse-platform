@@ -587,7 +587,7 @@ export function QuestionsLibrary({ boards }: Props) {
                     <TableCell><StatusBadge status={q.status} /></TableCell>
                     <TableCell>
                       <button
-                        onClick={() => router.push(`/admin/questions/${g.id}`)}
+                        onClick={() => router.push(`/admin/review?subject=${subjectCode}&questionId=${g.id}`)}
                         className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1')}
                       >
                         Review <ArrowRight className="h-3 w-3" />

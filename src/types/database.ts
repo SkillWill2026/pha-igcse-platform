@@ -19,6 +19,7 @@ export interface QuestionRow {
   marks: number
   status: QuestionStatus
   ai_extracted: boolean
+  calculator: boolean | null
   source_question_id: string | null
   created_at: string
   updated_at: string
