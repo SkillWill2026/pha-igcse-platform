@@ -61,7 +61,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json() as Record<string, unknown>
-    const allowed = ['content_text', 'difficulty', 'question_type', 'marks', 'status', 'image_url', 'subtopic_id', 'topic_id', 'sub_subtopic_id']
+    const allowed = ['content_text', 'difficulty', 'question_type', 'marks', 'status', 'image_url', 'subtopic_id', 'topic_id', 'sub_subtopic_id', 'calculator']
     const updates: Record<string, unknown> = {}
 
     for (const key of allowed) {
