@@ -164,12 +164,12 @@ export function UploadClient({
               const statusRes = await fetch(`/api/ingest/status?batch_id=${batchId}`)
               const statusData = (await statusRes.json()) as {
                 status: string
-                questions_extracted?: number
+                total_questions_extracted?: number
                 error_message?: string
               }
 
-              if (statusData.status === 'done' || statusData.status === 'completed') {
-                const count = statusData.questions_extracted ?? 0
+              if (statusData.status === 'completed' || statusData.status === 'partial') {
+                const count = statusData.total_questions_extracted ?? 0
                 setQueue((prev) =>
                   prev.map((f) =>
                     f.id === item.id
@@ -191,11 +191,11 @@ export function UploadClient({
               }
 
               // Still processing — show live question count
-              if ((statusData.questions_extracted ?? 0) > 0) {
+              if ((statusData.total_questions_extracted ?? 0) > 0) {
                 setQueue((prev) =>
                   prev.map((f) =>
                     f.id === item.id
-                      ? { ...f, questionsExtracted: statusData.questions_extracted }
+                      ? { ...f, questionsExtracted: statusData.total_questions_extracted }
                       : f
                   )
                 )
