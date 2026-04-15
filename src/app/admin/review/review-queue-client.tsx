@@ -36,9 +36,13 @@ interface DraftQuestion extends QuestionWithRelations {
 interface Props {
   drafts: DraftQuestion[]
   initialError: string | null
+  page: number
+  pageSize: number
+  totalCount: number
+  subjectCode: string
 }
 
-export function ReviewQueueClient({ drafts, initialError }: Props) {
+export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalCount, subjectCode }: Props) {
   const router = useRouter()
   const [currentIdx, setCurrentIdx] = useState(0)
   const [localDrafts, setLocalDrafts] = useState(drafts)
