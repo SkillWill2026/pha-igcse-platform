@@ -144,3 +144,19 @@ export default async function ReviewPage({ searchParams }: PageProps) {
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
+    console.error('[ReviewPage] unexpected error:', err)
+    error = `Unexpected error: ${msg}`
+  }
+
+  return (
+    <ReviewQueueClient
+      key={`${subjectCode}-${page}-${questionId}`}
+      drafts={drafts}
+      initialError={error}
+      page={page}
+      pageSize={PAGE_SIZE}
+      totalCount={totalCount}
+      subjectCode={subjectCode}
+    />
+  )
+}
