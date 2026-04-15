@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { createServerClient } from '@/lib/supabase-server'
 
 export const runtime = 'nodejs'
 
@@ -20,11 +21,11 @@ export async function GET() {
         processing_status: true,
         processing_error:  true,
         created_at:        true,
+        uploaded_by:       true,
       },
       orderBy: { created_at: 'desc' },
     })
 
-    // Enrich with topic data (replaces Supabase nested join)
     const topicIds = [...new Set(docs.map(d => d.topic_id).filter((id): id is string => id !== null))]
     const topicsRaw = topicIds.length > 0
       ? await prisma.topics.findMany({
@@ -48,6 +49,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get current user
+    const supabase = createServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
     const body = await request.json() as {
       title?: string
       doc_type?: string
@@ -73,6 +78,7 @@ export async function POST(request: NextRequest) {
         file_size:         file_size || null,
         processing_status: 'pending',
         created_at:        new Date(),
+        uploaded_by:       user?.id ?? null,   // NEW
       },
     })
 
