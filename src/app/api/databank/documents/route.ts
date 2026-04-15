@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
         file_name,
         file_size:         file_size || null,
         processing_status: 'pending',
+        created_at:        new Date(),
       },
     })
 
