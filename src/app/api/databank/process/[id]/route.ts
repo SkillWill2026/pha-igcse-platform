@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic'
 
+import { randomUUID } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase'
 import { prisma } from '@/lib/prisma'
@@ -27,7 +28,6 @@ export async function POST(
 
     if (!doc) throw new Error('Document not found')
 
-    // ── Download from Supabase Storage (unchanged) ────────────────────────────
     const supabase = createAdminClient()
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('databank')
@@ -65,13 +65,10 @@ export async function POST(
       )
     }
 
-    // Delete existing chunks (no embedding field involved — regular Prisma ok)
     await prisma.databank_chunks.deleteMany({ where: { document_id: id } })
 
     const embeddings = await embedTexts(chunks)
 
-    // ── Insert chunks with vector embeddings via raw SQL ──────────────────────
-    // Prisma cannot handle the vector type natively — must use $executeRaw
     const batchSize = 50
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batchChunks = chunks.slice(i, i + batchSize)
@@ -82,10 +79,11 @@ export async function POST(
         const embeddingStr = JSON.stringify(batchEmbeddings[j])
         const chunkIndex = i + j
         const tokenCount = Math.round(content.length / 4)
+        const chunkId = randomUUID()
 
         await prisma.$executeRaw`
-          INSERT INTO databank_chunks (document_id, content, embedding, chunk_index, token_count)
-          VALUES (${id}::uuid, ${content}, ${embeddingStr}::vector, ${chunkIndex}, ${tokenCount})
+          INSERT INTO databank_chunks (id, document_id, content, embedding, chunk_index, token_count)
+          VALUES (${chunkId}::uuid, ${id}::uuid, ${content}, ${embeddingStr}::vector, ${chunkIndex}, ${tokenCount})
         `
       }
     }
