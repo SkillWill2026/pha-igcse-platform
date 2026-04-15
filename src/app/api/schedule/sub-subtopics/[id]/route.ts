@@ -40,7 +40,19 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    await prisma.sub_subtopics.delete({ where: { id: params.id } })
+    await prisma.$transaction(async (tx) => {
+      // 1. Nullify questions referencing this sub_subtopic
+      await tx.questions.updateMany({
+        where: { sub_subtopic_id: params.id },
+        data:  { sub_subtopic_id: null },
+      })
+
+      // 2. Now safe to delete the sub_subtopic
+      await tx.sub_subtopics.delete({
+        where: { id: params.id },
+      })
+    })
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error(`[DELETE /api/schedule/sub-subtopics/${params.id}]`, err)
