@@ -48,6 +48,7 @@ model databank_documents {
   created_at        DateTime? @db.Timestamptz(6)
   updated_at        DateTime? @db.Timestamptz(6)
   subject_id        String?   @db.Uuid
+uploaded_by       String?   @db.Uuid
 }
 
 model error_logs {
