@@ -1,8 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { Prisma } from '@prisma/client'
-import { prisma } from '@/lib/prisma'
+import { createAdminClient } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
 
@@ -23,10 +22,18 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
-    const data = await prisma.sub_subtopics.update({
-      where: { id: params.id },
-      data:  updates as Prisma.sub_subtopicsUpdateInput,
-    })
+    const adminClient = createAdminClient()
+    const { data, error } = await adminClient
+      .from('sub_subtopics')
+      .update(updates)
+      .eq('id', params.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error(`[PATCH /api/schedule/sub-subtopics/${params.id}]`, error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     return NextResponse.json({ sub_subtopic: data })
   } catch (err) {
@@ -40,18 +47,17 @@ export async function DELETE(
   { params }: { params: { id: string } },
 ) {
   try {
-    await prisma.$transaction(async (tx) => {
-      // 1. Nullify questions referencing this sub_subtopic
-      await tx.questions.updateMany({
-        where: { sub_subtopic_id: params.id },
-        data:  { sub_subtopic_id: null },
-      })
+    const adminClient = createAdminClient()
 
-      // 2. Now safe to delete the sub_subtopic
-      await tx.sub_subtopics.delete({
-        where: { id: params.id },
-      })
-    })
+    const { error } = await adminClient
+      .from('sub_subtopics')
+      .delete()
+      .eq('id', params.id)
+
+    if (error) {
+      console.error(`[DELETE /api/schedule/sub-subtopics/${params.id}]`, error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true })
   } catch (err) {
