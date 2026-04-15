@@ -762,14 +762,14 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
                     </button>
                   </div>
                   <SyllabusSelector
-                    key={`${autoClassifiedTopicId}-${autoClassifiedSubtopicId}`}
+                    key={`${editTopicId}-${editSubtopicId}`}
                     onTopicChange={setEditTopicId}
                     onSubtopicChange={setEditSubtopicId}
                     onSubSubtopicChange={setEditSubSubtopicId}
                     showTierBadge={false}
                     subjectId={null}
-                    initialTopicId={autoClassifiedTopicId}
-                    initialSubtopicId={autoClassifiedSubtopicId}
+                    initialTopicId={editTopicId}
+                     initialSubtopicId={editSubtopicId}
                     hideSubSubtopic={true}
                   />
 
