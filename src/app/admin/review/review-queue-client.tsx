@@ -895,7 +895,6 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
                 </div>
 
                 <textarea
-                <textarea
                   value={editedText}
                   onChange={(e) => setEditedText(e.target.value)}
                   className="w-full h-48 p-4 rounded-lg border bg-white text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
