@@ -252,7 +252,7 @@ export function ReviewQueueClient({ drafts, initialError, page, pageSize, totalC
   ) {
     try {
       // Update question with status and any classification changes
-      const updateBody: Record<string, unknown> = { status }
+      const updateBody: Record<string, unknown> = { status, calculator: editedCalculator }
       if (classificationUpdates?.topic_id) updateBody.topic_id = classificationUpdates.topic_id
       if (classificationUpdates?.subtopic_id) updateBody.subtopic_id = classificationUpdates.subtopic_id
       if (classificationUpdates?.sub_subtopic_id !== undefined) updateBody.sub_subtopic_id = classificationUpdates.sub_subtopic_id
