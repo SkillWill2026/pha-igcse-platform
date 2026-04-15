@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { embedTexts } from '@/lib/voyage'
+import { enhancedGenerateAnswer } from './enhanced'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -28,6 +29,10 @@ async function callClaudeWithRetry(client: Anthropic, params: Parameters<Anthrop
 }
 
 export async function POST(request: Request) {
+  const qualityMode = process.env.ANSWER_QUALITY_MODE ?? 'legacy'
+  if (qualityMode === 'enhanced' || qualityMode === 'enhanced_structured_only') {
+    return enhancedGenerateAnswer(request)
+  }
   try {
     const { question_id, image_urls, force_regenerate } = await request.json()
     if (!question_id) {
