@@ -11,6 +11,7 @@ type Summary = {
   totalRejected: number
   totalAnswersGenerated: number
   totalPPTDecks: number
+  totalDatabankUploads: number  // NEW
 }
 
 type UserRow = {
@@ -21,6 +22,7 @@ type UserRow = {
   filesUploaded: number
   questionsExtracted: number
   failedFiles: number
+  databankUploads: number  // NEW
 }
 
 type BatchRow = {
@@ -36,12 +38,22 @@ type BatchRow = {
 
 type PPTRow = { id: string; title: string; createdAt: string }
 
+// NEW
+type DatabankRow = {
+  id: string
+  title: string
+  uploadedBy: string
+  docType: string
+  createdAt: string
+}
+
 type ReportData = {
   period: { from: string; to: string }
   summary: Summary
   byUser: UserRow[]
   recentBatches: BatchRow[]
   recentPPT: PPTRow[]
+  recentDatabank: DatabankRow[]  // NEW
 }
 
 const PRESETS = [
@@ -90,8 +102,8 @@ export default function ActivityReportClient() {
   const downloadCSV = () => {
     if (!data) return
     const rows = [
-      ['User', 'Role', 'Batches', 'Files Uploaded', 'Questions Extracted', 'Failed Files'],
-      ...data.byUser.map(u => [u.fullName, u.role, u.batchCount, u.filesUploaded, u.questionsExtracted, u.failedFiles]),
+      ['User', 'Role', 'Batches', 'Files Uploaded', 'Questions Extracted', 'Failed Files', 'Databank Uploads'],
+      ...data.byUser.map(u => [u.fullName, u.role, u.batchCount, u.filesUploaded, u.questionsExtracted, u.failedFiles, u.databankUploads]),
     ]
     const csv = rows.map(r => r.join(',')).join('\n')
     const a   = document.createElement('a')
@@ -112,7 +124,6 @@ export default function ActivityReportClient() {
           <h1 className="text-xl font-bold">Activity Report</h1>
         </div>
         <div className="flex items-center gap-2">
-          {/* Preset buttons */}
           <div className="flex rounded-lg overflow-hidden border">
             {PRESETS.map((p, i) => (
               <button
@@ -151,20 +162,20 @@ export default function ActivityReportClient() {
 
       {data && (
         <>
-          {/* Period label */}
           <p className="text-xs text-muted-foreground">
             Period: <span className="font-medium">{fmt(data.period.from)}</span> → <span className="font-medium">{fmt(data.period.to)}</span>
           </p>
 
           {/* Summary cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
             <SummaryCard label="Upload Batches"       value={s!.totalBatches}            color="bg-blue-50 border-blue-100" />
             <SummaryCard label="Files Uploaded"       value={s!.totalFilesUploaded}       color="bg-indigo-50 border-indigo-100" />
             <SummaryCard label="Questions Extracted"  value={s!.totalQuestionsExtracted}  color="bg-purple-50 border-purple-100" />
             <SummaryCard label="Approved"             value={s!.totalApproved}            color="bg-green-50 border-green-100" />
             <SummaryCard label="Rejected"             value={s!.totalRejected}            color="bg-red-50 border-red-100" />
             <SummaryCard label="Answers Generated"    value={s!.totalAnswersGenerated}    color="bg-yellow-50 border-yellow-100" />
-            <SummaryCard label="PPT Decks Created"    value={s!.totalPPTDecks}            color="bg-orange-50 border-orange-100" />
+            <SummaryCard label="PPT Decks"            value={s!.totalPPTDecks}            color="bg-orange-50 border-orange-100" />
+            <SummaryCard label="Databank Uploads"     value={s!.totalDatabankUploads}     color="bg-teal-50 border-teal-100" />
           </div>
 
           {/* Per-user table */}
@@ -177,7 +188,7 @@ export default function ActivityReportClient() {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
-                      {['User', 'Role', 'Batches', 'Files', 'Extracted', 'Failed'].map(h => (
+                      {['User', 'Role', 'Batches', 'Files', 'Extracted', 'Failed', 'Databank'].map(h => (
                         <th key={h} className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">{h}</th>
                       ))}
                     </tr>
@@ -191,6 +202,7 @@ export default function ActivityReportClient() {
                         <td className="px-4 py-2.5">{u.filesUploaded}</td>
                         <td className="px-4 py-2.5">{u.questionsExtracted}</td>
                         <td className="px-4 py-2.5">{u.failedFiles > 0 ? <span className="text-red-600 font-medium">{u.failedFiles}</span> : 0}</td>
+                        <td className="px-4 py-2.5">{u.databankUploads}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -254,6 +266,34 @@ export default function ActivityReportClient() {
                       <tr key={p.id} className="hover:bg-muted/30">
                         <td className="px-4 py-2.5 font-medium">{p.title}</td>
                         <td className="px-4 py-2.5 text-muted-foreground text-xs">{fmt(p.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Databank Uploads — NEW */}
+          {(data.recentDatabank?.length ?? 0) > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold mb-2">Recent Databank Uploads</h2>
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      {['Title', 'Uploaded By', 'Type', 'Time'].map(h => (
+                        <th key={h} className="text-left px-4 py-2.5 font-medium text-xs text-muted-foreground">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {data.recentDatabank.map(d => (
+                      <tr key={d.id} className="hover:bg-muted/30">
+                        <td className="px-4 py-2.5 font-medium">{d.title}</td>
+                        <td className="px-4 py-2.5">{d.uploadedBy}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground capitalize">{d.docType}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{fmt(d.createdAt)}</td>
                       </tr>
                     ))}
                   </tbody>
