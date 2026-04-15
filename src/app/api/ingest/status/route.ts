@@ -17,13 +17,12 @@ export async function GET(request: NextRequest) {
     const data = await prisma.upload_batches.findUnique({
       where: { id: batch_id },
       select: {
-        id:                  true,
-        status:              true,
-        questions_extracted: true,
-        total_questions:     true,
-        error_message:       true,
-        source_file_name:    true,
-      },
+  id:                         true,
+  status:                     true,
+  total_questions_extracted:  true,
+  error_message:              true,
+  source_file_name:           true,
+},
     })
 
     if (!data) {
